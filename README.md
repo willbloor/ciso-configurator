@@ -22,6 +22,16 @@ python3 -m http.server 8080
 
 Then open `http://localhost:8080`.
 
+## Workspace Profile Import / Export
+
+- Open **My account** in the left nav.
+- In **Workspace profiles**:
+  - `Load AE demo profile` or `Load CS demo profile` swaps in demo records.
+  - `Upload profile CSV` imports records from a CSV (client-side in browser).
+  - `Export high-fidelity CSV` downloads all records including `record_json`.
+- A ready sample file is included at:
+  - `workspace-profile-sample.csv`
+
 ## Deploy (Vercel)
 
 - Framework preset: `Other`

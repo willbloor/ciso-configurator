@@ -1,0 +1,4 @@
+record_id,company,stage,completion,tier,priority,archived,outcomes,gap_summary,full_name,role,company_size,operating_country,industry,region,updated_at
+sample-helix,Helix Financial,Validation,14/22 (64%),Core,true,false,Regulator readiness evidence; Board confidence,Evidence audience not confirmed; Delivery model unanswered,Will Bloor,CISO,2000-10000 employees,United Kingdom,Financial Services,UKI,2026-02-19T10:12:00Z
+sample-aurora,Aurora Logistics,Discovery,9/22 (41%),Core,false,false,Faster detection response and decision-making; Coverage roadmap,Cadence not selected; Context unanswered,Alex Morgan,Security Manager,1000-5000 employees,United States,Logistics,NA,2026-02-18T15:40:00Z
+sample-meridian,Meridian Health,Closed,22/22 (100%),Advanced,false,true,Compliance translated into evidence and benchmarks,No open gaps,Jordan Smith,Executive,10000-50000 employees,Canada,Healthcare,NA,2026-02-16T08:30:00Z

@@ -279,6 +279,17 @@
               <button class="btn small" id="accountReset" type="button">Reset account defaults</button>
             </div>
           </section>
+          <section class="settingsRow">
+            <div class="settingsLabel">Workspace profiles</div>
+            <p class="settingsHint">Load a saved profile dataset to switch record portfolios instantly, upload a CSV profile, or export all records for sharing and backup.</p>
+            <div class="settingsRowActions">
+              <button class="btn secondaryBlue small" id="accountLoadProfileAe" type="button">Load AE demo profile</button>
+              <button class="btn secondaryBlue small" id="accountLoadProfileCs" type="button">Load CS demo profile</button>
+              <button class="btn secondaryBlue small" id="accountUploadProfileCsv" type="button">Upload profile CSV</button>
+              <button class="btn small" id="accountExportAllCsv" type="button">Export high-fidelity CSV</button>
+            </div>
+            <input id="accountUploadProfileFile" type="file" accept=".csv,text/csv" hidden />
+          </section>
         </div>
       </article>
     </section>
@@ -456,7 +467,7 @@
               </div>
 
               <div style="margin-top:12px;">
-                <label class="qPrompt">Where is your biggest pain points?</label>
+                <label class="qPrompt">Where are your biggest pain points?</label>
                 <div class="radioGrid twoCol" id="radOrgPain"></div>
               </div>
             </div>
@@ -478,6 +489,7 @@
 
             <div class="actions">
               <button class="btn ghost" type="button" disabled>Back</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save record</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -565,6 +577,7 @@
 
             <div class="actions">
               <button class="btn" type="button" data-action="back">Back</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save record</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -644,6 +657,7 @@
 
             <div class="actions">
               <button class="btn" type="button" data-action="back">Back</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save record</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -748,6 +762,7 @@
 
             <div class="actions">
               <button class="btn" type="button" data-action="back">Back</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save record</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -941,6 +956,7 @@
 
             <div class="actions">
               <button class="btn" type="button" data-action="back">Back</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save record</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -954,7 +970,7 @@
                 <div class="reviewCtaBar">
                   <button class="btn secondaryBlue small" type="button" data-action="printReport">Print / Save PDF</button>
                   <button class="btn small" type="button" data-action="downloadCSV">Download CSV</button>
-                  <a class="btn primary small" href="#bookForm">Book my consultation</a>
+                  <button class="btn primary small" type="button" data-action="openConsultation">Book my consultation</button>
                 </div>
               </div>
             </div>
@@ -1057,43 +1073,6 @@
                     <div class="sumBody" id="sumStack">—</div>
                   </div>
                 </div>
-              </div>
-            </div>
-<div id="bookForm" class="card darkForm" style="box-shadow:none; margin-top:0;">
-              <div class="cardPad">
-                <div class="formHead">
-                  <div class="sectionTitle" style="color:#fff;">Book your consultation</div>
-                  <div class="mini" style="color:rgba(255,255,255,.78); margin-top:6px;">Share your contact details and we’ll follow up to tailor a consultation around your snapshot.</div>
-                </div>
-                <div class="divider" style="background:rgba(255,255,255,.14); margin:14px 0;"></div>
-<div class="row">
-              <div>
-                <label for="email">Business email</label>
-                <input id="email" type="email" placeholder="name@company.com" />
-              </div>
-              <div>
-                <label for="phone">Phone (optional)</label>
-                <input id="phone" type="tel" placeholder="+1 555 123 4567" />
-              </div>
-            </div>
-
-            <div style="margin-top:12px;">
-              <label for="notes">Anything you want us to tailor the consultation around? (optional)</label>
-              <textarea id="notes" placeholder="e.g., Upcoming audit, recent incident, specific scenarios, teams to include…"></textarea>
-            </div>
-
-            <div class="mini" style="margin-top:12px;">
-              By submitting, you acknowledge that Immersive will process your personal information in accordance with its Privacy Notice.
-              <br/>
-              <label class="optinRow">
-                <input id="optin" type="checkbox" style="transform: translateY(1px); width:20px; height:20px;" />
-                Keep me updated on product news and events (optional)
-              </label>
-            </div>
-
-            <div class="bookOnlyActions">
-              <button class="btn primary fullWidth" type="button" data-action="book">Book my consultation</button>
-            </div>
               </div>
             </div>
           </div>
@@ -1304,6 +1283,71 @@
         <button class="btn primary" type="button" data-action="confirmArchiveModal" id="archiveModalConfirm">Archive</button>
       </div>
     </div>
+  </div>
+  <div class="consultation" id="consultationPanel" aria-hidden="true">
+    <aside class="consultationSheet" role="dialog" aria-modal="true" aria-label="Consultation planner">
+      <div class="consultationHead">
+        <div>
+          <div class="settingsLabel" style="margin:0 0 8px;">Consultation planner</div>
+          <h3 class="consultationTitle" id="consultationCompany">Record</h3>
+          <p class="consultationSub" id="consultationSub">Consultation payload and agenda.</p>
+        </div>
+        <button class="btn small" id="closeConsultation" type="button">Close</button>
+      </div>
+      <div class="consultationMeta">
+        <span class="dashboardPill" id="consultTierPill">Tier: Core</span>
+        <span class="dashboardPill" id="consultStagePill">Stage: Discovery</span>
+        <span class="dashboardPill" id="consultCompletionPill">Completion: 0/22 (0%)</span>
+      </div>
+      <div class="consultationBody">
+        <section class="consultationSection">
+          <h4>Payload for customer</h4>
+          <ul id="consultPayload"></ul>
+        </section>
+        <section class="consultationSection">
+          <h4>People to invite</h4>
+          <ul id="consultAttendees"></ul>
+        </section>
+        <section class="consultationSection">
+          <h4>Topics to cover</h4>
+          <ul id="consultTopics"></ul>
+        </section>
+        <section class="consultationSection">
+          <h4>Proposed agenda</h4>
+          <ol id="consultAgenda"></ol>
+        </section>
+        <section class="consultationSection">
+          <h4>Recommended resources</h4>
+          <ul id="consultResources"></ul>
+        </section>
+        <section class="consultationSection consultationFormSection">
+          <h4>Booking details</h4>
+          <div class="row">
+            <div>
+              <label for="email">Business email</label>
+              <input id="email" type="email" placeholder="name@company.com" />
+            </div>
+            <div>
+              <label for="phone">Phone (optional)</label>
+              <input id="phone" type="tel" placeholder="+1 555 123 4567" />
+            </div>
+          </div>
+          <div style="margin-top:12px;">
+            <label for="notes">Anything to tailor this consultation around? (optional)</label>
+            <textarea id="notes" placeholder="e.g., Upcoming audit, recent incident, specific scenarios, teams to include…"></textarea>
+          </div>
+          <label class="optinRow consultationOptin">
+            <input id="optin" type="checkbox" style="transform: translateY(1px); width:20px; height:20px;" />
+            Keep me updated on product news and events (optional)
+          </label>
+          <div class="consultationActions">
+            <button class="btn secondaryBlue small" type="button" data-action="copyConsultationBrief">Copy brief</button>
+            <button class="btn small" type="button" data-action="downloadConsultationBrief">Download brief</button>
+            <button class="btn primary" type="button" data-action="book">Book my consultation</button>
+          </div>
+        </section>
+      </div>
+    </aside>
   </div>
 
   <div class="settings" id="settings" aria-hidden="true">

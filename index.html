@@ -1,0 +1,1348 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CISO Configurator Launchpad Edition Dashboard Shell</title>
+  <meta name="description" content="Customer configurator prototype with a lightweight dashboard view in the existing Launchpad shell." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+  <header class="topbar" role="banner">
+    <div class="wrap topbarInner">
+      <div class="brandRow">
+        <a class="brand" id="brandHome" href="#" aria-label="Immersive">
+          <img class="logo" src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg" data-light="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg" data-dark="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6911c98c1ee4440094a2ea32_Group.svg" alt="Immersive" />
+        </a>
+      </div>
+      <div class="nav-scroll" aria-label="Configurator navigation">
+        <nav class="workspaceNav" id="workspaceNav" aria-label="Workspace navigation">
+          <button type="button" class="workspaceItem" id="workspaceDashboard" data-workspace="dashboard" data-active="false">
+            <span class="workspaceItemIco" aria-hidden="true">▦</span>
+            <span>Dashboard</span>
+          </button>
+        </nav>
+        <section class="workspaceCompanies" id="workspaceCompanies" aria-label="Starred companies">
+          <div class="workspaceCompaniesHead">
+            <span class="workspaceCompaniesLabel">Starred</span>
+            <span class="workspaceCompaniesCount" id="workspaceCompaniesCount">0</span>
+          </div>
+          <div class="workspaceCompaniesList" id="workspaceCompaniesList"></div>
+        </section>
+        <div class="recordContext" id="recordContext">
+          <button type="button" class="recordContextBtn" id="recordOverviewBtn" aria-label="Back to record overview">
+            <span class="recordContextArrow" aria-hidden="true">←</span>
+            <span class="recordContextBody">
+              <span class="recordContextBack">Back</span>
+              <span class="recordContextName" id="recordContextName">Orchid Corp</span>
+            </span>
+          </button>
+        </div>
+        <nav class="progress" aria-label="Progress">
+          <button type="button" class="chip" data-chip="1" data-step="1" data-active="true"><strong>0</strong> About</button>
+          <button type="button" class="chip" data-chip="2" data-step="2" data-active="false"><strong>1</strong> Coverage</button>
+          <button type="button" class="chip" data-chip="3" data-step="3" data-active="false"><strong>2</strong> Package fit</button>
+          <button type="button" class="chip" data-chip="4" data-step="4" data-active="false"><strong>3</strong> Context</button>
+          <button type="button" class="chip" data-chip="5" data-step="5" data-active="false"><strong>4</strong> ROI estimate</button>
+          <button type="button" class="chip" data-chip="6" data-step="6" data-active="false"><strong>5</strong> Review</button>
+        </nav>
+      </div>
+      <div class="nav-settingsDock">
+        <button type="button" class="nav-settings nav-settings--archive" id="workspaceArchive" data-workspace="archived" data-active="false" aria-label="Open archived accounts">
+          <span class="nav-settingsIco" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img" aria-hidden="true">
+              <rect x="4.5" y="7" width="15" height="11" rx="2"></rect>
+              <path d="M3.5 7h17"></path>
+              <path d="M9 12h6"></path>
+            </svg>
+          </span>
+          <span class="nav-settingsText">
+            <span class="nav-settingsTitle">My archive</span>
+            <span class="nav-settingsSub" id="workspaceArchiveSub">Archived accounts</span>
+          </span>
+        </button>
+        <button type="button" class="nav-settings nav-settings--account" id="workspaceAccount" data-workspace="account" data-active="false" aria-label="Open My account">
+          <span class="nav-settingsIco" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img" aria-hidden="true">
+              <circle cx="12" cy="8" r="3.6"></circle>
+              <path d="M5.2 19.4c1.3-3.1 3.8-4.7 6.8-4.7s5.5 1.6 6.8 4.7"></path>
+            </svg>
+          </span>
+          <span class="nav-settingsText">
+            <span class="nav-settingsTitle">My account</span>
+            <span class="nav-settingsSub">Profile defaults</span>
+          </span>
+        </button>
+        <button type="button" class="nav-settings" id="openSettingsNav" aria-label="Open settings">
+          <span class="nav-settingsIco" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img" aria-hidden="true">
+              <path d="M11.7 3.1h.6l.8 2.1a7.4 7.4 0 0 1 1.9.8l2-1 1.1 1.1-1 2a7.4 7.4 0 0 1 .8 1.9l2.1.8v.6l-2.1.8a7.4 7.4 0 0 1-.8 1.9l1 2-1.1 1.1-2-1a7.4 7.4 0 0 1-1.9.8l-.8 2.1h-.6l-.8-2.1a7.4 7.4 0 0 1-1.9-.8l-2 1-1.1-1.1 1-2a7.4 7.4 0 0 1-.8-1.9l-2.1-.8v-.6l2.1-.8a7.4 7.4 0 0 1 .8-1.9l-1-2L8 5l2 1a7.4 7.4 0 0 1 1.9-.8l.8-2.1z"/>
+              <circle cx="12" cy="12" r="2.9"/>
+            </svg>
+          </span>
+          <span class="nav-settingsText">
+            <span class="nav-settingsTitle">My settings</span>
+            <span class="nav-settingsSub">Theme &amp; display</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  </header>
+  <div class="colResize colResize--lhn" id="lhnResizeHandle" aria-hidden="true"></div>
+  <div class="colResize colResize--right" id="rightResizeHandle" aria-hidden="true"></div>
+
+  <main class="wrap">
+    <section class="globalActionBar" id="globalActionBar" aria-label="Global actions">
+      <div class="globalActionContext" id="globalActionContext">Dashboard</div>
+      <div class="globalActionBtns">
+        <button class="btn primary small" type="button" id="globalCreateRecord">Create new record</button>
+        <button class="btn primary small" type="button" id="globalEditConfigurator" hidden>Edit record</button>
+        <button class="btn secondaryBlue small" type="button" id="globalBookConsultation" hidden>Book consultation</button>
+      </div>
+    </section>
+    <section id="dashboardView" aria-label="Dashboard view">
+      <article class="dashboardShell">
+        <div class="dashboardMeta">
+          <span class="dashboardPill" id="dashThreadsCount">3 threads</span>
+          <span class="dashboardPill" id="dashOverallScore">Average completion: 0%</span>
+          <span class="dashboardPill">Owner: Me</span>
+          <span class="dashboardPill" id="dashLastUpdated">Updated now</span>
+        </div>
+        <div class="dashboardToolbar">
+          <label class="dashboardSelectAll" for="dashSelectAll">
+            <input id="dashSelectAll" type="checkbox" />
+            <span>Select all</span>
+          </label>
+          <span class="dashboardSelectCount" id="dashSelectCount">0 selected</span>
+          <button class="btn small dashArchiveSelectedBtn" type="button" id="dashArchiveSelected" disabled>Archive selected</button>
+        </div>
+        <div class="dashboardTableWrap">
+          <table class="dashboardTable" id="dashboardTable" aria-label="Configurator dashboard table">
+            <thead>
+              <tr>
+                <th class="dashSelectCol" aria-label="Select rows"></th>
+                <th>
+                  <span class="dashColHeadLabel">Company</span>
+                  <button class="dashColResizer" type="button" data-dash-col-resize="company" aria-label="Resize Company column"></button>
+                </th>
+                <th>
+                  <span class="dashColHeadLabel">Completion</span>
+                  <button class="dashColResizer" type="button" data-dash-col-resize="completion" aria-label="Resize Completion column"></button>
+                </th>
+                <th>
+                  <span class="dashColHeadLabel">Tier</span>
+                  <button class="dashColResizer" type="button" data-dash-col-resize="tier" aria-label="Resize Tier column"></button>
+                </th>
+                <th>
+                  <span class="dashColHeadLabel">Key outcomes</span>
+                  <button class="dashColResizer" type="button" data-dash-col-resize="outcomes" aria-label="Resize Key outcomes column"></button>
+                </th>
+                <th>
+                  <span class="dashColHeadLabel">Remaining gaps</span>
+                  <button class="dashColResizer" type="button" data-dash-col-resize="gaps" aria-label="Resize Remaining gaps column"></button>
+                </th>
+                <th><span class="dashColHeadLabel">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="dashboardRows"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section id="archivedView" aria-label="Archived accounts view">
+      <article class="dashboardShell">
+        <div class="dashboardMeta">
+          <span class="dashboardPill" id="archivedThreadsCount">0 archived</span>
+          <span class="dashboardPill" id="archivedLastUpdated">No archived records</span>
+        </div>
+        <div class="dashboardToolbar">
+          <label class="dashboardSelectAll" for="archivedSelectAll">
+            <input id="archivedSelectAll" type="checkbox" />
+            <span>Select all</span>
+          </label>
+          <span class="dashboardSelectCount" id="archivedSelectCount">0 selected</span>
+          <button class="btn small dashArchiveSelectedBtn" type="button" id="archivedRestoreSelected" disabled>Unarchive selected</button>
+        </div>
+        <div class="dashboardTableWrap">
+          <table class="dashboardTable" id="archivedTable" aria-label="Archived accounts table">
+            <thead>
+              <tr>
+                <th class="dashSelectCol" aria-label="Select rows"></th>
+                <th>Company</th>
+                <th>Completion</th>
+                <th>Tier</th>
+                <th>Key outcomes</th>
+                <th>Remaining gaps</th>
+                <th><span class="dashColHeadLabel">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="archivedRows"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section id="accountView" aria-label="My account view">
+      <article class="accountShell">
+        <header class="accountHead">
+          <div>
+            <h2>My account</h2>
+            <p class="accountSub">Google Workspace profile defaults used to prefill new records and shape role-aware configurator behavior.</p>
+          </div>
+          <button class="btn" type="button" id="accountOpenSettings">Open settings</button>
+        </header>
+        <div class="accountBody">
+          <section class="settingsRow">
+            <div class="settingsLabel">Profile defaults</div>
+            <div class="settingsFieldGrid">
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Full name</span>
+                <input id="accountFullName" type="text" placeholder="Jane Doe" autocomplete="name" />
+              </label>
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Work email</span>
+                <input id="accountEmail" type="email" placeholder="name@company.com" autocomplete="email" />
+              </label>
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Phone</span>
+                <input id="accountPhone" type="tel" placeholder="+1 555 123 4567" autocomplete="tel" />
+              </label>
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Default role</span>
+                <select id="accountRole">
+                  <option value="">No default</option>
+                  <option value="vp_sales">VP Sales</option>
+                  <option value="vp_customer_success">VP, Customer Success</option>
+                  <option value="director_regional_sales">Director, Regional Sales</option>
+                  <option value="senior_manager_customer_success">Senior Manager, Customer Success</option>
+                  <option value="senior_enterprise_account_manager">Senior Enterprise Account Manager</option>
+                  <option value="lead_customer_success_manager">Lead Customer Success Manager</option>
+                  <option value="enterprise_account_manager">Enterprise Account Manager</option>
+                  <option value="customer_success_manager">Customer Success Manager</option>
+                  <option value="senior_sales_development_representative">Senior Sales Development Representative</option>
+                  <option value="sales_development_representative">Sales Development Representative</option>
+                  <option value="senior_cyber_resilience_advisor">Senior Cyber Resilience Advisor</option>
+                  <option value="cyber_resilience_advisor">Cyber Resilience Advisor</option>
+                  <option value="associate_enterprise_account_manager">Associate Enterprise Account Manager</option>
+                  <option value="associate_customer_success_manager">Associate Customer Success Manager</option>
+                  <option value="associate_sales_development_representative">Associate Sales Development Representative</option>
+                  <option value="associate_cyber_resilience_advisor">Associate Cyber Resilience Advisor</option>
+                </select>
+              </label>
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Default operating country</span>
+                <select id="accountCountry">
+                  <option value="">No default</option>
+                </select>
+              </label>
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Default region</span>
+                <select id="accountRegion">
+                  <option value="">No default</option>
+                </select>
+              </label>
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Configurator mode</span>
+                <select id="accountFieldMode">
+                  <option value="guided">Guided</option>
+                  <option value="advanced">Advanced</option>
+                </select>
+                <p class="settingsFieldNote">Guided keeps the flow lean. Advanced exposes extra detail and controls.</p>
+              </label>
+            </div>
+            <div class="settingsOptions settingsInlineOptions" id="accountPrefillOptions">
+              <button class="settingsOption" type="button" data-prefill="on" aria-pressed="true">Prefill new records</button>
+              <button class="settingsOption" type="button" data-prefill="off" aria-pressed="false">Manual start for new records</button>
+            </div>
+            <p class="settingsHint" style="margin-top:10px;">This role is your internal workspace role. Customer role/persona is still captured inside each record.</p>
+            <div class="settingsRowActions">
+              <button class="btn secondaryBlue small" id="accountApplyNow" type="button">Apply to current record</button>
+              <button class="btn small" id="accountReset" type="button">Reset account defaults</button>
+            </div>
+          </section>
+        </div>
+      </article>
+    </section>
+
+    <section id="interstitialView" aria-label="Conversation overview">
+      <article class="interShell" id="interstitialContent"></article>
+    </section>
+
+    <div class="grid">
+      <!-- MAIN -->
+      <section class="card">
+        <div class="cardPad title">
+          <div class="titleBar">
+            <h1>Cyber readiness configurator</h1>
+            <div class="titleActions">
+              <button class="btn secondaryBlue small" type="button" id="jumpNextIncompleteBtn" data-jump-next-incomplete="true" title="Jump to next incomplete section">
+                <span class="jumpNextIncompleteBtnLabel" id="jumpNextIncompleteBtnLabel">Next incomplete</span>
+              </button>
+              <button class="btn primary small saveRecordBtn" type="button" id="saveRecordBtn" data-saved="false" aria-live="polite">
+                <span class="saveSpinner" aria-hidden="true"></span>
+                <span id="saveRecordBtnLabel">Save record</span>
+                <span class="saveCheck" aria-hidden="true">✓</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="cardPad">
+          <!-- STEP 0 -->
+          <div class="step" data-step="1" data-active="true" aria-label="Step 0 — About">
+            <div class="stepHead">
+              <div>
+                <h2>Step 0 — Tell us about yourself and your priorities</h2>
+                <div class="hint">Capture profile, operating context, and outcomes together so we can infer priorities in one pass.</div>
+              </div>
+              <div class="pill">~ 2–3 minutes</div>
+            </div>
+
+            <div class="qBlock" id="qBusiness">
+              <div class="labelRow">
+                <div class="sectionTitle">Your business</div>
+                <span class="info" tabindex="0" aria-label="Info: Your business">
+                  i
+                  <span class="tip">This appears in Review and in copied/exported summaries.</span>
+                </span>
+              </div>
+
+              <div style="margin-top:12px;">
+                <label class="qPrompt">Which best describes your role?</label>
+                <div class="options" id="optRole" aria-label="Role options"></div>
+              </div>
+
+              <div class="row" style="margin-top:12px;">
+                <div>
+                  <label for="fullName">Your name</label>
+                  <input id="fullName" type="text" placeholder="Jane Doe" />
+                </div>
+                <div>
+                  <label for="company">Company</label>
+                  <input id="company" type="text" placeholder="Company name" />
+                </div>
+              </div>
+
+              <div class="row" style="margin-top:12px;">
+                <div>
+                  <label for="companySize">Company size</label>
+                  <select id="companySize">
+                    <option value="">Select…</option>
+                    <option value="lt500">&lt; 500 employees</option>
+                    <option value="500-2k">500–2,000</option>
+                    <option value="2k-10k">2,000–10,000</option>
+                    <option value="10k-50k">10,000–50,000</option>
+                    <option value="50kplus">50,000+</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="operatingCountry">Operating country</label>
+                  <select id="operatingCountry">
+                    <option value="">Select…</option>
+                    <option value="United States">United States</option>
+                    <option value="United Kingdom">United Kingdom</option>
+                    <option value="Ireland">Ireland</option>
+                    <option value="Canada">Canada</option>
+                    <option value="Germany">Germany</option>
+                    <option value="France">France</option>
+                    <option value="Netherlands">Netherlands</option>
+                    <option value="Spain">Spain</option>
+                    <option value="Italy">Italy</option>
+                    <option value="Sweden">Sweden</option>
+                    <option value="Norway">Norway</option>
+                    <option value="Denmark">Denmark</option>
+                    <option value="Switzerland">Switzerland</option>
+                    <option value="Australia">Australia</option>
+                    <option value="Singapore">Singapore</option>
+                    <option value="Japan">Japan</option>
+                    <option value="India">India</option>
+                    <option value="Other">Other / multiple</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="row" style="margin-top:12px;">
+                <div>
+                  <label for="industry">What best describes your business?</label>
+                  <select id="industry">
+                    <option value="">Select…</option>
+                    <option>Financial Services</option>
+                    <option>Banking</option>
+                    <option>Insurance</option>
+                    <option>Payments / FinTech</option>
+                    <option>Healthcare / Life Sciences</option>
+                    <option>Retail / eCommerce</option>
+                    <option>Technology / SaaS</option>
+                    <option>Telecommunications</option>
+                    <option>Government / Public Sector</option>
+                    <option>Defense / Aerospace</option>
+                    <option>Energy / Utilities</option>
+                    <option>Manufacturing / Industrial</option>
+                    <option>Transportation / Logistics</option>
+                    <option>Education</option>
+                    <option>Managed Services (MSP/MSSP)</option>
+                    <option>Professional Services</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="region">Operating region / footprint</label>
+                  <select id="region">
+                    <option value="">Select…</option>
+                    <option value="NA">North America</option>
+                    <option value="UKI">UK & Ireland</option>
+                    <option value="EU">Europe (EU)</option>
+                    <option value="APAC">APAC</option>
+                    <option value="Other">Other / Global</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="qBlock" id="qOutcomeDiscovery">
+              <div class="labelRow">
+                <div class="sectionTitle">Outcome discovery</div>
+                <span class="info" tabindex="0" aria-label="Info: Outcome discovery">
+                  i
+                  <span class="tip">Answer quickly. We use these signals to infer your top 3 outcomes without forcing a “pick from six”.</span>
+                </span>
+              </div>
+
+              <div style="margin-top:12px;">
+                <div class="questionHead">
+                  <label class="qPrompt">Where’s the pressure coming from? (pick up to 3)</label>
+                  <div class="countPill" id="pressureMeta">0 of 3 selected</div>
+                </div>
+                <div class="radioGrid twoCol" id="pressureCards" aria-label="Pressure source options"></div>
+              </div>
+
+              <div style="margin-top:12px;">
+                <label class="qPrompt">What’s the most urgent 90-day win?</label>
+                <div class="radioGrid twoCol" id="radUrgentWin"></div>
+              </div>
+
+              <div style="margin-top:12px;">
+                <div class="questionHead">
+                  <label class="qPrompt">Which environment is driving risk? (pick up to 2)</label>
+                  <div class="countPill" id="riskEnvMeta">0 of 2 selected</div>
+                </div>
+                <div class="radioGrid twoCol" id="riskEnvCards"></div>
+              </div>
+
+              <div style="margin-top:12px;">
+                <label class="qPrompt">What are you being measured on today?</label>
+                <div class="radioGrid twoCol" id="radMeasuredOn"></div>
+              </div>
+
+              <div style="margin-top:12px;">
+                <label class="qPrompt">Where is your biggest pain points?</label>
+                <div class="radioGrid twoCol" id="radOrgPain"></div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="qBlock" id="qOutcomeReveal">
+              <div class="labelRow">
+                <div class="sectionTitle">Based on what you said, your top outcomes look like:</div>
+                <span class="info" tabindex="0" aria-label="Info: Inferred outcomes">
+                  i
+                  <span class="tip">Use these to validate discovery confidence. You can tune the signals above if the order looks wrong.</span>
+                </span>
+              </div>
+              <div class="outcomeTop3" id="outcomeTop3">Complete the discovery questions above to see your top outcomes.</div>
+              <div class="mini" id="outcomePlaybackConfirm">Does this feel right? If not, adjust your answers above.</div>
+              <div class="radioGrid twoCol outcomeCardGrid" id="outcomeCards"></div>
+            </div>
+
+            <div class="actions">
+              <button class="btn ghost" type="button" disabled>Back</button>
+              <button class="btn primary" type="button" data-action="next">Continue</button>
+            </div>
+          </div>
+
+          <!-- STEP 1 -->
+          <div class="step" data-step="2" aria-label="Step 1 — Coverage">
+            <div class="stepHead">
+              <div>
+                <h2>Step 1 — Coverage</h2>
+                <div class="hint">Who needs to be ready — and how do you run readiness today?</div>
+              </div>
+              <div class="pill">~ 1–2 minutes</div>
+            </div>
+
+            <div class="qBlock" id="qCoverage">
+              <div class="labelRow">
+                <div class="sectionTitle">Teams who need to be ready (select any)</div>
+                <span class="info" tabindex="0" aria-label="Info: Coverage groups">
+                  i
+                  <span class="tip">Coverage shapes the plan (and the tier). Select all groups you need to include in the readiness program.</span>
+                </span>
+              </div>
+              <div class="options" id="optGroups"></div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="qBlock">
+              <div class="labelRow">
+                <div class="sectionTitle">Cyber resilience cadence today (best fit)</div>
+                <span class="info" tabindex="0" aria-label="Info: Exercising cadence">
+                  i
+                  <span class="tip">Choose the option that best applies. Cadence and realism affect the operating rhythm we propose (and whether Advanced/Ultimate is justified).</span>
+                </span>
+              </div>
+              <div class="radioGrid twoCol" id="radRhythm"></div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="qBlock">
+              <div class="labelRow">
+                <div class="sectionTitle">How do you measure readiness today?</div>
+                <span class="info" tabindex="0" aria-label="Info: Measurement">
+                  i
+                  <span class="tip">Completion metrics are a starting point. Performance metrics (speed, accuracy, decisions) strengthen evidence and confidence.</span>
+                </span>
+              </div>
+              <div class="radioGrid twoCol" id="radMeasure"></div>
+            </div>
+
+            <details class="collapse" id="coverageAdvanced">
+              <summary>
+                <span>Advanced (optional)</span>
+                <span class="chev" aria-hidden="true">▾</span>
+              </summary>
+
+              <div class="qBlock" id="qDrivers" style="margin-top:12px;">
+                <div class="labelRow">
+                  <div class="sectionTitle">What triggered this conversation? (pick up to 3)</div>
+                  <span class="info" tabindex="0" aria-label="Info: Outcome signals">
+                    i
+                    <span class="tip">These are outcome signals, not a pricing wizard. We use them to shape tier rationale and follow-up agenda.</span>
+                  </span>
+                </div>
+                <div class="helperMetaRow">
+                  <div class="helperText">Pick up to three triggers. Each maps to one or more outcomes.</div>
+                  <div class="countPill" id="driverMeta">0 of 3 selected</div>
+                </div>
+                <div class="radioGrid twoCol" id="driverCards"></div>
+              </div>
+
+              <div class="qBlock" id="qOutcomeDrill" style="margin-top:12px;">
+                <div class="labelRow">
+                  <div class="sectionTitle">Outcome drill-down (optional)</div>
+                  <span class="info" tabindex="0" aria-label="Info: Outcome drill-down">
+                    i
+                    <span class="tip">One extra question per inferred top outcome to sharpen the next-meeting agenda.</span>
+                  </span>
+                </div>
+                <div class="mini">Only shown for your current top outcomes.</div>
+                <div id="outcomeDrilldowns" class="drillGrid"></div>
+              </div>
+            </details>
+
+            <div class="actions">
+              <button class="btn" type="button" data-action="back">Back</button>
+              <button class="btn primary" type="button" data-action="next">Continue</button>
+            </div>
+          </div>
+
+          <!-- STEP 2 -->
+          <div class="step" data-step="3" aria-label="Step 2 — Package fit">
+            <div class="stepHead">
+              <div>
+                <h2>Step 2 — Package fit</h2>
+                <div class="hint">Add the remaining fit signals (realism, scope, delivery) before we recommend a starting tier.</div>
+              </div>
+              <div class="pill">~ 1–2 minutes</div>
+            </div>
+
+            <div class="qBlock" id="qPackageFit">
+              <div class="labelRow">
+                <div class="sectionTitle">1) How realistic do exercises need to be?</div>
+                <span class="info" tabindex="0" aria-label="Info: Exercise realism">
+                  i
+                  <span class="tip">Realism increases trust and supports scrutiny, but changes the delivery model.</span>
+                </span>
+              </div>
+              <div class="radioGrid" id="radFitRealism"></div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="qBlock" id="qFitScope">
+              <div class="labelRow">
+                <div class="sectionTitle">2) Scope of the program</div>
+                <span class="info" tabindex="0" aria-label="Info: Program scope">
+                  i
+                  <span class="tip">Scope is about the breadth of coverage needed to deliver ROI and defensible outcomes.</span>
+                </span>
+              </div>
+              <div class="radioGrid" id="radFitScope"></div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="qBlock" id="qFitToday">
+              <div class="labelRow">
+                <div class="sectionTitle">3) Current state (closest match)</div>
+                <span class="info" tabindex="0" aria-label="Info: Current state">
+                  i
+                  <span class="tip">Be honest about the starting point; it improves the recommendation.</span>
+                </span>
+              </div>
+              <div class="radioGrid" id="radFitToday"></div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="qBlock" id="qFitServices">
+              <div class="labelRow">
+                <div class="sectionTitle">4) Delivery style they need</div>
+                <span class="info" tabindex="0" aria-label="Info: Delivery style">
+                  i
+                  <span class="tip">Services signal how much support is needed to deliver outcomes.</span>
+                </span>
+              </div>
+              <div class="radioGrid" id="radFitServices"></div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="qBlock" id="qFitRisk">
+              <div class="labelRow">
+                <div class="sectionTitle">5) How they describe the problem</div>
+                <span class="info" tabindex="0" aria-label="Info: Problem framing">
+                  i
+                  <span class="tip">How teams frame the problem indicates maturity and evidence needs.</span>
+                </span>
+              </div>
+              <div class="radioGrid" id="radFitRisk"></div>
+            </div>
+
+            <div class="actions">
+              <button class="btn" type="button" data-action="back">Back</button>
+              <button class="btn primary" type="button" data-action="next">Continue</button>
+            </div>
+          </div>
+
+          <!-- STEP 3 -->
+          <div class="step" data-step="4" aria-label="Step 3 — Context">
+            <div class="stepHead">
+              <div>
+                <h2>Step 3 — Context</h2>
+                <div class="hint">Add just enough context for relevance — without turning into the master configurator.</div>
+              </div>
+              <div class="pill">~ 1–2 minutes</div>
+            </div>
+
+            <div class="qBlock" id="qContext">
+              <div class="labelRow">
+                <div class="sectionTitle">Context from Step 0</div>
+                <span class="info" tabindex="0" aria-label="Info: Context from Step 0">
+                  i
+                  <span class="tip">Industry and region are set in Step 0 and used here to tailor suggested regulations.</span>
+                </span>
+              </div>
+              <div class="mini" id="contextFromStep0">Complete Step 0 to personalize regulation suggestions.</div>
+            </div>
+
+            <div class="divider"></div>
+
+	            <div class="qBlock" id="qRegs">
+              <div class="labelRow">
+                <div class="sectionTitle">Regulatory / assurance context (optional)</div>
+                <span class="info" tabindex="0" aria-label="Info: Regulations">
+                  i
+                  <span class="tip">Suggested based on your business and region. Used to tailor evidence language and stakeholder framing. Not legal advice.</span>
+                </span>
+              </div>
+
+	              <div class="regMetaRow">
+	                <div class="mini" id="regSuggestedFor">Suggested for: your selected context</div>
+	                <div class="helperText" id="regModeHint">Suggested list is tailored by industry and region. “All” shows the full library A–Z. Tags show Regulation / Framework / Assurance.</div>
+	              </div>
+
+	              <div class="regControls" aria-label="Regulation picker controls">
+	                <div class="grow">
+	                  <label for="regSearch">Search regulations &amp; standards</label>
+	                  <input id="regSearch" type="search" placeholder="e.g., DORA, NIS2, GDPR, ISO 27001, PCI DSS, NIST 800-53…" />
+                </div>
+                <div class="fixed">
+                  <label>View</label>
+                  <div class="seg" id="regMode" role="tablist" aria-label="Regulation list mode">
+                    <button type="button" class="segBtn" data-mode="suggested" role="tab" aria-selected="true">Suggested</button>
+                    <button type="button" class="segBtn" data-mode="all" role="tab" aria-selected="false">All</button>
+                  </div>
+                </div>
+                <div class="fixed">
+                  <label>Proof set</label>
+                  <button type="button" class="btn secondaryBlue small" id="applyProofSet">Recommended</button>
+                </div>
+              </div>
+
+	              <div class="options" id="optRegs"></div>
+	            </div>
+
+            
+
+            <div class="divider"></div>
+
+            <div class="qBlock" id="qStack">
+              <div class="labelRow">
+                <div class="sectionTitle">Security tools &amp; platforms (optional)</div>
+                <span class="info" tabindex="0" aria-label="Info: Tech stack">
+                  i
+                  <span class="tip">Pick the platforms you want hands‑on simulations and examples to align to. This helps make the plan feel “your world”.</span>
+                </span>
+              </div>
+
+              <div class="mini">Select any tools or platforms you want to practice workflows for.</div>
+
+              <div class="stackGrid" aria-label="Tech stack pick-list">
+                <div>
+                  <div class="stackH">Security tools &amp; SOC platforms</div>
+                  <div class="options" id="optStackSoc"></div>
+                </div>
+                <div>
+                  <div class="stackH">Cloud platforms</div>
+                  <div class="options" id="optStackCloud"></div>
+                </div>
+                <div>
+                  <div class="stackH">Cloud‑native &amp; DevSecOps</div>
+                  <div class="options" id="optStackDevops"></div>
+                </div>
+                <div>
+                  <div class="stackH">Other domains</div>
+                  <div class="options" id="optStackDomains"></div>
+                </div>
+              </div>
+
+              <div style="margin-top:14px;">
+                <label for="stackOther">Other must‑have tooling (optional)</label>
+                <input id="stackOther" type="text" placeholder="e.g., Okta, ServiceNow, Palo Alto…" />
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="btn" type="button" data-action="back">Back</button>
+              <button class="btn primary" type="button" data-action="next">Continue</button>
+            </div>
+          </div>
+
+          <!-- STEP 4 -->
+          <div class="step" data-step="5" aria-label="Step 4 — ROI estimate">
+            <div class="stepHead">
+              <div>
+                <h2>Step 4 — ROI estimate</h2>
+                <div class="hint">Immersive estimate based on Immersive assumptions and outcomes seen in organizations of similar size and scale. Start with revenue or budget to size quickly, then adjust team sizes and spend.</div>
+              </div>
+              <div class="pill">~ 1 minute</div>
+            </div>
+
+            <div class="roiBox" id="qValue">
+              <div class="roiTop">
+                <div>
+                  <div class="roiTitleRow">
+                    <span>How this estimate works</span>
+                    <span class="info" tabindex="0" aria-label="Info: How this estimate works">
+                      i
+                      <span class="tip">This estimate uses Immersive assumptions informed by delivery experience with organizations of similar size and scale. It is for planning guidance and decision support.</span>
+                    </span>
+                  </div>
+                  <div class="roiSub">This is an Immersive estimate to help you sanity-check ROI. Start with <strong>annual revenue / operating budget</strong> to get a typical footprint + indicative spend, then fine-tune team sizes and spend to match your reality. <strong>Based on Immersive assumptions and comparable customer profiles.</strong></div>
+
+                  <div class="roiCtrlBar" aria-label="ROI estimate controls">
+                    <div class="seg small" role="group" aria-label="Currency">
+                      <button type="button" class="curBtn" data-cur="USD" aria-pressed="true">USD</button>
+                      <button type="button" class="curBtn" data-cur="GBP" aria-pressed="false">GBP</button>
+                      <button type="button" class="curBtn" data-cur="EUR" aria-pressed="false">EUR</button>
+                    </div>
+
+                    <button type="button" class="btn small resetPill" id="resetValue">
+                      Reset
+                      <span class="resetIcon" aria-hidden="true">↺</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="rangeLine">
+                <div class="rangeLabel">
+                  <label for="revenue">Annual revenue or operating budget</label>
+                  <span class="info" tabindex="0" aria-label="Info: Revenue sizing">
+                    i
+                    <span class="tip">Revenue is used as a quick sizing proxy to suggest a typical starting footprint. You can override team sizes below.</span>
+                  </span>
+                </div>
+                <div class="pill rangeValue" id="revenueLabel">$10B</div>
+                <div class="rangeControl">
+                  <input id="revenue" type="range" min="0.2" max="200" step="0.1" value="10" />
+                </div>
+              </div>
+
+              <div class="divider" style="margin:14px 0;"></div>
+
+              <div class="rangeLine">
+                <div class="rangeLabel">
+                  <label for="teamCyber">Cyber team size</label>
+                  <span class="info" tabindex="0" aria-label="Info: Cyber team slider">
+                    i
+                    <span class="tip">Used to scale cyber workforce benefits (attrition, hiring, training efficiency) in the preview.</span>
+                  </span>
+                </div>
+                <div class="pill rangeValue" id="teamCyberLabel">200</div>
+                <div class="rangeControl">
+                  <input id="teamCyber" type="range" min="10" max="1500" step="5" value="200" />
+                </div>
+              </div>
+
+              <div class="rangeLine">
+                <div class="rangeLabel">
+                  <label for="teamDev">Developer population</label>
+                  <span class="info" tabindex="0" aria-label="Info: Developer slider">
+                    i
+                    <span class="tip">Used to scale developer productivity benefits in the preview.</span>
+                  </span>
+                </div>
+                <div class="pill rangeValue" id="teamDevLabel">1,000</div>
+                <div class="rangeControl">
+                  <input id="teamDev" type="range" min="50" max="8000" step="50" value="1000" />
+                </div>
+              </div>
+
+              <div class="rangeLine">
+                <div class="rangeLabel">
+                  <label for="teamWf">Wider workforce</label>
+                  <span class="info" tabindex="0" aria-label="Info: Workforce slider">
+                    i
+                    <span class="tip">Used for suggested footprint context and workforce-ready planning (not a precise model input).</span>
+                  </span>
+                </div>
+                <div class="pill rangeValue" id="teamWfLabel">3,000</div>
+                <div class="rangeControl">
+                  <input id="teamWf" type="range" min="200" max="200000" step="250" value="3000" />
+                </div>
+              </div>
+
+              <div class="divider" style="margin:14px 0;"></div>
+
+              <div class="rangeLine">
+                <div class="rangeLabel">
+                  <div class="labelRow">
+                    <label for="invest">Indicative spend (annual program investment)</label>
+                    <span class="info" tabindex="0" aria-label="Info: Indicative spend slider">
+                      i
+                      <span class="tip">Directional estimate based on revenue + footprint (revenue + team footprint). Preview is capped at roughly US$9M/yr equivalent for realism. If you model materially higher/lower spend, we apply diminishing returns to keep outputs sensible.</span>
+                    </span>
+                  </div>
+                                  </div>
+                <div class="pill rangeValue" id="investLabel">$250,000</div>
+                <div class="rangeControl">
+                  <input id="invest" type="range" min="25000" max="9000000" step="5000" value="250000" />
+                </div>
+              </div>
+
+                            <div class="divider"></div>
+
+              <div class="roiOutputsHead">
+                <div class="roiOutputsTitle">Estimated outcomes</div>
+                <div class="roiOutputsSub">Choose an assumption range for estimated ROI, NPV and payback.</div>
+              </div>
+              <div class="seg roiOutputsSeg" role="group" aria-label="ROI output assumption range">
+                <button type="button" class="segBtn" data-real="conservative" aria-pressed="true">Conservative</button>
+                <button type="button" class="segBtn" data-real="expected" aria-pressed="false">Expected</button>
+                <button type="button" class="segBtn" data-real="immersive" aria-pressed="false">Immersive base</button>
+              </div>
+
+              <div class="kpiGrid" aria-label="ROI estimate outputs">
+                <div class="kpi">
+                  <p class="k">3‑year ROI (estimate)</p>
+                  <p class="v" id="roiOut">—</p>
+                </div>
+                <div class="kpi">
+                  <p class="k">3‑year NPV (estimate)</p>
+                  <p class="v" id="npvOut">—</p>
+                </div>
+                <div class="kpi">
+                  <p class="k">Payback (est.)</p>
+                  <p class="v" id="paybackOut">—</p>
+                </div>
+                <div class="kpi">
+                  <p class="k">Indicative spend</p>
+                  <p class="v" id="valueInputsOut">—</p>
+                </div>
+              </div>
+
+              <details class="collapse" id="roiMore">
+                <summary>
+                  <span>Adjust assumptions</span>
+                  <span class="chev" aria-hidden="true">▾</span>
+                </summary>
+
+                <div class="row" style="margin-top:14px;">
+                  <div>
+                    <label for="paybackDelay">Adoption ramp before benefits (months)</label>
+                    <input id="paybackDelay" type="number" min="0" max="12" step="1" value="3" />
+                  </div>
+                  <div>
+                    <label for="cyberSalary">Avg cyber fully loaded salary</label>
+                    <input id="cyberSalary" type="number" min="40000" max="600000" step="5000" value="180000" />
+                  </div>
+                </div>
+
+                <div class="row" style="margin-top:12px;">
+                  <div>
+                    <label for="devSalary">Avg developer fully loaded salary</label>
+                    <input id="devSalary" type="number" min="40000" max="600000" step="5000" value="160000" />
+                  </div>
+                  <div>
+                    <label for="fxGBP">FX: 1 USD = (GBP)</label>
+                    <input id="fxGBP" type="number" min="0.1" max="2" step="0.01" value="0.80" />
+                  </div>
+                </div>
+
+                <div class="row" style="margin-top:12px;">
+                  <div>
+                    <label for="fxEUR">FX: 1 USD = (EUR)</label>
+                    <input id="fxEUR" type="number" min="0.1" max="2" step="0.01" value="0.90" />
+                  </div>
+                  <div>
+                    <label for="assumpNote">Note</label>
+                    <input id="assumpNote" type="text" value="Planning sensitivity inputs" readonly />
+                  </div>
+                </div>
+
+                <div class="mini">Salary inputs scale benefits in this estimate. FX defaults are placeholders for the prototype and can be edited for your environment.</div>
+              </details>
+            </div>
+
+            <div class="actions">
+              <button class="btn" type="button" data-action="back">Back</button>
+              <button class="btn primary" type="button" data-action="next">Continue</button>
+            </div>
+          </div>
+
+          <!-- STEP 5 -->
+          <div class="step" data-step="6" aria-label="Step 5 — Review">
+            <div class="stepHead">
+              <div>
+                <h2>Step 5 — Review</h2>
+                <div class="hint">Confirm our understanding of your business. If anything looks off, jump back to edit — then book a consultation.</div>
+                <div class="reviewCtaBar">
+                  <button class="btn secondaryBlue small" type="button" data-action="printReport">Print / Save PDF</button>
+                  <button class="btn small" type="button" data-action="downloadCSV">Download CSV</button>
+                  <a class="btn primary small" href="#bookForm">Book my consultation</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="card" style="box-shadow:none; margin-bottom:16px;">
+              <div class="cardPad">
+                <div class="sectionTitle">Our understanding of your business</div>
+                <div class="mini" style="margin-top:6px;">Review what we’ve captured across the configurator. Use “Edit” to adjust any section.</div>
+                <div class="summaryGrid" style="margin-top:12px;">
+                  <div class="sumCard">
+                    <div class="sumHead">
+                      <span>Organisation</span>
+                      <button class="link" type="button" data-jump="1" data-target="#qBusiness">Edit</button>
+                    </div>
+                    <div class="sumBody" id="sumOrg">—</div>
+                  </div>
+
+                  <div class="sumCard">
+                    <div class="sumHead">
+                      <span>ROI inputs</span>
+                      <button class="link" type="button" data-jump="5" data-target="#qValue">Edit</button>
+                    </div>
+                    <div class="sumBody" id="sumValue">—</div>
+                  </div>
+
+                  <div class="sumCard">
+                    <div class="sumHead">
+                      <span>Challenge</span>
+                      <button class="link" type="button" data-jump="1" data-target="#qOutcomeDiscovery">Edit</button>
+                    </div>
+                    <div class="sumBody" id="sumMandate">—</div>
+                  </div>
+
+                  <div class="sumCard">
+                    <div class="sumHead">
+                      <span>Top outcomes</span>
+                      <button class="link" type="button" data-jump="1" data-target="#qOutcomeReveal">Edit</button>
+                    </div>
+                    <div class="sumBody" id="sumOutcomes">—</div>
+                  </div>
+
+                  <div class="sumCard">
+                    <div class="sumHead">
+                      <span>Tier + why</span>
+                      <button class="link" type="button" data-jump="3" data-target="#qPackageFit">Edit</button>
+                    </div>
+                    <div class="sumBody" id="sumTier">—</div>
+                  </div>
+
+                  <div class="sumCard">
+                    <div class="sumHead">
+                      <span>Recommended next meeting agenda</span>
+                    </div>
+                    <div class="sumBody" id="sumAgenda">—</div>
+                  </div>
+
+                  <div class="sumCard">
+                    <div class="sumHead">
+                      <span>Who to bring</span>
+                    </div>
+                    <div class="sumBody" id="sumWho">—</div>
+                  </div>
+
+                  <div class="sumCard">
+                    <div class="sumHead">
+                      <span>Recommended resources</span>
+                    </div>
+                    <div class="sumBody" id="sumResources">—</div>
+                  </div>
+
+                  <div class="sumCard">
+                    <div class="sumHead">
+                      <span>Coverage</span>
+                      <button class="link" type="button" data-jump="2" data-target="#qCoverage">Edit</button>
+                    </div>
+                    <div class="sumBody" id="sumCoverage">—</div>
+                  </div>
+                  <div class="sumCard">
+                    <div class="sumHead">
+                      <span>Package fit</span>
+                      <button class="link" type="button" data-jump="3" data-target="#qPackageFit">Edit</button>
+                    </div>
+                    <div class="sumBody" id="sumFit">—</div>
+                  </div>
+
+
+                  <div class="sumCard">
+                    <div class="sumHead">
+                      <span>Context</span>
+                      <button class="link" type="button" data-jump="4" data-target="#qContext">Edit</button>
+                    </div>
+                    <div class="sumBody" id="sumContext">—</div>
+                  </div>
+
+                  <div class="sumCard">
+                    <div class="sumHead">
+                      <span>Security tools & platforms</span>
+                      <button class="link" type="button" data-jump="4" data-target="#qStack">Edit</button>
+                    </div>
+                    <div class="sumBody" id="sumStack">—</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+<div id="bookForm" class="card darkForm" style="box-shadow:none; margin-top:0;">
+              <div class="cardPad">
+                <div class="formHead">
+                  <div class="sectionTitle" style="color:#fff;">Book your consultation</div>
+                  <div class="mini" style="color:rgba(255,255,255,.78); margin-top:6px;">Share your contact details and we’ll follow up to tailor a consultation around your snapshot.</div>
+                </div>
+                <div class="divider" style="background:rgba(255,255,255,.14); margin:14px 0;"></div>
+<div class="row">
+              <div>
+                <label for="email">Business email</label>
+                <input id="email" type="email" placeholder="name@company.com" />
+              </div>
+              <div>
+                <label for="phone">Phone (optional)</label>
+                <input id="phone" type="tel" placeholder="+1 555 123 4567" />
+              </div>
+            </div>
+
+            <div style="margin-top:12px;">
+              <label for="notes">Anything you want us to tailor the consultation around? (optional)</label>
+              <textarea id="notes" placeholder="e.g., Upcoming audit, recent incident, specific scenarios, teams to include…"></textarea>
+            </div>
+
+            <div class="mini" style="margin-top:12px;">
+              By submitting, you acknowledge that Immersive will process your personal information in accordance with its Privacy Notice.
+              <br/>
+              <label class="optinRow">
+                <input id="optin" type="checkbox" style="transform: translateY(1px); width:20px; height:20px;" />
+                Keep me updated on product news and events (optional)
+              </label>
+            </div>
+
+            <div class="bookOnlyActions">
+              <button class="btn primary fullWidth" type="button" data-action="book">Book my consultation</button>
+            </div>
+              </div>
+            </div>
+          </div>
+          <div class="configBottomActions">
+            <button class="btn secondaryBlue small" type="button" id="jumpNextIncompleteBtnBottom" data-jump-next-incomplete="true" title="Jump to next incomplete section">
+              <span class="jumpNextIncompleteBtnLabel">Next incomplete</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SIDE -->
+      <aside class="card sticky" aria-label="Your readiness snapshot">
+        <div class="cardPad">
+          <div class="sideTitle">
+            <div class="sectionTitle">Your snapshot</div>
+            <div class="pill small" id="selPill">0/14 captured</div>
+          </div>
+
+          <section class="snapshotDecision" id="decisionCol" aria-label="Decision summary">
+            <div class="decisionCard decisionPackageCard">
+              <div class="sectionTitle">Package</div>
+              <div class="recTitle" id="recTitle">—</div>
+              <div class="recDesc" id="recDesc">—</div>
+            </div>
+
+            <div class="decisionCard decisionOutcomeCard">
+              <div class="sectionTitle">Primary outcomes in focus</div>
+              <div class="sideOutcomeSingle" id="sidePrimaryOutcome">Complete Step 0 to infer top outcomes.</div>
+            </div>
+
+            <details class="collapse" id="sideRoiBlock">
+              <summary>
+                <span class="summaryLabelWithInfo">
+                  <span>ROI estimate</span>
+                  <span class="info infoTiny" tabindex="0" aria-label="Info: ROI assumptions">
+                    i
+                    <span class="tip">Assumptions are documented in the main ROI step. Snapshot shows Immersive estimate outputs only.</span>
+                  </span>
+                </span>
+                <span class="chev" aria-hidden="true">▾</span>
+              </summary>
+
+              <div class="mini" id="roiSnapNote">Complete Step 4 to see the ROI estimate.</div>
+
+              <div class="kpiGrid hide" id="roiSnapGrid" aria-label="ROI estimate snapshot">
+                <div class="kpi">
+                  <p class="k">3‑year ROI</p>
+                  <p class="v" id="roiSnap">—</p>
+                </div>
+                <div class="kpi">
+                  <p class="k">3‑year NPV</p>
+                  <p class="v" id="npvSnap">—</p>
+                </div>
+                <div class="kpi">
+                  <p class="k">Payback (est.)</p>
+                  <p class="v" id="paybackSnap">—</p>
+                </div>
+                <div class="kpi">
+                  <p class="k">Indicative spend</p>
+                  <p class="v" id="valueInputs">—</p>
+                </div>
+              </div>
+            </details>
+          </section>
+
+          <details class="collapse sideAnswersBlock" id="sideAnswersBlock" open>
+            <summary>
+              <span class="sectionTitle">YOUR ANSWERS</span>
+              <span class="chev" aria-hidden="true">▾</span>
+            </summary>
+            <div class="sideAnswersBody">
+          <section class="snapshotInputs" id="inputsCol" aria-label="Inputs summary">
+            <details class="inputAccordion" id="inputAccAbout" data-input="about" open>
+              <summary>
+                <span class="inputAccHead">
+                  <span class="inputAccTitle">About</span>
+                </span>
+                <span class="chev" aria-hidden="true">▾</span>
+              </summary>
+              <div class="inputAccBody">
+                <div class="inputSubhead">Organisation</div>
+                <div class="kvRow"><span class="kvLabel">Role</span><span class="kvValue" id="snapOrgRole">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Name</span><span class="kvValue" id="snapOrgName">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Company</span><span class="kvValue" id="snapOrgCompany">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Country</span><span class="kvValue" id="snapOrgCountry">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Size</span><span class="kvValue" id="snapOrgSize">—</span></div>
+                <div class="inputSubhead">Outcome discovery</div>
+                <div class="kvRow"><span class="kvLabel">Pressure</span><span class="kvValue" id="snapPressure">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Urgent win</span><span class="kvValue" id="snapMilestone">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Risk env</span><span class="kvValue" id="snapRiskEnv">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Measured on</span><span class="kvValue" id="snapMeasuredOn">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Org pain</span><span class="kvValue" id="snapOrgPain">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Triggers</span><span class="kvValue" id="snapDrivers">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Evidence</span><span class="kvValue" id="snapEvidence">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Outcomes</span><span class="kvValue" id="snapOutcomes">—</span></div>
+              </div>
+            </details>
+
+            <details class="inputAccordion" id="inputAccCoverage" data-input="coverage" open>
+              <summary>
+                <span class="inputAccHead">
+                  <span class="inputAccTitle">Coverage</span>
+                </span>
+                <span class="chev" aria-hidden="true">▾</span>
+              </summary>
+              <div class="inputAccBody">
+                <div class="kvRow"><span class="kvLabel">Groups</span><span class="kvValue" id="snapGroups">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Cadence</span><span class="kvValue" id="snapCadence">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Measurement</span><span class="kvValue" id="snapMeasurement">—</span></div>
+              </div>
+            </details>
+
+            <details class="inputAccordion" id="inputAccFit" data-input="fit" open>
+              <summary>
+                <span class="inputAccHead">
+                  <span class="inputAccTitle">Package fit</span>
+                </span>
+                <span class="chev" aria-hidden="true">▾</span>
+              </summary>
+              <div class="inputAccBody">
+                <div class="kvRow"><span class="kvLabel">Realism</span><span class="kvValue" id="snapFitRealism">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Scope</span><span class="kvValue" id="snapFitScope">—</span></div>
+                <div class="kvRow"><span class="kvLabel">State</span><span class="kvValue" id="snapFitToday">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Delivery</span><span class="kvValue" id="snapFitServices">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Frame</span><span class="kvValue" id="snapFitRisk">—</span></div>
+              </div>
+            </details>
+
+            <details class="inputAccordion" id="inputAccContext" data-input="context" open>
+              <summary>
+                <span class="inputAccHead">
+                  <span class="inputAccTitle">Context</span>
+                </span>
+                <span class="chev" aria-hidden="true">▾</span>
+              </summary>
+              <div class="inputAccBody">
+                <div class="kvRow"><span class="kvLabel">Industry</span><span class="kvValue" id="snapIndustry">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Region</span><span class="kvValue" id="snapRegion">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Regulations</span><span class="kvValue" id="snapRegulatory">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Tools</span><span class="kvValue" id="snapStack">—</span></div>
+                <div class="kvRow"><span class="kvLabel">GRC</span><span class="kvValue" id="snapGrc">—</span></div>
+              </div>
+            </details>
+
+            <details class="inputAccordion" id="inputAccRoi" data-input="roi" open>
+              <summary>
+                <span class="inputAccHead">
+                  <span class="inputAccTitle">ROI estimate</span>
+                </span>
+                <span class="chev" aria-hidden="true">▾</span>
+              </summary>
+              <div class="inputAccBody">
+                <div class="kvRow"><span class="kvLabel">3-year ROI</span><span class="kvValue" id="snapRoiPct">—</span></div>
+                <div class="kvRow"><span class="kvLabel">3-year NPV</span><span class="kvValue" id="snapRoiNpv">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Payback</span><span class="kvValue" id="snapRoiPayback">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Spend</span><span class="kvValue" id="snapRoiSpend">—</span></div>
+              </div>
+            </details>
+
+            <details class="inputAccordion" id="inputAccReview" data-input="review" open>
+              <summary>
+                <span class="inputAccHead">
+                  <span class="inputAccTitle">Review</span>
+                </span>
+                <span class="chev" aria-hidden="true">▾</span>
+              </summary>
+              <div class="inputAccBody">
+                <div class="kvRow"><span class="kvLabel">Package</span><span class="kvValue" id="snapReviewPackage">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Top outcomes</span><span class="kvValue" id="snapReviewOutcomes">—</span></div>
+                <div class="kvRow"><span class="kvLabel">Next meeting</span><span class="kvValue" id="snapReviewAgenda">—</span></div>
+              </div>
+            </details>
+          </section>
+            </div>
+          </details>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <div class="wrap">
+        Prototype for internal discussion. Replace booking action with your scheduling flow (e.g., calendar embed + CRM form submit).
+      </div>
+    </footer>
+  </main>
+
+  
+  <!-- Print-only report (populated on demand) -->
+  <section id="printReportRoot" class="printRoot" aria-hidden="true"></section>
+
+<!-- Modal -->
+  <div class="modal" id="modal">
+    <div class="modalCard" role="dialog" aria-modal="true" aria-label="Booked">
+      <h3>Booked (prototype)</h3>
+      <p id="modalBody">In a production build, this button would route to your scheduling flow (calendar + CRM handoff) with the summary attached.</p>
+      <div class="modalActions">
+        <button class="btn" type="button" data-action="closeModal">Close</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="archiveModal">
+    <div class="modalCard" role="dialog" aria-modal="true" aria-label="Archive records">
+      <h3 id="archiveModalTitle">Archive selected records?</h3>
+      <p id="archiveModalBody">Archived records are removed from the active list but can be restored later.</p>
+      <div class="modalActions">
+        <button class="btn" type="button" data-action="closeArchiveModal">Cancel</button>
+        <button class="btn primary" type="button" data-action="confirmArchiveModal" id="archiveModalConfirm">Archive</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings" id="settings" aria-hidden="true">
+    <div class="settingsPanel" role="dialog" aria-label="My settings">
+      <div class="settingsHead">
+        <div>
+          <h3 class="settingsTitle">My settings</h3>
+          <p class="settingsSub">Theme, display &amp; test data</p>
+        </div>
+        <button class="btn small" id="closeSettings" type="button" aria-label="Close settings">Close</button>
+      </div>
+      <div class="settingsBody">
+        <div class="settingsRow">
+          <div class="settingsLabel">Theme</div>
+          <div class="settingsOptions" id="toneOptions">
+            <button class="settingsOption" type="button" data-tone="default" aria-pressed="true">Default</button>
+            <button class="settingsOption" type="button" data-tone="soft" aria-pressed="false">Soft</button>
+            <button class="settingsOption" type="button" data-tone="dark" aria-pressed="false">Onyx 1</button>
+            <button class="settingsOption" type="button" data-tone="comfort" aria-pressed="false">Comfort</button>
+          </div>
+        </div>
+        <div class="settingsRow">
+          <div class="settingsLabel">Display</div>
+          <div class="settingsOptions" id="densityOptions">
+            <button class="settingsOption" type="button" data-density="comfortable" aria-pressed="true">Comfortable</button>
+            <button class="settingsOption" type="button" data-density="compact" aria-pressed="false">Compact</button>
+          </div>
+        </div>
+        <div class="settingsRow">
+          <div class="settingsLabel">Font size scale</div>
+          <div class="settingsOptions" id="fontScaleOptions">
+            <button class="settingsOption" type="button" data-font-scale="0.9" aria-pressed="false">90%</button>
+            <button class="settingsOption" type="button" data-font-scale="1" aria-pressed="true">100%</button>
+            <button class="settingsOption" type="button" data-font-scale="1.1" aria-pressed="false">110%</button>
+          </div>
+        </div>
+        <div class="settingsRow">
+          <div class="settingsLabel">Test data</div>
+          <div class="settingsOptions" id="dummyOptions">
+            <button class="settingsOption" type="button" data-dummy="off" aria-pressed="true">Dummy account off</button>
+            <button class="settingsOption" type="button" data-dummy="on" aria-pressed="false">Dummy account on</button>
+          </div>
+        </div>
+        <div class="settingsReset">
+          <button class="btn small" id="resetLayoutWidths" type="button">Reset layout widths</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="assets/js/app.js"></script>
+</body>
+</html>

@@ -48,6 +48,7 @@
       }
 
       let outcomeTopObserver = null;
+      let globalActionBtnsEl = null;
 
       function isElementInViewport(el, visibilityThreshold = 0.3){
         if(!el) return false;
@@ -102,6 +103,38 @@
           outcomeTopObserver.observe(container);
           container.dataset.pctObserved = 'true';
         }
+      }
+
+      function animateDashboardCompletionRings(scope){
+        if(!scope) return;
+        const rings = $$('.dashCompletionRing[data-animate="true"]', scope);
+        if(!rings.length) return;
+        if(!(state.completionRingAnimatedIds instanceof Set)){
+          state.completionRingAnimatedIds = new Set();
+        }
+        rings.forEach((ring, idx)=>{
+          const target = clamp(Number(ring.dataset.targetPct) || 0, 0, 100);
+          const ringId = String(ring.dataset.ringId || '').trim();
+          const label = $('span', ring);
+          if(prefersReducedMotion()){
+            ring.style.setProperty('--pct', String(target));
+            if(label) label.textContent = `${Math.round(target)}%`;
+            ring.dataset.animate = 'false';
+            if(ringId) state.completionRingAnimatedIds.add(ringId);
+            return;
+          }
+          ring.style.setProperty('--pct', '0');
+          if(label) label.textContent = '0%';
+          window.setTimeout(()=>{
+            ring.classList.add('is-animate');
+            window.requestAnimationFrame(()=>{
+              ring.style.setProperty('--pct', String(target));
+            });
+            if(label) animatePercentValue(label, target, 620);
+            ring.dataset.animate = 'false';
+            if(ringId) state.completionRingAnimatedIds.add(ringId);
+          }, idx * 52);
+        });
       }
 
       function tweenMetricText(el, target, formatter, opts){
@@ -241,6 +274,10 @@
         dashboardSelectedIds: new Set(),
         archivedSelectedIds: new Set(),
         starPulseQueue: new Set(),
+        completionRingAnimatedIds: new Set(),
+        dashboardRowAnimatedIds: new Set(),
+        workspaceCompanyAnimatedIds: new Set(),
+        interstitialAnimatedThreadIds: new Set(),
         navPreviewThreadId: null,
 
         // record persistence
@@ -1371,31 +1408,16 @@ const evidenceOpts = [
       }
 
       function syncGlobalActionBar(){
-        const bar = $('#globalActionBar');
-        if(!bar) return;
-        const context = $('#globalActionContext');
+        const actionBtns = globalActionBtnsEl || $('#globalActionBtns');
+        if(!actionBtns) return;
+        globalActionBtnsEl = actionBtns;
+        const parking = $('#globalActionParking');
+        const dashboardSlot = $('#dashboardActionSlot');
+        const interstitialSlot = $('#interstitialActionSlot');
         const createBtn = $('#globalCreateRecord');
         const editBtn = $('#globalEditConfigurator');
         const bookBtn = $('#globalBookConsultation');
         const view = state.currentView || 'configurator';
-        const thread = activeThreadModel();
-        const company = String(state.company || '').trim() || (thread && thread.company) || 'Untitled company';
-
-        if(context){
-          if(view === 'dashboard'){
-            context.textContent = 'Dashboard';
-            context.title = 'Active configurator threads with completion, tier recommendation, key outcomes, and remaining gaps.';
-          }
-          else if(view === 'archived'){
-            context.textContent = 'Archived Accounts';
-            context.removeAttribute('title');
-          }
-          else if(view === 'interstitial') context.textContent = `${company} overview actions`;
-          else if(view === 'configurator') context.textContent = `${company} configurator`;
-          else if(view === 'account') context.textContent = 'My account';
-          else context.textContent = '';
-          if(view !== 'dashboard') context.removeAttribute('title');
-        }
 
         const setActionBtnVisible = (el, visible)=>{
           if(!el) return;
@@ -1406,8 +1428,23 @@ const evidenceOpts = [
         setActionBtnVisible(createBtn, view === 'dashboard');
         setActionBtnVisible(editBtn, view === 'interstitial');
         setActionBtnVisible(bookBtn, view === 'interstitial');
+        let targetSlot = null;
+        if(view === 'dashboard') targetSlot = dashboardSlot;
+        if(view === 'interstitial') targetSlot = interstitialSlot;
 
-        bar.hidden = (view === 'account');
+        if(targetSlot){
+          if(actionBtns.parentElement !== targetSlot){
+            targetSlot.appendChild(actionBtns);
+          }
+          actionBtns.style.display = 'flex';
+        }else if(parking){
+          if(actionBtns.parentElement !== parking){
+            parking.appendChild(actionBtns);
+          }
+          actionBtns.style.display = 'none';
+        }else{
+          actionBtns.style.display = 'none';
+        }
       }
 
       function setActiveStep(n){
@@ -1442,7 +1479,8 @@ const evidenceOpts = [
       }
 
       function dashboardFirstGapStep(thread){
-        const gapStep = Number(thread && thread.gaps && thread.gaps[0] && thread.gaps[0].step);
+        const progress = threadReadinessProgress(thread);
+        const gapStep = Number(progress && progress.gaps && progress.gaps[0] && progress.gaps[0].step);
         if(Number.isFinite(gapStep)) return clamp(gapStep, 1, 6);
         const snapStep = Number(thread && thread.snapshot && thread.snapshot.activeStep);
         if(Number.isFinite(snapStep)) return clamp(snapStep, 1, 6);
@@ -1535,33 +1573,7 @@ const evidenceOpts = [
       }
 
       function dashboardCompletionSummary(){
-        const checks = [
-          !!state.role,
-          !!state.fullName,
-          !!state.company,
-          !!state.companySize,
-          !!state.operatingCountry,
-          !!state.industry,
-          !!state.region,
-          (state.pressureSources || []).length > 0,
-          !!state.urgentWin,
-          (state.riskEnvs || []).length > 0,
-          !!state.measuredOn,
-          !!state.orgPain,
-          (state.groups && state.groups.size > 0),
-          !!state.rhythm,
-          !!state.measure,
-          !!state.fitRealism,
-          !!state.fitScope,
-          !!state.fitToday,
-          !!state.fitServices,
-          !!state.fitRiskFrame,
-          state.visited.has(5)
-        ];
-        const done = checks.filter(Boolean).length;
-        const total = checks.length;
-        const pct = Math.round((done / total) * 100);
-        return `${done}/${total} (${pct}%)`;
+        return readinessProgressFromContext(state).completion;
       }
 
       function dashboardTierName(){
@@ -1572,38 +1584,109 @@ const evidenceOpts = [
       }
 
       function dashboardCurrentGaps(){
-        const gaps = [];
-        const pushGap = (when, title, why, step)=>{
-          if(when){
-            gaps.push({ title, why, step: Number(step) || 1 });
-          }
+        return readinessProgressFromContext(state).gaps;
+      }
+
+      function listFromCollection(value){
+        if(value instanceof Set) return Array.from(value);
+        if(Array.isArray(value)) return value.slice();
+        return [];
+      }
+
+      function setFromCollection(value){
+        return new Set(listFromCollection(value));
+      }
+
+      function buildReadinessContext(source){
+        const src = (source && typeof source === 'object') ? source : {};
+        const ctx = {
+          role: String(src.role || '').trim(),
+          fullName: String(src.fullName || '').trim(),
+          company: String(src.company || '').trim(),
+          companySize: String(src.companySize || '').trim(),
+          operatingCountry: String(src.operatingCountry || '').trim(),
+          pressureSources: listFromCollection(src.pressureSources).filter(Boolean),
+          urgentWin: String(src.urgentWin || '').trim(),
+          riskEnvs: listFromCollection(src.riskEnvs).filter(Boolean),
+          measuredOn: String(src.measuredOn || '').trim(),
+          orgPain: String(src.orgPain || '').trim(),
+          groups: setFromCollection(src.groups),
+          rhythm: String(src.rhythm || '').trim(),
+          measure: String(src.measure || '').trim(),
+          fitRealism: String(src.fitRealism || '').trim(),
+          fitScope: String(src.fitScope || '').trim(),
+          fitToday: String(src.fitToday || '').trim(),
+          fitServices: String(src.fitServices || '').trim(),
+          fitRiskFrame: String(src.fitRiskFrame || '').trim(),
+          industry: String(src.industry || '').trim(),
+          region: String(src.region || '').trim(),
+          regs: setFromCollection(src.regs),
+          visited: setFromCollection(src.visited)
         };
+        if(!ctx.visited.size) ctx.visited.add(1);
+        return ctx;
+      }
 
-        pushGap(!state.role, 'Role not confirmed', 'Role anchors ownership for outcomes and follow-up.', 1);
-        pushGap(!state.company, 'Company not captured', 'Company context is needed before sharing a recommendation.', 1);
-        pushGap(!state.companySize, 'Company size missing', 'Size influences cadence and recommendation confidence.', 1);
-        pushGap(!state.operatingCountry, 'Operating country missing', 'Country informs the likely regulatory evidence path.', 1);
-        pushGap(!state.industry, 'Industry not selected', 'Industry context changes suggested standards and language.', 1);
-        pushGap(!state.region, 'Region not selected', 'Region influences evidence and audit expectations.', 1);
-        pushGap(!(state.pressureSources || []).length, 'Pressure sources not selected', 'Pressure signals help prioritize the right outcomes.', 1);
-        pushGap(!state.urgentWin, 'Urgent 90-day win not set', 'Urgency clarifies what success must look like first.', 1);
-        pushGap(!state.measuredOn, 'Current measurement baseline missing', 'Baseline metrics are required to quantify uplift.', 1);
-        pushGap(!state.orgPain, 'Current organisation challenge unclear', 'Current challenge shapes where value shows up fastest.', 1);
+      function readinessRequirements(source){
+        const ctx = buildReadinessContext(source);
+        return [
+          { step:1, done: !!ctx.role, title:'Role not confirmed', why:'Role anchors ownership for outcomes and follow-up.' },
+          { step:1, done: !!ctx.fullName, title:'Name not captured', why:'Contact ownership is required for follow-up and handoff.' },
+          { step:1, done: !!ctx.company, title:'Company not captured', why:'Company context is needed before sharing a recommendation.' },
+          { step:1, done: !!ctx.companySize, title:'Company size missing', why:'Size influences cadence and recommendation confidence.' },
+          { step:1, done: !!ctx.operatingCountry, title:'Operating country missing', why:'Country informs the likely regulatory evidence path.' },
+          { step:1, done: ctx.pressureSources.length > 0, title:'Pressure sources not selected', why:'Pressure signals help prioritize the right outcomes.' },
+          { step:1, done: !!ctx.urgentWin, title:'Urgent 90-day win not set', why:'Urgency clarifies what success must look like first.' },
+          { step:1, done: ctx.riskEnvs.length > 0, title:'Risk environment not selected', why:'Risk environment helps focus the right simulation scope.' },
+          { step:1, done: !!ctx.measuredOn, title:'Current measurement baseline missing', why:'Baseline metrics are required to quantify uplift.' },
+          { step:1, done: !!ctx.orgPain, title:'Current organisation challenge unclear', why:'Current challenge shapes where value shows up fastest.' },
 
-        pushGap(!state.groups.size, 'Coverage groups not selected', 'Coverage determines program scope and rollout design.', 2);
-        pushGap(!state.rhythm, 'Cadence not selected', 'Cadence impacts operating model and package fit.', 2);
-        pushGap(!state.measure, 'Measurement model not selected', 'Measurement model drives reporting and evidence quality.', 2);
+          { step:2, done: ctx.groups.size > 0, title:'Coverage groups not selected', why:'Coverage determines program scope and rollout design.' },
+          { step:2, done: !!ctx.rhythm, title:'Cadence not selected', why:'Cadence impacts operating model and package fit.' },
+          { step:2, done: !!ctx.measure, title:'Measurement model not selected', why:'Measurement model drives reporting and evidence quality.' },
 
-        pushGap(!state.fitRealism, 'Realism requirement unanswered', 'Realism changes effort and content structure.', 3);
-        pushGap(!state.fitScope, 'Scope requirement unanswered', 'Scope alters expected delivery footprint.', 3);
-        pushGap(!state.fitToday, 'Current state unanswered', 'Current state helps calibrate the starting package.', 3);
-        pushGap(!state.fitServices, 'Delivery support unanswered', 'Support model affects implementation recommendations.', 3);
-        pushGap(!state.fitRiskFrame, 'Risk frame unanswered', 'Risk framing helps position the narrative for stakeholders.', 3);
+          { step:3, done: !!ctx.fitRealism, title:'Realism requirement unanswered', why:'Realism changes effort and content structure.' },
+          { step:3, done: !!ctx.fitScope, title:'Scope requirement unanswered', why:'Scope alters expected delivery footprint.' },
+          { step:3, done: !!ctx.fitToday, title:'Current state unanswered', why:'Current state helps calibrate the starting package.' },
+          { step:3, done: !!ctx.fitServices, title:'Delivery support unanswered', why:'Support model affects implementation recommendations.' },
+          { step:3, done: !!ctx.fitRiskFrame, title:'Risk frame unanswered', why:'Risk framing helps position the narrative for stakeholders.' },
 
-        pushGap(!state.visited.has(4), 'Context step not reviewed', 'Review context to confirm region-driven suggestions and relevance.', 4);
+          { step:4, done: !!ctx.industry, title:'Industry not selected', why:'Industry context changes suggested standards and language.' },
+          { step:4, done: !!ctx.region, title:'Region not selected', why:'Region influences evidence and audit expectations.' },
+          { step:4, done: ctx.regs.size > 0, title:'Regulatory references not selected', why:'References improve the evidence narrative for stakeholders.' },
 
-        pushGap(!state.visited.has(5), 'ROI estimate not reviewed', 'ROI inputs are needed for investment and timing decisions.', 5);
-        return gaps;
+          { step:5, done: ctx.visited.has(5), title:'ROI estimate not reviewed', why:'ROI inputs are needed for investment and timing decisions.' }
+        ];
+      }
+
+      function readinessProgressFromContext(source){
+        const requirements = readinessRequirements(source);
+        const gaps = requirements
+          .filter((req)=> !req.done)
+          .map((req)=> ({ title:req.title, why:req.why, step:req.step }));
+        const total = requirements.length;
+        const done = total - gaps.length;
+        const pct = total ? Math.round((done / total) * 100) : 0;
+        return {
+          completion: `${done}/${total} (${pct}%)`,
+          gaps,
+          gapSummary: gaps.length ? gaps.slice(0, 2).map((gap)=> gap.title).join(' · ') : 'No open gaps'
+        };
+      }
+
+      function threadReadinessProgress(thread){
+        if(!thread || thread.id === 'current'){
+          return readinessProgressFromContext(state);
+        }
+        const snapshot = (thread.snapshot && typeof thread.snapshot === 'object') ? thread.snapshot : {};
+        const computed = readinessProgressFromContext(snapshot);
+        const storedCompletion = String(thread.completion || '').trim();
+        const hasStoredCompletion = /\(\s*\d+\s*%\s*\)/.test(storedCompletion);
+        return {
+          completion: hasStoredCompletion ? storedCompletion : computed.completion,
+          gaps: computed.gaps,
+          gapSummary: computed.gapSummary
+        };
       }
 
       function currentThreadModel(){
@@ -1617,8 +1700,9 @@ const evidenceOpts = [
         };
 
         const outcomes = inferredPrimaryOutcomes(3).map((o)=> o.short || o.label).filter(Boolean);
-        const gaps = dashboardCurrentGaps();
-        const gapSummary = gaps.length ? gaps.slice(0, 2).map((g)=> g.title).join(' · ') : 'No open gaps';
+        const progress = readinessProgressFromContext(state);
+        const gaps = progress.gaps;
+        const gapSummary = progress.gapSummary;
         const stackLabels = dashLabelsFromIds(state.stack, stackMaster);
         if(String(state.stackOther || '').trim()) stackLabels.push(String(state.stackOther).trim());
 
@@ -1626,7 +1710,7 @@ const evidenceOpts = [
           id: 'current',
           company: (state.company && String(state.company).trim()) ? state.company.trim() : 'Untitled company',
           stage: dashboardStage(),
-          completion: dashboardCompletionSummary(),
+          completion: progress.completion,
           tier: dashboardTierName(),
           outcomes,
           outcomesText: outcomes.length ? outcomes.join(' · ') : 'Awaiting outcome signals',
@@ -2506,35 +2590,44 @@ const evidenceOpts = [
 
       function dashboardRowsModel(){
         const filtered = threadModels().filter((thread)=> !thread.archived);
-        return dashboardSortThreads(filtered).map((thread)=> ({
+        return dashboardSortThreads(filtered).map((thread)=> {
+          const progress = threadReadinessProgress(thread);
+          return ({
           id: thread.id,
           company: thread.company,
-          completion: thread.completion,
+          completion: progress.completion,
           tier: thread.tier,
           outcomes: thread.outcomesText,
-          gaps: thread.gapSummary,
+          gaps: progress.gapSummary,
           priority: !!thread.priority,
           openLabel: 'Open overview'
-        }));
+        });
+        });
       }
 
       function archivedRowsModel(){
         const filtered = threadModels().filter((thread)=> !!thread.archived);
-        return dashboardSortThreads(filtered).map((thread)=> ({
+        return dashboardSortThreads(filtered).map((thread)=> {
+          const progress = threadReadinessProgress(thread);
+          return ({
           id: thread.id,
           company: thread.company,
-          completion: thread.completion,
+          completion: progress.completion,
           tier: thread.tier,
           outcomes: thread.outcomesText,
-          gaps: thread.gapSummary,
+          gaps: progress.gapSummary,
           openLabel: 'Open overview'
-        }));
+        });
+        });
       }
 
       function renderWorkspaceCompanies(){
         const host = $('#workspaceCompaniesList');
         const countEl = $('#workspaceCompaniesCount');
         if(!host) return;
+        if(!(state.workspaceCompanyAnimatedIds instanceof Set)){
+          state.workspaceCompanyAnimatedIds = new Set();
+        }
 
         const starredRows = dashboardSortThreads(
           threadModels().filter((thread)=> !thread.archived && !!thread.priority)
@@ -2548,6 +2641,10 @@ const evidenceOpts = [
             rows.unshift(previewThread);
           }
         }
+        const visibleNavIds = new Set(rows.map((thread)=> thread.id));
+        state.workspaceCompanyAnimatedIds = new Set(
+          Array.from(state.workspaceCompanyAnimatedIds || []).filter((id)=> visibleNavIds.has(id))
+        );
         if(countEl) countEl.textContent = String(starredRows.length);
 
         if(!rows.length){
@@ -2555,24 +2652,26 @@ const evidenceOpts = [
           return;
         }
 
-        host.innerHTML = rows.map((thread)=>{
-          const pct = completionPctFromSummary(thread.completion);
+        const newAnimatedIds = [];
+        host.innerHTML = rows.map((thread, idx)=>{
+          const progress = threadReadinessProgress(thread);
+          const pct = completionPctFromSummary(progress.completion);
           const active = (state.activeThread === thread.id && (state.currentView === 'interstitial' || state.currentView === 'configurator'));
           const isStarred = !!thread.priority;
           const animateStar = isStarred && !!state.starPulseQueue && state.starPulseQueue.has(thread.id);
+          const shouldAnimateEntry = !state.workspaceCompanyAnimatedIds.has(thread.id);
+          if(shouldAnimateEntry) newAnimatedIds.push(thread.id);
           const star = isStarred
             ? `<span class="workspacePriorityStar${animateStar ? ' is-animate' : ''}" aria-hidden="true">★</span>`
             : '';
           return `
-            <button type="button" class="workspaceCompanyBtn" data-company-open="${escapeHtml(thread.id)}" data-active="${active ? 'true' : 'false'}" title="Open ${escapeHtml(thread.company)} overview">
+            <button type="button" class="workspaceCompanyBtn${shouldAnimateEntry ? ' is-enter' : ''}" style="--nav-enter-delay:${Math.min(idx, 10) * 34}ms;" data-company-open="${escapeHtml(thread.id)}" data-active="${active ? 'true' : 'false'}" title="Open ${escapeHtml(thread.company)} overview">
               <span class="workspaceCompanyName">${star}<span class="workspaceCompanyNameLabel">${escapeHtml(thread.company)}</span></span>
               <span class="workspaceCompanyMeta">${pct}% complete · ${escapeHtml(thread.tier)}</span>
             </button>
           `;
         }).join('');
-        if(state.starPulseQueue && state.starPulseQueue.size){
-          state.starPulseQueue.clear();
-        }
+        newAnimatedIds.forEach((id)=> state.workspaceCompanyAnimatedIds.add(id));
       }
 
       function renderArchiveNavMeta(){
@@ -2597,6 +2696,34 @@ const evidenceOpts = [
         thread.updatedAt = Date.now();
         persistSavedThreads();
         update();
+      }
+
+      function renameThreadCompany(threadId, rawName){
+        const nextName = String(rawName || '').trim();
+        const resolved = nextName || 'Untitled company';
+        let changed = false;
+
+        if(threadId && threadId !== 'current'){
+          const thread = findSavedThread(threadId);
+          if(thread && thread.company !== resolved){
+            thread.company = resolved;
+            thread.updatedAt = Date.now();
+            changed = true;
+          }
+          if(thread && state.activeThread === thread.id){
+            state.company = resolved;
+          }
+        }else if(state.company !== resolved){
+          state.company = resolved;
+          changed = true;
+        }else{
+          state.company = resolved;
+        }
+
+        if(changed && threadId && threadId !== 'current'){
+          persistSavedThreads();
+        }
+        return { changed, name: resolved };
       }
 
       function closeArchivePrompt(){
@@ -2807,12 +2934,20 @@ const evidenceOpts = [
         if(!host) return;
 
         const thread = activeThreadModel();
+        if(!(state.interstitialAnimatedThreadIds instanceof Set)){
+          state.interstitialAnimatedThreadIds = new Set();
+        }
+        const interAnimKey = String((thread && thread.id) || 'current');
+        const shouldAnimateInter = !state.interstitialAnimatedThreadIds.has(interAnimKey);
+        const progress = threadReadinessProgress(thread);
         const viz = interVizModel(thread);
-        const gaps = thread.gaps || [];
+        const gaps = progress.gaps || [];
         const pkg = packageOverviewForTier(thread.tier);
+        const companyDisplay = String((thread && thread.company) || '').trim() || 'Untitled company';
         const canTogglePriority = !!(thread && thread.id && thread.id !== 'current' && !!findSavedThread(thread.id));
+        const animateInterStar = canTogglePriority && !!state.starPulseQueue && state.starPulseQueue.has(thread.id);
         const interTitleStar = canTogglePriority
-          ? `<button type="button" class="interTitleStarBtn" data-inter-star-id="${escapeHtml(thread.id)}" data-active="${thread.priority ? 'true' : 'false'}" aria-pressed="${thread.priority ? 'true' : 'false'}" title="${thread.priority ? 'Unstar company' : 'Star company'}">★</button>`
+          ? `<button type="button" class="interTitleStarBtn${animateInterStar ? ' is-animate' : ''}" data-inter-star-id="${escapeHtml(thread.id)}" data-active="${thread.priority ? 'true' : 'false'}" aria-pressed="${thread.priority ? 'true' : 'false'}" title="${thread.priority ? 'Unstar company' : 'Star company'}">★</button>`
           : '';
         const outcomeRows = (viz.outcomeBreakdown || []).slice(0, 4).map((row, idx)=> {
           const pct = clamp(Number(row.pct) || 0, 0, 100);
@@ -2830,8 +2965,8 @@ const evidenceOpts = [
         }).join('');
 
         const gapItems = gaps.length
-          ? gaps.slice(0, 8).map((gap)=> `
-              <div class="interGapItem">
+          ? gaps.map((gap, idx)=> `
+              <div class="interGapItem${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ` style="--inter-enter-delay:${170 + (idx * 46)}ms;"` : ''}>
                 <p class="interGapTitle">${escapeHtml(gap.title)}</p>
                 <p class="interGapWhy">Why it matters: ${escapeHtml(gap.why || 'Required for confidence in recommendation and plan.')}</p>
                 <div class="interGapActions">
@@ -2844,35 +2979,47 @@ const evidenceOpts = [
         host.innerHTML = `
           <header class="interHead">
             <div class="interCrumbs">
-              <span class="interCrumbHome">Dashboard</span>
-              <span>/</span>
-              <span>${escapeHtml(thread.company)}</span>
+              <button type="button" class="interCrumbHome" data-inter-crumb="dashboard" aria-label="Go to dashboard">Dashboard</button>
+              <span aria-hidden="true">/</span>
+              <span>${escapeHtml(companyDisplay)}</span>
             </div>
             <div class="interTitleRow">
               <div>
-                <div class="interTitleMain">
+                <div class="interTitleMain" id="interTitleMain">
                   ${interTitleStar}
-                  <h2>${escapeHtml(thread.company)}</h2>
+                  <h2 id="interCompanyTitleText">${escapeHtml(companyDisplay)}</h2>
+                  <input
+                    id="interCompanyTitleInput"
+                    class="interTitleInlineInput"
+                    type="text"
+                    value="${escapeHtml(companyDisplay)}"
+                    maxlength="120"
+                    aria-label="Rename company"
+                  />
+                  <button type="button" class="interTitleIconBtn interTitleEditBtn" data-inter-rename-btn title="Rename company" aria-label="Rename company">&#9998;</button>
+                  <button type="button" class="interTitleIconBtn interTitleSaveBtn" data-inter-rename-save title="Save company name" aria-label="Save company name">&#10003;</button>
+                  <button type="button" class="interTitleIconBtn interTitleCancelBtn" data-inter-rename-cancel title="Cancel rename" aria-label="Cancel rename">&times;</button>
                 </div>
                 <p class="interSub">Our understanding of your business. Use Edit to jump directly to incomplete sections.</p>
               </div>
+              <div class="interActions viewActionSlot" id="interstitialActionSlot"></div>
             </div>
             <div class="interMeta">
               <span class="interPill">Stage: ${escapeHtml(thread.stage || 'Discovery')}</span>
-              <span class="interPill">Completion: ${escapeHtml(thread.completion)}</span>
+              <span class="interPill">Completion: ${escapeHtml(progress.completion)}</span>
               <span class="interPill">Tier: ${escapeHtml(thread.tier)}</span>
               <span class="interPill">Open gaps: ${gaps.length}</span>
             </div>
           </header>
 
-          <section class="interPackageHero" data-tier-key="${escapeHtml(pkg.key)}">
+          <section class="interPackageHero${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:26ms;"' : ''} data-tier-key="${escapeHtml(pkg.key)}">
             <p class="interPackageKicker">Package</p>
             <h3 class="interPackageTitle">${escapeHtml(pkg.title)}</h3>
             <p class="interPackageBody">${escapeHtml(pkg.body)}</p>
           </section>
 
           <section class="interViz">
-            <article class="interVizCard">
+            <article class="interVizCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:70ms;"' : ''}>
               <h3 class="interVizTitle">ROI snapshot</h3>
               <p class="interVizSub">Directional signal for commercial confidence, based on the current record profile.</p>
               <div class="interRoiGrid">
@@ -2895,7 +3042,7 @@ const evidenceOpts = [
               </div>
             </article>
 
-            <article class="interVizCard">
+            <article class="interVizCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:108ms;"' : ''}>
               <h3 class="interVizTitle">Outcome weighting</h3>
               <p class="interVizSub">Relative confidence split across the leading outcomes for this record.</p>
               <div class="interOutcomeList">
@@ -2905,12 +3052,12 @@ const evidenceOpts = [
           </section>
 
           <section class="interGrid">
-            <article class="interCard interCardWide">
+            <article class="interCard interCardWide${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:146ms;"' : ''}>
               <h3>Gaps: what we still need</h3>
               <div class="interGapList">${gapItems}</div>
             </article>
 
-            <article class="interCard interCardWide">
+            <article class="interCard interCardWide${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:186ms;"' : ''}>
               <h3>Snapshot</h3>
               <div class="interKvs">
                 <div class="interKv">
@@ -2919,32 +3066,35 @@ const evidenceOpts = [
                 </div>
                 <div class="interKv">
                   <span class="interKvLabel">Current status</span>
-                  <span class="interKvVal">${escapeHtml(thread.gapSummary || 'No open gaps')}</span>
+                  <span class="interKvVal">${escapeHtml(progress.gapSummary || 'No open gaps')}</span>
                 </div>
               </div>
             </article>
 
-            <article class="interCard">
+            <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:224ms;"' : ''}>
               <h3>Organisation</h3>
               <div class="interKvs">${renderInterstitialKvs((thread.modules && thread.modules.organisation) || [])}</div>
             </article>
 
-            <article class="interCard">
+            <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:262ms;"' : ''}>
               <h3>Discovery & outcomes</h3>
               <div class="interKvs">${renderInterstitialKvs((thread.modules && thread.modules.discovery) || [])}</div>
             </article>
 
-            <article class="interCard">
+            <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:300ms;"' : ''}>
               <h3>Coverage & package fit</h3>
               <div class="interKvs">${renderInterstitialKvs([...(thread.modules?.coverage || []), ...(thread.modules?.packageFit || [])])}</div>
             </article>
 
-            <article class="interCard">
+            <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:338ms;"' : ''}>
               <h3>Context</h3>
               <div class="interKvs">${renderInterstitialKvs((thread.modules && thread.modules.context) || [])}</div>
             </article>
           </section>
         `;
+        if(shouldAnimateInter){
+          state.interstitialAnimatedThreadIds.add(interAnimKey);
+        }
 
         $$('#interstitialContent .interGapList [data-inter-edit-step]').forEach((btn)=>{
           btn.addEventListener('click', ()=>{
@@ -2952,11 +3102,62 @@ const evidenceOpts = [
             openThreadConfigurator(thread.id, step);
           });
         });
+        const interDashboardCrumb = $('#interstitialContent [data-inter-crumb="dashboard"]');
+        if(interDashboardCrumb){
+          interDashboardCrumb.addEventListener('click', ()=>{
+            setView('dashboard');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          });
+        }
         const interStarBtn = $('#interstitialContent [data-inter-star-id]');
         if(interStarBtn){
           interStarBtn.addEventListener('click', ()=>{
             const id = interStarBtn.getAttribute('data-inter-star-id') || '';
             if(id) toggleThreadPriority(id);
+          });
+        }
+        const titleMain = $('#interTitleMain');
+        const renameBtn = $('#interstitialContent [data-inter-rename-btn]');
+        const renameSaveBtn = $('#interstitialContent [data-inter-rename-save]');
+        const renameCancelBtn = $('#interstitialContent [data-inter-rename-cancel]');
+        const renameInput = $('#interCompanyTitleInput');
+        const commitRename = ()=>{
+          if(!renameInput) return;
+          const result = renameThreadCompany(thread.id, renameInput.value);
+          if(result.changed){
+            toast(`Renamed to ${result.name}.`);
+          }
+          update();
+        };
+        const openRename = ()=>{
+          if(!titleMain || !renameInput) return;
+          titleMain.classList.add('is-editing');
+          renameInput.focus();
+          renameInput.select();
+        };
+        const cancelRename = ()=>{
+          if(!titleMain || !renameInput) return;
+          renameInput.value = companyDisplay;
+          titleMain.classList.remove('is-editing');
+        };
+        if(renameBtn){
+          renameBtn.addEventListener('click', openRename);
+        }
+        if(renameSaveBtn){
+          renameSaveBtn.addEventListener('click', commitRename);
+        }
+        if(renameCancelBtn){
+          renameCancelBtn.addEventListener('click', cancelRename);
+        }
+        if(renameInput){
+          renameInput.addEventListener('keydown', (event)=>{
+            if(event.key === 'Enter'){
+              event.preventDefault();
+              commitRename();
+            }else if(event.key === 'Escape'){
+              event.preventDefault();
+              cancelRename();
+            }
           });
         }
 
@@ -2995,9 +3196,22 @@ const evidenceOpts = [
       function renderDashboardRows(){
         const body = $('#dashboardRows');
         if(!body) return;
+        if(!(state.completionRingAnimatedIds instanceof Set)){
+          state.completionRingAnimatedIds = new Set();
+        }
+        if(!(state.dashboardRowAnimatedIds instanceof Set)){
+          state.dashboardRowAnimatedIds = new Set();
+        }
 
         const rows = dashboardRowsModel();
         const visibleIds = new Set(rows.map((row)=> row.id));
+        const visibleAnimIds = new Set(rows.map((row)=> `active:${row.id}`));
+        state.dashboardRowAnimatedIds = new Set(
+          Array.from(state.dashboardRowAnimatedIds || []).filter((id)=> {
+            const key = String(id || '');
+            return !key.startsWith('active:') || visibleAnimIds.has(key);
+          })
+        );
         state.dashboardSelectedIds = new Set(
           Array.from(state.dashboardSelectedIds || []).filter((id)=> visibleIds.has(id))
         );
@@ -3012,23 +3226,33 @@ const evidenceOpts = [
             </tr>
           `;
         }else{
-          body.innerHTML = rows.map((row)=> {
+          const newlyAnimatedRows = [];
+          body.innerHTML = rows.map((row, idx)=> {
             const pct = completionPctFromSummary(row.completion);
             const checked = state.dashboardSelectedIds.has(row.id) ? 'checked' : '';
+            const animateStar = !!state.starPulseQueue && state.starPulseQueue.has(row.id);
+            const shouldAnimateRing = !state.completionRingAnimatedIds.has(row.id);
+            const rowAnimId = `active:${row.id}`;
+            const shouldAnimateRow = !state.dashboardRowAnimatedIds.has(rowAnimId);
+            if(shouldAnimateRow) newlyAnimatedRows.push(rowAnimId);
+            const rowClasses = [
+              animateStar ? 'is-star-pulse' : '',
+              shouldAnimateRow ? 'is-enter' : ''
+            ].filter(Boolean).join(' ');
             return `
-              <tr data-dashboard-row-id="${escapeHtml(row.id)}" data-selected="${checked ? 'true' : 'false'}">
+              <tr class="${rowClasses}" style="--row-i:${idx}; --row-enter-delay:${Math.min(idx, 14) * 34}ms;" data-dashboard-row-id="${escapeHtml(row.id)}" data-selected="${checked ? 'true' : 'false'}">
                 <td class="dashSelectCol">
                   <input class="dashRowCheck" type="checkbox" data-dashboard-select-id="${escapeHtml(row.id)}" aria-label="Select ${escapeHtml(row.company)}" ${checked} />
                 </td>
                 <td>
                   <div class="dashCompanyCell">
-                    <button class="dashStarBtn" type="button" data-dashboard-star-id="${escapeHtml(row.id)}" data-active="${row.priority ? 'true' : 'false'}" title="Toggle priority for ${escapeHtml(row.company)}">★</button>
+                    <button class="dashStarBtn${animateStar ? ' is-animate' : ''}" type="button" data-dashboard-star-id="${escapeHtml(row.id)}" data-active="${row.priority ? 'true' : 'false'}" title="Toggle priority for ${escapeHtml(row.company)}">★</button>
                     <span class="dash-company">${escapeHtml(row.company)}</span>
                   </div>
                 </td>
                 <td>
                   <div class="dashCompletion" title="${escapeHtml(row.completion)}">
-                    <span class="dashCompletionRing" style="--pct:${pct};"><span>${pct}%</span></span>
+                    <span class="dashCompletionRing${shouldAnimateRing ? ' is-enter' : ''}" data-ring-id="${escapeHtml(row.id)}" data-target-pct="${pct}" data-animate="${shouldAnimateRing ? 'true' : 'false'}" style="--pct:${shouldAnimateRing ? 0 : pct};"><span>${shouldAnimateRing ? '0%' : `${pct}%`}</span></span>
                   </div>
                 </td>
                 <td><span class="dash-tier">${escapeHtml(row.tier)}</span></td>
@@ -3042,6 +3266,8 @@ const evidenceOpts = [
               </tr>
             `;
           }).join('');
+          newlyAnimatedRows.forEach((id)=> state.dashboardRowAnimatedIds.add(id));
+          animateDashboardCompletionRings(body);
         }
 
         const count = $('#dashThreadsCount');
@@ -3078,9 +3304,22 @@ const evidenceOpts = [
       function renderArchivedRows(){
         const body = $('#archivedRows');
         if(!body) return;
+        if(!(state.completionRingAnimatedIds instanceof Set)){
+          state.completionRingAnimatedIds = new Set();
+        }
+        if(!(state.dashboardRowAnimatedIds instanceof Set)){
+          state.dashboardRowAnimatedIds = new Set();
+        }
 
         const rows = archivedRowsModel();
         const visibleIds = new Set(rows.map((row)=> row.id));
+        const visibleAnimIds = new Set(rows.map((row)=> `archived-row:${row.id}`));
+        state.dashboardRowAnimatedIds = new Set(
+          Array.from(state.dashboardRowAnimatedIds || []).filter((id)=> {
+            const key = String(id || '');
+            return !key.startsWith('archived-row:') || visibleAnimIds.has(key);
+          })
+        );
         state.archivedSelectedIds = new Set(
           Array.from(state.archivedSelectedIds || []).filter((id)=> visibleIds.has(id))
         );
@@ -3095,18 +3334,24 @@ const evidenceOpts = [
             </tr>
           `;
         }else{
-          body.innerHTML = rows.map((row)=> {
+          const newlyAnimatedRows = [];
+          body.innerHTML = rows.map((row, idx)=> {
             const pct = completionPctFromSummary(row.completion);
             const checked = state.archivedSelectedIds.has(row.id) ? 'checked' : '';
+            const ringId = `archived:${row.id}`;
+            const shouldAnimateRing = !state.completionRingAnimatedIds.has(ringId);
+            const rowAnimId = `archived-row:${row.id}`;
+            const shouldAnimateRow = !state.dashboardRowAnimatedIds.has(rowAnimId);
+            if(shouldAnimateRow) newlyAnimatedRows.push(rowAnimId);
             return `
-              <tr data-archived-row-id="${escapeHtml(row.id)}" data-selected="${checked ? 'true' : 'false'}">
+              <tr class="${shouldAnimateRow ? 'is-enter' : ''}" style="--row-enter-delay:${Math.min(idx, 14) * 34}ms;" data-archived-row-id="${escapeHtml(row.id)}" data-selected="${checked ? 'true' : 'false'}">
                 <td class="dashSelectCol">
                   <input class="dashRowCheck" type="checkbox" data-archived-select-id="${escapeHtml(row.id)}" aria-label="Select ${escapeHtml(row.company)}" ${checked} />
                 </td>
                 <td><span class="dash-company">${escapeHtml(row.company)}</span></td>
                 <td>
                   <div class="dashCompletion" title="${escapeHtml(row.completion)}">
-                    <span class="dashCompletionRing" style="--pct:${pct};"><span>${pct}%</span></span>
+                    <span class="dashCompletionRing${shouldAnimateRing ? ' is-enter' : ''}" data-ring-id="${escapeHtml(ringId)}" data-target-pct="${pct}" data-animate="${shouldAnimateRing ? 'true' : 'false'}" style="--pct:${shouldAnimateRing ? 0 : pct};"><span>${shouldAnimateRing ? '0%' : `${pct}%`}</span></span>
                   </div>
                 </td>
                 <td><span class="dash-tier">${escapeHtml(row.tier)}</span></td>
@@ -3120,6 +3365,8 @@ const evidenceOpts = [
               </tr>
             `;
           }).join('');
+          newlyAnimatedRows.forEach((id)=> state.dashboardRowAnimatedIds.add(id));
+          animateDashboardCompletionRings(body);
         }
 
         const count = $('#archivedThreadsCount');
@@ -4089,12 +4336,12 @@ const evidenceOpts = [
         };
 
         setView(state.currentView, { render:false });
-        syncGlobalActionBar();
         renderDashboardRows();
         renderArchivedRows();
         renderWorkspaceCompanies();
         renderArchiveNavMeta();
         renderInterstitialView();
+        syncGlobalActionBar();
         const jumpBtns = $$('[data-jump-next-incomplete]');
         const jumpLabels = $$('.jumpNextIncompleteBtnLabel');
         if(jumpBtns.length){
@@ -4633,6 +4880,10 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
 
         // Tools & platforms
         setHTML('#sumStack', escapeHtml(stackTxt));
+
+        if(state.starPulseQueue && state.starPulseQueue.size){
+          state.starPulseQueue.clear();
+        }
 
         snapshotMotionReady = true;
       }
@@ -5329,6 +5580,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const workspaceArchive = $('#workspaceArchive');
       const workspaceAccount = $('#workspaceAccount');
       const recordOverviewBtn = $('#recordOverviewBtn');
+      const workspaceCreateRecord = $('#workspaceCreateRecord');
       const globalCreateRecord = $('#globalCreateRecord');
       const globalEditConfigurator = $('#globalEditConfigurator');
       const globalBookConsultation = $('#globalBookConsultation');
@@ -5371,6 +5623,11 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       if(recordOverviewBtn){
         recordOverviewBtn.addEventListener('click', ()=>{
           openThreadOverview(state.activeThread || 'current');
+        });
+      }
+      if(workspaceCreateRecord){
+        workspaceCreateRecord.addEventListener('click', ()=>{
+          createNewRecord();
         });
       }
       if(globalCreateRecord){

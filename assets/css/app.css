@@ -272,6 +272,18 @@
       padding: 8px;
       overflow:visible;
     }
+    .workspaceCreateWrap{
+      padding: 8px 8px 0;
+    }
+    .workspaceCreateBtn{
+      width:100%;
+      justify-content:center;
+      min-height: 34px;
+      border-radius: 10px;
+    }
+    body:not(.is-dashboard-view) .workspaceCreateWrap{
+      display:none;
+    }
     .workspaceCompanyBtn{
       appearance:none;
       border:1px solid color-mix(in srgb, var(--border) 84%, transparent);
@@ -283,11 +295,14 @@
       display:grid;
       gap:3px;
       cursor:pointer;
-      transition: border-color .12s ease, background .12s ease;
+      transform: translateY(0);
+      transition: border-color .14s ease, background .14s ease, transform .2s ease, box-shadow .2s ease;
     }
     .workspaceCompanyBtn:hover{
       border-color: color-mix(in srgb, var(--azure) 78%, var(--border));
       background: var(--surface);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px color-mix(in srgb, var(--azure) 12%, transparent);
     }
     .workspaceCompanyBtn[data-active="true"]{
       border-color: color-mix(in srgb, var(--azure) 84%, var(--border));
@@ -298,6 +313,20 @@
       outline:none;
       border-color: color-mix(in srgb, var(--azure) 84%, var(--border));
       box-shadow:none;
+    }
+    .workspaceCompanyBtn.is-enter{
+      animation: workspaceCompanyIn .5s cubic-bezier(.2,.9,.24,1.02) both;
+      animation-delay: var(--nav-enter-delay, 0ms);
+    }
+    @keyframes workspaceCompanyIn{
+      0%{
+        opacity:0;
+        transform: translateY(8px) scale(.985);
+      }
+      100%{
+        opacity:1;
+        transform: translateY(0) scale(1);
+      }
     }
     .workspaceCompanyName{
       display:flex;
@@ -570,34 +599,13 @@
     body.is-configurator-view .nav-settingsDock{
       display:none;
     }
-    .globalActionBar{
-      position: sticky;
-      top: 0;
-      z-index: 20;
+    .viewActionSlot{
       display:flex;
       align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      min-height:56px;
-      padding: 10px 14px;
-      margin: 12px 0 10px;
-      border:1px solid var(--border);
-      border-radius: var(--radius-md);
-      background:
-        radial-gradient(520px 190px at 12% -34%, color-mix(in srgb, var(--azure) 10%, transparent), transparent 72%),
-        linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
-      box-shadow: var(--shadow-card);
-    }
-    .globalActionContext{
+      justify-content:flex-end;
+      min-height:36px;
       min-width:0;
-      font-size: clamp(1.45rem, 2.5vw, 2rem);
-      line-height:1.08;
-      font-weight:760;
-      color: var(--text);
-      letter-spacing:-0.02em;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
+      margin-left:auto;
     }
     .globalActionBtns{
       display:flex;
@@ -605,7 +613,6 @@
       justify-content:flex-end;
       gap:8px;
       flex-wrap:wrap;
-      margin-left:auto;
     }
     .dashboardShell{
       border:1px solid var(--border);
@@ -802,6 +809,9 @@
       cursor:pointer;
       border-radius:6px;
       flex: 0 0 auto;
+      position: relative;
+      transform-origin: 50% 58%;
+      transition: transform .16s ease, color .16s ease, background .16s ease;
     }
     .dashStarBtn:hover{
       background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
@@ -809,6 +819,74 @@
     .dashStarBtn[data-active="true"]{
       color: color-mix(in srgb, var(--tangerine) 86%, var(--text) 14%);
       text-shadow: 0 0 0.5px color-mix(in srgb, var(--tangerine) 70%, transparent);
+    }
+    .dashStarBtn.is-animate,
+    .interTitleStarBtn.is-animate{
+      animation: dashStarPop .46s cubic-bezier(.2,.9,.24,1.1);
+    }
+    .dashStarBtn.is-animate::after,
+    .interTitleStarBtn.is-animate::after{
+      content:"";
+      position:absolute;
+      inset: 2px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--tangerine) 62%, transparent);
+      animation: starHaloBurst .46s ease-out both;
+      pointer-events:none;
+    }
+    .dashboardTable tbody tr.is-star-pulse{
+      animation: dashRowPulse .5s ease;
+    }
+    .dashboardTable tbody tr.is-enter > td{
+      opacity:0;
+      transform: translateY(8px);
+      animation: dashTableCellIn .52s cubic-bezier(.2,.9,.24,1.02) both;
+      animation-delay: var(--row-enter-delay, 0ms);
+    }
+    @keyframes dashStarPop{
+      0%{
+        transform: translateY(2px) scale(.55) rotate(-18deg);
+        filter: saturate(.8);
+      }
+      62%{
+        transform: translateY(-1px) scale(1.24) rotate(7deg);
+        filter: saturate(1.18);
+      }
+      100%{
+        transform: translateY(0) scale(1) rotate(0);
+        filter: saturate(1);
+      }
+    }
+    @keyframes starHaloBurst{
+      0%{
+        opacity:.75;
+        transform: scale(.35);
+      }
+      100%{
+        opacity:0;
+        transform: scale(1.75);
+      }
+    }
+    @keyframes dashRowPulse{
+      0%{
+        background: color-mix(in srgb, var(--azure) 0%, var(--surface));
+      }
+      46%{
+        background: color-mix(in srgb, var(--azure) 14%, var(--surface));
+      }
+      100%{
+        background: transparent;
+      }
+    }
+    @keyframes dashTableCellIn{
+      0%{
+        opacity:0;
+        transform: translateY(8px);
+      }
+      100%{
+        opacity:1;
+        transform: translateY(0);
+      }
     }
     .dash-company{
       font-weight: 700;
@@ -826,6 +904,11 @@
       font-size: .8rem;
       font-weight: 700;
       background: color-mix(in srgb, var(--surface-2) 76%, var(--surface));
+    }
+    @property --pct{
+      syntax: "<number>";
+      inherits: false;
+      initial-value: 0;
     }
     .dashCompletion{
       display:flex;
@@ -846,6 +929,13 @@
         );
       position: relative;
       box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 80%, transparent);
+      transition: --pct .76s cubic-bezier(.22,.61,.36,1), transform .3s ease, box-shadow .3s ease;
+    }
+    .dashCompletionRing.is-enter{
+      transform: scale(.92);
+    }
+    .dashCompletionRing.is-animate{
+      transform: scale(1);
     }
     .dashCompletionRing::before{
       content:"";
@@ -972,6 +1062,26 @@
       color: var(--azure);
       font-weight: 650;
     }
+    button.interCrumbHome{
+      appearance:none;
+      border:0;
+      background:transparent;
+      margin:0;
+      padding:0;
+      font: inherit;
+      line-height: inherit;
+      cursor:pointer;
+      text-decoration:none;
+    }
+    button.interCrumbHome:hover{
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    button.interCrumbHome:focus-visible{
+      outline: 2px solid color-mix(in srgb, var(--azure) 56%, var(--border));
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
     .interTitleRow{
       display:flex;
       align-items:flex-start;
@@ -984,6 +1094,65 @@
       align-items:center;
       gap:10px;
       min-width:0;
+    }
+    .interTitleIconBtn{
+      appearance:none;
+      flex: 0 0 auto;
+      width:28px;
+      height:28px;
+      border-radius:8px;
+      border:1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      background: var(--surface);
+      color: var(--muted);
+      display:grid;
+      place-items:center;
+      padding:0;
+      line-height:1;
+      font-size:.9rem;
+      cursor:pointer;
+      transition: border-color .16s ease, color .16s ease, background .16s ease, transform .16s ease;
+    }
+    .interTitleIconBtn:hover{
+      border-color: color-mix(in srgb, var(--azure) 58%, var(--border));
+      color: var(--text);
+      background: color-mix(in srgb, var(--azure) 8%, var(--surface));
+    }
+    .interTitleIconBtn:active{
+      transform: translateY(1px);
+    }
+    .interTitleInlineInput{
+      display:none;
+      width: min(360px, 56vw);
+      max-width: 100%;
+      height: 38px;
+      border-radius: 10px;
+      border:1px solid color-mix(in srgb, var(--azure) 46%, var(--border));
+      background: var(--surface);
+      color: var(--text);
+      padding: 0 12px;
+      font: 700 clamp(1.25rem, 2.4vw, 1.85rem)/1 var(--font);
+      letter-spacing:-0.03em;
+      min-width: 190px;
+    }
+    .interTitleInlineInput:focus-visible{
+      outline: none;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--azure) 18%, transparent);
+      border-color: color-mix(in srgb, var(--azure) 68%, var(--border));
+    }
+    .interTitleMain .interTitleSaveBtn,
+    .interTitleMain .interTitleCancelBtn{
+      display:none;
+    }
+    .interTitleMain.is-editing h2,
+    .interTitleMain.is-editing .interTitleEditBtn{
+      display:none;
+    }
+    .interTitleMain.is-editing .interTitleInlineInput{
+      display:block;
+    }
+    .interTitleMain.is-editing .interTitleSaveBtn,
+    .interTitleMain.is-editing .interTitleCancelBtn{
+      display:grid;
     }
     .interTitleStarBtn{
       appearance:none;
@@ -999,6 +1168,7 @@
       font-size:1rem;
       line-height:1;
       cursor:pointer;
+      position: relative;
       transition: border-color .16s ease, color .16s ease, transform .16s ease, background .16s ease;
     }
     .interTitleStarBtn:hover{
@@ -1030,6 +1200,7 @@
       align-items:center;
       gap:8px;
       flex-wrap:wrap;
+      margin-left:auto;
     }
     .interMeta{
       display:flex;
@@ -1102,6 +1273,25 @@
       background: color-mix(in srgb, var(--surface) 93%, var(--accent) 7%);
       padding: 12px;
       box-shadow: inset 0 1px 0 rgba(255,255,255,.4);
+    }
+    .interPackageHero.is-enter,
+    .interVizCard.is-enter,
+    .interCard.is-enter,
+    .interGapItem.is-enter{
+      opacity:0;
+      transform: translateY(10px);
+      animation: interCardIn .55s cubic-bezier(.2,.9,.24,1.02) both;
+      animation-delay: var(--inter-enter-delay, 0ms);
+    }
+    @keyframes interCardIn{
+      0%{
+        opacity:0;
+        transform: translateY(10px);
+      }
+      100%{
+        opacity:1;
+        transform: translateY(0);
+      }
     }
     .interVizTitle{
       margin:0;
@@ -1246,6 +1436,12 @@
       border-radius: var(--radius-sm);
       background: color-mix(in srgb, var(--tangerine) 8%, var(--surface));
       padding: 10px 11px;
+      transition: border-color .16s ease, background .16s ease, transform .2s ease;
+    }
+    .interGapItem:hover{
+      border-color: color-mix(in srgb, var(--tangerine) 58%, var(--border));
+      background: color-mix(in srgb, var(--tangerine) 12%, var(--surface));
+      transform: translateY(-1px);
     }
     .interGapTitle{
       margin:0;
@@ -1285,13 +1481,14 @@
       .grid{ grid-template-columns: 1fr; }
       .sticky{ position: static !important; top:auto !important; }
       .progress{ justify-content:flex-start; }
-      .globalActionBar{
-        position: static;
-        flex-direction:column;
-        align-items:flex-start;
+      .viewActionSlot{
+        width:100%;
+        justify-content:flex-start;
+        margin-left:0;
       }
       .globalActionBtns{
         width:100%;
+        justify-content:flex-start;
       }
       .dashboardHead{
         flex-direction:column;
@@ -4195,6 +4392,7 @@
       .workspaceItem{
         min-height:56px;
         padding: 8px 10px 8px 20px;
+        grid-template-columns: 34px minmax(0, 1fr);
         border-bottom:0;
         font-size:.82rem;
         letter-spacing:0;
@@ -4430,6 +4628,9 @@
         margin: 0;
         margin-left: var(--app-lhn-w);
         padding: 0 0 0 var(--app-gap);
+      }
+      body:is(.is-dashboard-view, .is-archived-view, .is-interstitial-view) main.wrap{
+        padding-right: var(--app-gap);
       }
       .grid{
         grid-template-columns: minmax(620px, 1fr) clamp(520px, var(--app-right-w), 860px);

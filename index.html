@@ -32,6 +32,9 @@
             <span class="workspaceCompaniesLabel">Starred</span>
             <span class="workspaceCompaniesCount" id="workspaceCompaniesCount">0</span>
           </div>
+          <div class="workspaceCreateWrap">
+            <button type="button" class="btn primary small workspaceCreateBtn" id="workspaceCreateRecord">Create new</button>
+          </div>
           <div class="workspaceCompaniesList" id="workspaceCompaniesList"></div>
         </section>
         <div class="recordContext" id="recordContext">
@@ -97,16 +100,21 @@
   <div class="colResize colResize--right" id="rightResizeHandle" aria-hidden="true"></div>
 
   <main class="wrap">
-    <section class="globalActionBar" id="globalActionBar" aria-label="Global actions">
-      <div class="globalActionContext" id="globalActionContext">Dashboard</div>
-      <div class="globalActionBtns">
+    <div id="globalActionParking" hidden aria-hidden="true">
+      <div class="globalActionBtns" id="globalActionBtns">
         <button class="btn primary small" type="button" id="globalCreateRecord">Create new record</button>
         <button class="btn primary small" type="button" id="globalEditConfigurator" hidden>Edit record</button>
         <button class="btn secondaryBlue small" type="button" id="globalBookConsultation" hidden>Book consultation</button>
       </div>
-    </section>
+    </div>
     <section id="dashboardView" aria-label="Dashboard view">
       <article class="dashboardShell">
+        <header class="dashboardHead">
+          <div>
+            <h2>Dashboard</h2>
+          </div>
+          <div class="viewActionSlot" id="dashboardActionSlot"></div>
+        </header>
         <div class="dashboardMeta">
           <span class="dashboardPill" id="dashThreadsCount">3 threads</span>
           <span class="dashboardPill" id="dashOverallScore">Average completion: 0%</span>
@@ -157,6 +165,11 @@
 
     <section id="archivedView" aria-label="Archived accounts view">
       <article class="dashboardShell">
+        <header class="dashboardHead">
+          <div>
+            <h2>Archived accounts</h2>
+          </div>
+        </header>
         <div class="dashboardMeta">
           <span class="dashboardPill" id="archivedThreadsCount">0 archived</span>
           <span class="dashboardPill" id="archivedLastUpdated">No archived records</span>

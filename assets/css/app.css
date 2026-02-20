@@ -614,6 +614,29 @@
       gap:8px;
       flex-wrap:wrap;
     }
+    .globalDeleteBtn{
+      width:40px;
+      min-width:40px;
+      height:40px;
+      padding:0;
+      border-color: color-mix(in srgb, #ef4444 44%, var(--border));
+      background: color-mix(in srgb, #ef4444 8%, var(--surface));
+      color: color-mix(in srgb, #ef4444 62%, var(--text));
+    }
+    .globalDeleteBtn svg{
+      width:18px;
+      height:18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.9;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .globalDeleteBtn:hover{
+      border-color: color-mix(in srgb, #ef4444 64%, var(--border));
+      background: color-mix(in srgb, #ef4444 16%, var(--surface));
+      color: color-mix(in srgb, #ef4444 78%, var(--text));
+    }
     .dashboardShell{
       border:1px solid var(--border);
       border-radius: var(--radius-lg);
@@ -1400,6 +1423,67 @@
     .interCardWide{
       grid-column: 1 / -1;
     }
+    .interPitchHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-bottom:4px;
+    }
+    .interPitchHead h3{
+      margin:0;
+    }
+    .interPitchStatus{
+      display:inline-flex;
+      align-items:center;
+      border:1px solid color-mix(in srgb, var(--azure) 34%, var(--border));
+      border-radius:999px;
+      padding: 5px 9px;
+      font-size:.76rem;
+      line-height:1;
+      letter-spacing:.03em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--text) 66%, var(--azure) 34%);
+      background: color-mix(in srgb, var(--azure) 9%, var(--surface));
+      font-weight:700;
+    }
+    .interPitchStatus[data-final="true"]{
+      border-color: color-mix(in srgb, var(--lime) 44%, var(--border));
+      color: color-mix(in srgb, var(--lime) 78%, var(--text) 22%);
+      background: color-mix(in srgb, var(--lime) 10%, var(--surface));
+    }
+    .interPitchSub{
+      margin: 0 0 11px;
+      font-size:.88rem;
+      color: var(--muted);
+      line-height:1.45;
+    }
+    .interPitchGrid{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap:10px;
+    }
+    .interPitchItem{
+      border:1px solid color-mix(in srgb, var(--border) 86%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--surface) 92%, var(--azure) 8%);
+      padding: 10px 11px;
+    }
+    .interPitchLabel{
+      margin:0 0 6px;
+      font-size:.75rem;
+      font-weight:750;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      color: color-mix(in srgb, var(--text) 70%, var(--azure) 30%);
+    }
+    .interPitchText{
+      margin:0;
+      font-size:.9rem;
+      line-height:1.45;
+      color: var(--text);
+    }
     .interKvs{
       display:grid;
       gap:0;
@@ -1509,6 +1593,9 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
       .interGrid{
+        grid-template-columns: 1fr;
+      }
+      .interPitchGrid{
         grid-template-columns: 1fr;
       }
       .interKv{
@@ -2312,6 +2399,16 @@
       background: rgba(60,100,255,.10);
       border-color: rgba(60,100,255,.40);
       color: var(--azure);
+    }
+    .btn.danger{
+      background: linear-gradient(135deg, color-mix(in srgb, #ef4444 88%, #111827) 0%, color-mix(in srgb, #ef4444 72%, #111827) 100%);
+      border-color: color-mix(in srgb, #ef4444 78%, #111827);
+      color: #fff;
+      box-shadow: 0 10px 20px color-mix(in srgb, #ef4444 30%, transparent);
+    }
+    .btn.danger:hover{
+      filter: brightness(1.02);
+      box-shadow: 0 14px 24px color-mix(in srgb, #ef4444 36%, transparent);
     }
     .btn.secondaryBlue:hover{ background: rgba(60,100,255,.16); }
     .btn.ghost{ background: transparent; }

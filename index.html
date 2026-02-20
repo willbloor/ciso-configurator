@@ -21,12 +21,6 @@
         </a>
       </div>
       <div class="nav-scroll" aria-label="Configurator navigation">
-        <nav class="workspaceNav" id="workspaceNav" aria-label="Workspace navigation">
-          <button type="button" class="workspaceItem" id="workspaceDashboard" data-workspace="dashboard" data-active="false">
-            <span class="workspaceItemIco" aria-hidden="true">▦</span>
-            <span>Dashboard</span>
-          </button>
-        </nav>
         <section class="workspaceCompanies" id="workspaceCompanies" aria-label="Starred companies">
           <div class="workspaceCompaniesHead">
             <span class="workspaceCompaniesLabel">Starred</span>
@@ -103,6 +97,15 @@
     <div id="globalActionParking" hidden aria-hidden="true">
       <div class="globalActionBtns" id="globalActionBtns">
         <button class="btn primary small" type="button" id="globalCreateRecord">Create new record</button>
+        <button class="btn small globalDeleteBtn" type="button" id="globalDeleteRecord" hidden aria-label="Delete record" title="Delete record">
+          <svg viewBox="0 0 24 24" role="img" aria-hidden="true">
+            <path d="M4 7h16"></path>
+            <path d="M9 7V5.7c0-.9.7-1.7 1.7-1.7h2.6c.9 0 1.7.7 1.7 1.7V7"></path>
+            <path d="M8 7v11.2c0 1 .8 1.8 1.8 1.8h4.4c1 0 1.8-.8 1.8-1.8V7"></path>
+            <path d="M10.4 10.2v6.4"></path>
+            <path d="M13.6 10.2v6.4"></path>
+          </svg>
+        </button>
         <button class="btn primary small" type="button" id="globalEditConfigurator" hidden>Edit record</button>
         <button class="btn secondaryBlue small" type="button" id="globalBookConsultation" hidden>Book consultation</button>
       </div>

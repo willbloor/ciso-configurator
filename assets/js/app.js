@@ -1391,12 +1391,8 @@ const evidenceOpts = [
           requestAutoSave(AUTO_SAVE_BASE_MS);
         }
 
-        const workspaceDash = $('#workspaceDashboard');
         const workspaceArchive = $('#workspaceArchive');
         const workspaceAccount = $('#workspaceAccount');
-        if(workspaceDash){
-          workspaceDash.dataset.active = (next === 'dashboard') ? 'true' : 'false';
-        }
         if(workspaceArchive){
           workspaceArchive.dataset.active = (next === 'archived') ? 'true' : 'false';
         }
@@ -1421,9 +1417,12 @@ const evidenceOpts = [
         const dashboardSlot = $('#dashboardActionSlot');
         const interstitialSlot = $('#interstitialActionSlot');
         const createBtn = $('#globalCreateRecord');
+        const deleteBtn = $('#globalDeleteRecord');
         const editBtn = $('#globalEditConfigurator');
         const bookBtn = $('#globalBookConsultation');
         const view = state.currentView || 'configurator';
+        const interThread = (view === 'interstitial') ? activeThreadModel() : null;
+        const canDeleteThread = !!(interThread && interThread.id && interThread.id !== 'current' && findSavedThread(interThread.id));
 
         const setActionBtnVisible = (el, visible)=>{
           if(!el) return;
@@ -1432,6 +1431,7 @@ const evidenceOpts = [
           el.style.display = on ? '' : 'none';
         };
         setActionBtnVisible(createBtn, view === 'dashboard');
+        setActionBtnVisible(deleteBtn, view === 'interstitial' && canDeleteThread);
         setActionBtnVisible(editBtn, view === 'interstitial');
         setActionBtnVisible(bookBtn, view === 'interstitial');
         let targetSlot = null;
@@ -1581,6 +1581,15 @@ const evidenceOpts = [
       function listOrDash(values){
         const arr = (values || []).map((v)=> String(v || '').trim()).filter(Boolean);
         return arr.length ? arr.join(' · ') : '—';
+      }
+
+      function naturalList(values, opts){
+        const arr = (values || []).map((v)=> String(v || '').trim()).filter(Boolean);
+        if(!arr.length) return '';
+        const cfg = Object.assign({ conjunction:'and' }, opts || {});
+        if(arr.length === 1) return arr[0];
+        if(arr.length === 2) return `${arr[0]} ${cfg.conjunction} ${arr[1]}`;
+        return `${arr.slice(0, -1).join(', ')}, ${cfg.conjunction} ${arr[arr.length - 1]}`;
       }
 
       function dashLabelsFromIds(ids, list){
@@ -3417,14 +3426,21 @@ const evidenceOpts = [
         let changed = false;
 
         if(threadId && threadId !== 'current'){
-          const thread = findSavedThread(threadId);
-          if(thread && thread.company !== resolved){
-            thread.company = resolved;
-            thread.updatedAt = Date.now();
-            changed = true;
-          }
-          if(thread && state.activeThread === thread.id){
-            state.company = resolved;
+          ensureSavedThreadsLoaded();
+          const idx = (state.savedThreads || []).findIndex((thread)=> thread.id === threadId);
+          if(idx >= 0){
+            const existing = state.savedThreads[idx];
+            const existingCompany = String((existing && existing.company) || '').trim();
+            const existingSnapshotCompany = String((existing && existing.snapshot && existing.snapshot.company) || '').trim();
+            const replaced = replaceThreadCompany(existing, resolved);
+            const normalized = normalizeThreadModel(Object.assign({}, replaced, {
+              updatedAt: Date.now()
+            }), idx);
+            state.savedThreads[idx] = normalized;
+            changed = existingCompany !== resolved || existingSnapshotCompany !== resolved;
+            if(state.activeThread === normalized.id){
+              state.company = resolved;
+            }
           }
         }else if(state.company !== resolved){
           state.company = resolved;
@@ -3450,20 +3466,30 @@ const evidenceOpts = [
         const validIds = uniq.filter((id)=> !!findSavedThread(id));
         if(!validIds.length) return;
 
-        archivePromptMode = (mode === 'restore') ? 'restore' : 'archive';
+        archivePromptMode = (mode === 'restore' || mode === 'delete') ? mode : 'archive';
         archivePromptIds = validIds;
         const count = validIds.length;
-        const verb = archivePromptMode === 'restore' ? 'Restore' : 'Archive';
+        const verb = archivePromptMode === 'restore'
+          ? 'Restore'
+          : (archivePromptMode === 'delete' ? 'Delete' : 'Archive');
         const titleEl = $('#archiveModalTitle');
         const bodyEl = $('#archiveModalBody');
         const confirmBtn = $('#archiveModalConfirm');
         if(titleEl) titleEl.textContent = `${verb} ${count === 1 ? 'this record' : `${count} records`}?`;
         if(bodyEl){
-          bodyEl.textContent = archivePromptMode === 'restore'
-            ? 'Restored records return to the active dashboard and company list.'
-            : 'Archived records are removed from active lists and can be restored later.';
+          if(archivePromptMode === 'restore'){
+            bodyEl.textContent = 'Restored records return to the active dashboard and company list.';
+          }else if(archivePromptMode === 'delete'){
+            bodyEl.textContent = 'Deleted records are permanently removed from this prototype and cannot be restored.';
+          }else{
+            bodyEl.textContent = 'Archived records are removed from active lists and can be restored later.';
+          }
         }
-        if(confirmBtn) confirmBtn.textContent = `${verb} ${count === 1 ? 'record' : 'records'}`;
+        if(confirmBtn){
+          confirmBtn.textContent = `${verb} ${count === 1 ? 'record' : 'records'}`;
+          confirmBtn.classList.toggle('danger', archivePromptMode === 'delete');
+          confirmBtn.classList.toggle('primary', archivePromptMode !== 'delete');
+        }
         const modal = $('#archiveModal');
         if(modal) modal.classList.add('show');
       }
@@ -3474,7 +3500,33 @@ const evidenceOpts = [
           closeArchivePrompt();
           return;
         }
-        const restoreMode = archivePromptMode === 'restore';
+        const promptMode = archivePromptMode;
+        if(promptMode === 'delete'){
+          ensureSavedThreadsLoaded();
+          const deletedIds = new Set(ids);
+          const hadActiveDeleted = deletedIds.has(String(state.activeThread || ''));
+          const beforeCount = Array.isArray(state.savedThreads) ? state.savedThreads.length : 0;
+          state.savedThreads = (state.savedThreads || []).filter((thread)=> !deletedIds.has(String((thread && thread.id) || '')));
+          const touched = Math.max(0, beforeCount - (state.savedThreads || []).length);
+          if(hadActiveDeleted){
+            state.activeThread = 'current';
+            state.navPreviewThreadId = null;
+          }
+          state.dashboardSelectedIds = new Set();
+          state.archivedSelectedIds = new Set();
+          persistSavedThreads();
+          closeArchivePrompt();
+          if(hadActiveDeleted && state.currentView !== 'dashboard'){
+            setView('dashboard', { render:false });
+          }
+          update();
+          if(touched > 0){
+            toast(`${touched} record${touched === 1 ? '' : 's'} deleted.`);
+          }
+          return;
+        }
+
+        const restoreMode = promptMode === 'restore';
         let touched = 0;
         ids.forEach((id)=>{
           const thread = findSavedThread(id);
@@ -3523,14 +3575,27 @@ const evidenceOpts = [
         if(target !== 'current'){
           const thread = findSavedThread(target);
           if(thread){
+            const threadCompany = String((thread && thread.company) || '').trim();
+            const snapshotSource = (thread.snapshot && typeof thread.snapshot === 'object')
+              ? thread.snapshot
+              : defaultSnapshotForThread(thread);
+            const nextSnapshot = jsonClone(snapshotSource) || {};
+            const snapshotCompany = String((nextSnapshot && nextSnapshot.company) || '').trim();
+            if(threadCompany && threadCompany !== snapshotCompany){
+              nextSnapshot.company = threadCompany;
+              thread.snapshot = nextSnapshot;
+              thread.updatedAt = Date.now();
+              persistSavedThreads();
+            }
             state.activeThread = target;
-            applyThreadSnapshot(thread.snapshot || defaultSnapshotForThread(thread), {
+            applyThreadSnapshot(nextSnapshot, {
               step: Number(step) || dashboardFirstGapStep(thread)
             });
             return;
           }
         }
         state.activeThread = 'current';
+        syncFormControlsFromState();
         setActiveStep(Number(step) || dashboardFirstGapStep(currentThreadModel()));
       }
 
@@ -3757,6 +3822,134 @@ const evidenceOpts = [
         };
       }
 
+      function splitOverviewList(value){
+        return String(value || '')
+          .split(/\s*·\s*|\s*;\s*|\s*,\s*/g)
+          .map((item)=> item.trim())
+          .filter((item)=> item && item !== '—');
+      }
+
+      function interCoverageGroups(thread){
+        if(!thread) return [];
+        if(thread.id === 'current'){
+          return dashLabelsFromIds(state.groups, groupOpts);
+        }
+
+        const snapGroups = Array.isArray(thread.snapshot && thread.snapshot.groups) ? thread.snapshot.groups : [];
+        if(snapGroups.length){
+          return dashLabelsFromIds(snapGroups, groupOpts);
+        }
+
+        const coverageRows = Array.isArray(thread.modules && thread.modules.coverage) ? thread.modules.coverage : [];
+        const coverageRow = coverageRows.find((row)=> String((row && row.label) || '').toLowerCase().includes('coverage'));
+        if(!coverageRow) return [];
+        return splitOverviewList(coverageRow.value);
+      }
+
+      function interPressureSignals(thread){
+        if(!thread) return [];
+        if(thread.id === 'current'){
+          return dashLabelsFromIds(state.pressureSources, pressureOpts.map((opt)=> ({ id:opt.id, label:opt.title })));
+        }
+
+        const snapPressure = Array.isArray(thread.snapshot && thread.snapshot.pressureSources) ? thread.snapshot.pressureSources : [];
+        if(snapPressure.length){
+          return dashLabelsFromIds(snapPressure, pressureOpts.map((opt)=> ({ id:opt.id, label:opt.title })));
+        }
+
+        const discoveryRows = Array.isArray(thread.modules && thread.modules.discovery) ? thread.modules.discovery : [];
+        const pressureRow = discoveryRows.find((row)=> String((row && row.label) || '').toLowerCase().includes('pressure'));
+        if(!pressureRow) return [];
+        return splitOverviewList(pressureRow.value);
+      }
+
+      function interTierModeLine(tierName){
+        const key = String(tierName || '').trim().toLowerCase();
+        if(key.includes('ult')){
+          return 'Assurance gives you board- and regulator-ready evidence with executive reporting.';
+        }
+        if(key.includes('adv')){
+          return 'Performance Readiness gives you repeatable proving, benchmarking, and a multi-team operating rhythm.';
+        }
+        return 'Foundation gives you a fast baseline, controlled proving, and a clear path to improve.';
+      }
+
+      function interTierModeShort(tierName){
+        const key = String(tierName || '').trim().toLowerCase();
+        if(key.includes('ult')) return 'Assurance';
+        if(key.includes('adv')) return 'Performance Readiness';
+        return 'Foundation';
+      }
+
+      function buildInterstitialPitchModel(thread, progress, viz){
+        const modelThread = thread || {};
+        const modelProgress = progress || { completion:'0/22 (0%)', gaps:[], gapSummary:'No open gaps' };
+        const modelViz = viz || {};
+
+        const completion = String(modelProgress.completion || modelThread.completion || '0/22 (0%)');
+        const completionPct = completionPctFromSummary(completion);
+        const gaps = Array.isArray(modelProgress.gaps) ? modelProgress.gaps : [];
+        const openGapCount = gaps.length;
+        const isFinal = completionPct >= 100 && openGapCount === 0;
+
+        const company = String(modelThread.company || 'This organisation').trim() || 'This organisation';
+        const tier = String(modelThread.tier || 'Core').trim() || 'Core';
+        const coverageGroups = interCoverageGroups(modelThread);
+        const coverageCore = coverageGroups.length ? naturalList(coverageGroups.slice(0, 3)) : 'your priority teams';
+        const groupText = coverageGroups.length > 3 ? `${coverageCore}, and other adjacent teams` : coverageCore;
+        const pressureSignals = interPressureSignals(modelThread);
+        const pressureLead = pressureSignals.length ? pressureSignals[0] : 'stakeholder pressure';
+        const topGap = String((gaps[0] && gaps[0].title) || 'priority readiness blockers').trim();
+        const secondGap = String((gaps[1] && gaps[1].title) || '').trim();
+        const gapLabel = openGapCount === 1 ? 'open gap' : 'open gaps';
+
+        const outcomeRows = Array.isArray(modelViz.outcomeBreakdown) ? modelViz.outcomeBreakdown : [];
+        const weightedOutcomes = outcomeRows
+          .map((row)=> ({
+            label: String((row && row.label) || '').trim(),
+            pct: clamp(Number(row && row.pct) || 0, 0, 100)
+          }))
+          .filter((row)=> row.label)
+          .sort((a, b)=> b.pct - a.pct)
+          .slice(0, 3);
+        const weightedOutcomeLabels = weightedOutcomes.map((row)=> row.label);
+        const fallbackOutcomeLabels = splitOverviewList(modelThread.outcomesText);
+        const outcomeLabels = weightedOutcomeLabels.length ? weightedOutcomeLabels : fallbackOutcomeLabels;
+        const outcomeShort = naturalList(outcomeLabels.slice(0, 2)) || 'core readiness outcomes';
+        const outcomeLong = naturalList(outcomeLabels.slice(0, 3)) || outcomeShort;
+
+        const roiPct = Number(modelViz.roiPct);
+        const paybackMonths = Number(modelViz.paybackMonths);
+        const hasRoi = Number.isFinite(roiPct);
+        const roiLine = hasRoi
+          ? `The model currently indicates ${Math.round(roiPct)}% 3-year ROI${Number.isFinite(paybackMonths) ? ` with payback in ${fmtPayback(paybackMonths)}` : ''}.`
+          : 'ROI will be quantified once remaining inputs are confirmed.';
+
+        const tierModeLine = interTierModeLine(tier);
+        const tierModeShort = interTierModeShort(tier);
+
+        const pitch15 = isFinal
+          ? `${company} is focused on ${outcomeShort} across ${groupText}. ${tierModeShort} helps prove readiness under pressure and keep progress measurable.`
+          : `${company} still has key inputs missing. Start by resolving ${topGap}, then complete the remaining required fields so the pitch can be finalized.`;
+
+        const pitch30 = isFinal
+          ? `${company} needs resilience coverage across ${groupText}, not just activity metrics. The priority outcomes are ${outcomeLong}. ${tierModeLine} ${roiLine}`
+          : `${company} is ${completionPct}% complete with ${openGapCount} ${gapLabel}. Prioritize ${topGap}${secondGap ? ` and ${secondGap}` : ''}, then complete the remaining required fields to finalize the pitch.`;
+
+        const pitch60 = isFinal
+          ? `For ${company}, ${pressureLead.toLowerCase()} pressure means confidence has to be demonstrated, not assumed. The priority outcomes are ${outcomeLong}. ${tierModeLine} This lets the team prove readiness in the scenarios that matter most, close weak points through a repeatable rhythm, and align evidence with stakeholder expectations. ${roiLine} Next step: agree the first checkpoint agenda and assign owners for each benefiting group.`
+          : `This is a working draft based on partial inputs. ${company} is ${completionPct}% complete with ${openGapCount} ${gapLabel}, and the first blocker is ${topGap}. Resolve the missing inputs, confirm the operating mode, and validate outcome priorities. Then we can output final 15, 30, and 60-second versions with stronger evidence and ROI framing.`;
+
+        return {
+          isFinal,
+          completionPct,
+          openGapCount,
+          pitch15,
+          pitch30,
+          pitch60
+        };
+      }
+
       function renderInterstitialKvs(rows){
         return (rows || [])
           .map((row)=> `
@@ -3839,6 +4032,7 @@ const evidenceOpts = [
         const shouldAnimateInter = !state.interstitialAnimatedThreadIds.has(interAnimKey);
         const progress = threadReadinessProgress(thread);
         const viz = interVizModel(thread);
+        const pitch = buildInterstitialPitchModel(thread, progress, viz);
         const gaps = progress.gaps || [];
         const pkg = packageOverviewForTier(thread.tier);
         const companyDisplay = String((thread && thread.company) || '').trim() || 'Untitled company';
@@ -3987,6 +4181,28 @@ const evidenceOpts = [
             <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:338ms;"' : ''}>
               <h3>Context</h3>
               <div class="interKvs">${renderInterstitialKvs((thread.modules && thread.modules.context) || [])}</div>
+            </article>
+
+            <article class="interCard interCardWide${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:376ms;"' : ''}>
+              <div class="interPitchHead">
+                <h3>Elevator pitch</h3>
+                <span class="interPitchStatus" data-final="${pitch.isFinal ? 'true' : 'false'}">${pitch.isFinal ? 'Final (ready)' : `Draft (${pitch.completionPct}% complete)`}</span>
+              </div>
+              <p class="interPitchSub">${pitch.isFinal ? 'Generated from current package fit, outcome weighting, and ROI signals.' : `Working draft while inputs are incomplete (${pitch.openGapCount} open gaps).`}</p>
+              <div class="interPitchGrid">
+                <section class="interPitchItem">
+                  <p class="interPitchLabel">15s</p>
+                  <p class="interPitchText">${escapeHtml(pitch.pitch15)}</p>
+                </section>
+                <section class="interPitchItem">
+                  <p class="interPitchLabel">30s</p>
+                  <p class="interPitchText">${escapeHtml(pitch.pitch30)}</p>
+                </section>
+                <section class="interPitchItem">
+                  <p class="interPitchLabel">60s</p>
+                  <p class="interPitchText">${escapeHtml(pitch.pitch60)}</p>
+                </section>
+              </div>
             </article>
           </section>
         `;
@@ -6481,12 +6697,12 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         ch.addEventListener('click', ()=> setActiveStep(Number(ch.dataset.step)));
       });
       const brandHome = $('#brandHome');
-      const workspaceDashboard = $('#workspaceDashboard');
       const workspaceArchive = $('#workspaceArchive');
       const workspaceAccount = $('#workspaceAccount');
       const recordOverviewBtn = $('#recordOverviewBtn');
       const workspaceCreateRecord = $('#workspaceCreateRecord');
       const globalCreateRecord = $('#globalCreateRecord');
+      const globalDeleteRecord = $('#globalDeleteRecord');
       const globalEditConfigurator = $('#globalEditConfigurator');
       const globalBookConsultation = $('#globalBookConsultation');
       const consultationPanel = $('#consultationPanel');
@@ -6505,12 +6721,6 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       if(brandHome){
         brandHome.addEventListener('click', (e)=>{
           e.preventDefault();
-          setView('dashboard');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
-      }
-      if(workspaceDashboard){
-        workspaceDashboard.addEventListener('click', ()=>{
           setView('dashboard');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         });
@@ -6547,6 +6757,16 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           const thread = activeThreadModel();
           const step = dashboardFirstGapStep(thread);
           openThreadConfigurator((thread && thread.id) ? thread.id : (state.activeThread || 'current'), step);
+        });
+      }
+      if(globalDeleteRecord){
+        globalDeleteRecord.addEventListener('click', ()=>{
+          const thread = activeThreadModel();
+          if(!thread || !thread.id || thread.id === 'current'){
+            toast('Save the record first, then you can delete it from here.');
+            return;
+          }
+          openArchivePrompt([thread.id], 'delete');
         });
       }
       if(globalBookConsultation){

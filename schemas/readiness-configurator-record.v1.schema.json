@@ -1,0 +1,499 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/immersive-one/readiness-configurator-record.v1.schema.json",
+  "title": "Immersive One — Cyber readiness configurator record + pitch output",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "reportId",
+    "createdAt",
+    "locale",
+    "currency",
+    "organisation",
+    "selections",
+    "recommendation"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "reportId": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "locale": {
+      "type": "string"
+    },
+    "currency": {
+      "type": "string"
+    },
+    "app": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "build": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "stage": {
+      "type": "string",
+      "description": "Configurator stage id (optional if you store elsewhere)"
+    },
+    "completion_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "lead": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "optin": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "organisation": {
+      "type": "object",
+      "required": [
+        "role",
+        "company",
+        "operatingCountry"
+      ],
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "roleLabel": {
+          "type": "string"
+        },
+        "fullName": {
+          "type": "string"
+        },
+        "company": {
+          "type": "string"
+        },
+        "companySize": {
+          "type": "string"
+        },
+        "companySizeLabel": {
+          "type": "string"
+        },
+        "operatingCountry": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "selections": {
+      "type": "object",
+      "properties": {
+        "pressureSources": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "pressureSourceLabels": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "urgentWin": {
+          "type": "string"
+        },
+        "urgentWinLabel": {
+          "type": "string"
+        },
+        "riskEnvs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "riskEnvLabels": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "measuredOn": {
+          "type": "string"
+        },
+        "measuredOnLabel": {
+          "type": "string"
+        },
+        "orgPain": {
+          "type": "string"
+        },
+        "orgPainLabel": {
+          "type": "string"
+        },
+        "drivers": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "driverLabels": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "evidenceLabels": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "outcomeDrilldowns": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "primaryOutcomes": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "primaryOutcomeLabels": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "primaryOutcomeOneLiners": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "primaryOutcomeScores": {
+          "$ref": "#/$defs/nonNegativeNumberMap"
+        },
+        "openGaps": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "groups": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "groupLabels": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "rhythm": {
+          "type": "string"
+        },
+        "rhythmLabel": {
+          "type": "string"
+        },
+        "measure": {
+          "type": "string"
+        },
+        "measureLabel": {
+          "type": "string"
+        },
+        "fitRealism": {
+          "type": "string"
+        },
+        "fitScope": {
+          "type": "string"
+        },
+        "fitToday": {
+          "type": "string"
+        },
+        "fitServices": {
+          "type": "string"
+        },
+        "fitRiskFrame": {
+          "type": "string"
+        },
+        "industry": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "regionLabel": {
+          "type": "string"
+        },
+        "regulations": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "regulationLabels": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "techStack": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "techStackLabels": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": true
+    },
+    "recommendation": {
+      "type": "object",
+      "required": [
+        "packageKey",
+        "packageName"
+      ],
+      "properties": {
+        "packageKey": {
+          "type": "string",
+          "description": "Tier key. Supports legacy app keys and canonical pitch-engine keys.",
+          "enum": [
+            "foundation",
+            "performance_readiness",
+            "assurance",
+            "core",
+            "adv",
+            "ult",
+            "advanced",
+            "ultimate"
+          ]
+        },
+        "normalizedTier": {
+          "$ref": "#/$defs/canonicalTier"
+        },
+        "packageName": {
+          "type": "string"
+        },
+        "serviceTier": {
+          "type": "string",
+          "description": "Optional display tier label",
+          "enum": [
+            "Good",
+            "Better",
+            "Best",
+            "Standard",
+            "Premium",
+            "Assurance",
+            "Core",
+            "Advanced",
+            "Ultimate"
+          ]
+        },
+        "confidence": {
+          "description": "Current app emits directional/moderate/strong; pitch engine may emit 0-1 numeric.",
+          "oneOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "string",
+              "enum": [
+                "directional",
+                "moderate",
+                "strong"
+              ]
+            }
+          ]
+        },
+        "confidenceScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "pressureScore": {
+          "type": "number"
+        },
+        "scaleLargeSignal": {
+          "type": "number"
+        },
+        "ultimateGateMatched": {
+          "type": "number"
+        },
+        "tagline": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "reasons": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "tierWhy": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": true
+    },
+    "followup": {
+      "type": "object",
+      "properties": {
+        "tierWhy": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "agenda": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "recommendedAttendees": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "recommendedResources": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": true
+    },
+    "pitch": {
+      "type": "object",
+      "description": "Deterministic pitch engine outputs",
+      "required": [
+        "selectedTier",
+        "selectedAngle",
+        "outputs",
+        "assumptions",
+        "missingFields"
+      ],
+      "properties": {
+        "selectedTier": {
+          "$ref": "#/$defs/canonicalTier"
+        },
+        "selectedAngle": {
+          "type": "string",
+          "enum": [
+            "A1_COMPLIANCE_EVIDENCE",
+            "A2_EXEC_ASSURANCE",
+            "A3_CRISIS_READINESS",
+            "A4_CAPABILITY_UPLIFT",
+            "A5_BENCHMARKING_KPI",
+            "A6_APPSEC_SDLC",
+            "A7_SPECIALTY_DOMAIN",
+            "A8_INSURANCE_TRUST"
+          ]
+        },
+        "secondaryAngle": {
+          "type": "string"
+        },
+        "reasonCodes": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "selectedOutcomes": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "selectedGaps": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "selectedBenefitingGroups": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "outputs": {
+          "type": "object",
+          "required": [
+            "elevator15s",
+            "elevator30s",
+            "talkTrack60s",
+            "whyNow",
+            "whyThisPackage",
+            "nextStep"
+          ],
+          "properties": {
+            "elevator15s": {
+              "type": "string"
+            },
+            "elevator30s": {
+              "type": "string"
+            },
+            "talkTrack60s": {
+              "type": "string"
+            },
+            "whyNow": {
+              "type": "string"
+            },
+            "whyThisPackage": {
+              "type": "string"
+            },
+            "nextStep": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "assumptions": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "missingFields": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "quality": {
+          "type": "object",
+          "properties": {
+            "confidenceScore": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "completenessScore": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "roi": {
+      "type": "object",
+      "properties": {
+        "visited": {
+          "type": "boolean"
+        },
+        "scenario": {
+          "type": "string"
+        },
+        "roiPercent": {
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "npvUSD_3yr": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "paybackMonths": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "investUSD_Annual": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "assumptions": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "nonNegativeNumberMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "canonicalTier": {
+      "type": "string",
+      "enum": [
+        "foundation",
+        "performance_readiness",
+        "assurance"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

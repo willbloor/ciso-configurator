@@ -279,6 +279,8 @@
         workspaceCompanyAnimatedIds: new Set(),
         interstitialAnimatedThreadIds: new Set(),
         navPreviewThreadId: null,
+        consultationOpen: false,
+        consultationThreadId: 'current',
 
         // record persistence
         savedThreads: [],
@@ -288,6 +290,7 @@
         autoSaveDueAt: 0
       };
       const THREAD_STORAGE_KEY = 'immersive.launchpad.savedThreads.v1';
+      const WORKSPACE_PROFILE_KEY = 'immersive.launchpad.workspaceProfile.v1';
       const AUTO_SAVE_FAST_MS = 30000;
       const AUTO_SAVE_BASE_MS = 60000;
       let autoSaveTimerId = 0;
@@ -1054,10 +1057,9 @@ const evidenceOpts = [
           state.regMode = (state.industry === 'Other' || state.region === 'Other') ? 'all' : 'suggested';
         }
 
-        // Keep auto-suggesting until the user edits the regulation set
-        if(!state.regsTouched || state.regs.size === 0){
+        // Keep recommendations visible in Suggested mode, but require explicit user selection.
+        if(!state.regsTouched){
           state.regs.clear();
-          regSuggestedIds(state.industry, state.region).forEach(id => state.regs.add(id));
         }
       }
 
@@ -1369,8 +1371,12 @@ const evidenceOpts = [
       // ---------- navigation ----------
       function setView(view, opts){
         const cfg = Object.assign({ render: true }, opts || {});
+        const prev = state.currentView || 'dashboard';
         const next = (view === 'dashboard' || view === 'archived' || view === 'interstitial' || view === 'account') ? view : 'configurator';
         state.currentView = next;
+        if(prev !== next && state.consultationOpen){
+          toggleConsultation(false);
+        }
         document.body.classList.toggle('is-configurator-view', next === 'configurator');
         document.body.classList.toggle('is-dashboard-view', next === 'dashboard');
         document.body.classList.toggle('is-archived-view', next === 'archived');
@@ -1465,6 +1471,111 @@ const evidenceOpts = [
         const it = (list || []).find((x)=> x.id === id);
         if(!it) return String(id);
         return String(it.label || it.title || id);
+      }
+
+      function optionIdFromAny(list, raw){
+        const value = String(raw || '').trim();
+        if(!value) return '';
+        const direct = (list || []).find((it)=> String(it && it.id || '').toLowerCase() === value.toLowerCase());
+        if(direct) return String(direct.id);
+        const normalize = (input)=> String(input || '')
+          .toLowerCase()
+          .replace(/[\u2018\u2019]/g, "'")
+          .replace(/[^a-z0-9]+/g, ' ')
+          .trim();
+        const target = normalize(value);
+        const byLabel = (list || []).find((it)=>{
+          const label = String((it && (it.label || it.title || it.id)) || '');
+          return normalize(label) === target;
+        });
+        return byLabel ? String(byLabel.id) : '';
+      }
+
+      const REQUIRED_FIELD_SELECTORS = Object.freeze({
+        role: '#optRole',
+        fullName: '#fullName',
+        company: '#company',
+        companySize: '#companySize',
+        operatingCountry: '#operatingCountry',
+        pressureSources: '#pressureCards',
+        urgentWin: '#radUrgentWin',
+        riskEnvs: '#riskEnvCards',
+        measuredOn: '#radMeasuredOn',
+        orgPain: '#radOrgPain',
+        groups: '#optGroups',
+        rhythm: '#radRhythm',
+        measure: '#radMeasure',
+        fitRealism: '#radFitRealism',
+        fitScope: '#radFitScope',
+        fitToday: '#radFitToday',
+        fitServices: '#radFitServices',
+        fitRiskFrame: '#radFitRisk',
+        industry: '#industry',
+        region: '#region',
+        regs: '#optRegs',
+        roiVisited: '#qValue'
+      });
+
+      function ensureQBlockStatusPill(block){
+        const labelRow = $('.labelRow', block);
+        if(!labelRow) return null;
+
+        let meta = $('.labelRowMeta', labelRow);
+        if(!meta){
+          meta = document.createElement('div');
+          meta.className = 'labelRowMeta';
+          const directInfo = Array.from(labelRow.children).find((child)=> child && child.classList && child.classList.contains('info'));
+          if(directInfo){
+            meta.appendChild(directInfo);
+          }
+          labelRow.appendChild(meta);
+        }
+
+        let pill = $('.qBlockStatusPill', meta);
+        if(!pill){
+          pill = document.createElement('span');
+          pill.className = 'qBlockStatusPill';
+          pill.hidden = true;
+          meta.insertBefore(pill, meta.firstChild || null);
+        }
+        return pill;
+      }
+
+      function applyRequiredFieldHighlights(missingKeys){
+        const missing = (missingKeys instanceof Set) ? missingKeys : new Set();
+        const requiredTargets = Object.entries(REQUIRED_FIELD_SELECTORS)
+          .map(([key, selector])=> ({ key, el: $(selector) }))
+          .filter((row)=> !!row.el);
+
+        requiredTargets.forEach(({ key, el })=>{
+          const isMissing = missing.has(key);
+          el.classList.toggle('is-field-incomplete', isMissing);
+          if(el.matches('input, select, textarea')){
+            if(isMissing){
+              el.setAttribute('aria-invalid', 'true');
+            }else{
+              el.removeAttribute('aria-invalid');
+            }
+          }
+        });
+
+        $$('.qBlock').forEach((block)=>{
+          let missingCount = 0;
+          requiredTargets.forEach(({ key, el })=>{
+            if(!missing.has(key)) return;
+            if(block.contains(el)) missingCount += 1;
+          });
+          block.classList.toggle('is-incomplete', missingCount > 0);
+          const pill = ensureQBlockStatusPill(block);
+          if(!pill) return;
+          if(missingCount > 0){
+            pill.hidden = false;
+            pill.textContent = missingCount === 1 ? '1 required' : `${missingCount} required`;
+          }else{
+            pill.hidden = true;
+            pill.textContent = '';
+          }
+        });
       }
 
       function listOrDash(values){
@@ -1599,6 +1710,8 @@ const evidenceOpts = [
 
       function buildReadinessContext(source){
         const src = (source && typeof source === 'object') ? source : {};
+        const regsRaw = listFromCollection(src.regs);
+        const hasRegsTouchedFlag = Object.prototype.hasOwnProperty.call(src, 'regsTouched');
         const ctx = {
           role: String(src.role || '').trim(),
           fullName: String(src.fullName || '').trim(),
@@ -1620,7 +1733,8 @@ const evidenceOpts = [
           fitRiskFrame: String(src.fitRiskFrame || '').trim(),
           industry: String(src.industry || '').trim(),
           region: String(src.region || '').trim(),
-          regs: setFromCollection(src.regs),
+          regsTouched: hasRegsTouchedFlag ? !!src.regsTouched : regsRaw.length > 0,
+          regs: new Set(regsRaw),
           visited: setFromCollection(src.visited)
         };
         if(!ctx.visited.size) ctx.visited.add(1);
@@ -1630,32 +1744,32 @@ const evidenceOpts = [
       function readinessRequirements(source){
         const ctx = buildReadinessContext(source);
         return [
-          { step:1, done: !!ctx.role, title:'Role not confirmed', why:'Role anchors ownership for outcomes and follow-up.' },
-          { step:1, done: !!ctx.fullName, title:'Name not captured', why:'Contact ownership is required for follow-up and handoff.' },
-          { step:1, done: !!ctx.company, title:'Company not captured', why:'Company context is needed before sharing a recommendation.' },
-          { step:1, done: !!ctx.companySize, title:'Company size missing', why:'Size influences cadence and recommendation confidence.' },
-          { step:1, done: !!ctx.operatingCountry, title:'Operating country missing', why:'Country informs the likely regulatory evidence path.' },
-          { step:1, done: ctx.pressureSources.length > 0, title:'Pressure sources not selected', why:'Pressure signals help prioritize the right outcomes.' },
-          { step:1, done: !!ctx.urgentWin, title:'Urgent 90-day win not set', why:'Urgency clarifies what success must look like first.' },
-          { step:1, done: ctx.riskEnvs.length > 0, title:'Risk environment not selected', why:'Risk environment helps focus the right simulation scope.' },
-          { step:1, done: !!ctx.measuredOn, title:'Current measurement baseline missing', why:'Baseline metrics are required to quantify uplift.' },
-          { step:1, done: !!ctx.orgPain, title:'Current organisation challenge unclear', why:'Current challenge shapes where value shows up fastest.' },
+          { key:'role', step:1, done: !!ctx.role, title:'Role not confirmed', why:'Role anchors ownership for outcomes and follow-up.' },
+          { key:'fullName', step:1, done: !!ctx.fullName, title:'Name not captured', why:'Contact ownership is required for follow-up and handoff.' },
+          { key:'company', step:1, done: !!ctx.company, title:'Company not captured', why:'Company context is needed before sharing a recommendation.' },
+          { key:'companySize', step:1, done: !!ctx.companySize, title:'Company size missing', why:'Size influences cadence and recommendation confidence.' },
+          { key:'operatingCountry', step:1, done: !!ctx.operatingCountry, title:'Operating country missing', why:'Country informs the likely regulatory evidence path.' },
+          { key:'pressureSources', step:1, done: ctx.pressureSources.length > 0, title:'Pressure sources not selected', why:'Pressure signals help prioritize the right outcomes.' },
+          { key:'urgentWin', step:1, done: !!ctx.urgentWin, title:'Urgent 90-day win not set', why:'Urgency clarifies what success must look like first.' },
+          { key:'riskEnvs', step:1, done: ctx.riskEnvs.length > 0, title:'Risk environment not selected', why:'Risk environment helps focus the right simulation scope.' },
+          { key:'measuredOn', step:1, done: !!ctx.measuredOn, title:'Current measurement baseline missing', why:'Baseline metrics are required to quantify uplift.' },
+          { key:'orgPain', step:1, done: !!ctx.orgPain, title:'Current organisation challenge unclear', why:'Current challenge shapes where value shows up fastest.' },
 
-          { step:2, done: ctx.groups.size > 0, title:'Coverage groups not selected', why:'Coverage determines program scope and rollout design.' },
-          { step:2, done: !!ctx.rhythm, title:'Cadence not selected', why:'Cadence impacts operating model and package fit.' },
-          { step:2, done: !!ctx.measure, title:'Measurement model not selected', why:'Measurement model drives reporting and evidence quality.' },
+          { key:'groups', step:2, done: ctx.groups.size > 0, title:'Coverage groups not selected', why:'Coverage determines program scope and rollout design.' },
+          { key:'rhythm', step:2, done: !!ctx.rhythm, title:'Cadence not selected', why:'Cadence impacts operating model and package fit.' },
+          { key:'measure', step:2, done: !!ctx.measure, title:'Measurement model not selected', why:'Measurement model drives reporting and evidence quality.' },
 
-          { step:3, done: !!ctx.fitRealism, title:'Realism requirement unanswered', why:'Realism changes effort and content structure.' },
-          { step:3, done: !!ctx.fitScope, title:'Scope requirement unanswered', why:'Scope alters expected delivery footprint.' },
-          { step:3, done: !!ctx.fitToday, title:'Current state unanswered', why:'Current state helps calibrate the starting package.' },
-          { step:3, done: !!ctx.fitServices, title:'Delivery support unanswered', why:'Support model affects implementation recommendations.' },
-          { step:3, done: !!ctx.fitRiskFrame, title:'Risk frame unanswered', why:'Risk framing helps position the narrative for stakeholders.' },
+          { key:'fitRealism', step:3, done: !!ctx.fitRealism, title:'Realism requirement unanswered', why:'Realism changes effort and content structure.' },
+          { key:'fitScope', step:3, done: !!ctx.fitScope, title:'Scope requirement unanswered', why:'Scope alters expected delivery footprint.' },
+          { key:'fitToday', step:3, done: !!ctx.fitToday, title:'Current state unanswered', why:'Current state helps calibrate the starting package.' },
+          { key:'fitServices', step:3, done: !!ctx.fitServices, title:'Delivery support unanswered', why:'Support model affects implementation recommendations.' },
+          { key:'fitRiskFrame', step:3, done: !!ctx.fitRiskFrame, title:'Risk frame unanswered', why:'Risk framing helps position the narrative for stakeholders.' },
 
-          { step:4, done: !!ctx.industry, title:'Industry not selected', why:'Industry context changes suggested standards and language.' },
-          { step:4, done: !!ctx.region, title:'Region not selected', why:'Region influences evidence and audit expectations.' },
-          { step:4, done: ctx.regs.size > 0, title:'Regulatory references not selected', why:'References improve the evidence narrative for stakeholders.' },
+          { key:'industry', step:4, done: !!ctx.industry, title:'Industry not selected', why:'Industry context changes suggested standards and language.' },
+          { key:'region', step:4, done: !!ctx.region, title:'Region not selected', why:'Region influences evidence and audit expectations.' },
+          { key:'regs', step:4, done: ctx.regs.size > 0 && !!ctx.regsTouched, title:'Regulatory references not selected', why:'References improve the evidence narrative for stakeholders.' },
 
-          { step:5, done: ctx.visited.has(5), title:'ROI estimate not reviewed', why:'ROI inputs are needed for investment and timing decisions.' }
+          { key:'roiVisited', step:5, done: ctx.visited.has(5), title:'ROI estimate not reviewed', why:'ROI inputs are needed for investment and timing decisions.' }
         ];
       }
 
@@ -2204,9 +2318,606 @@ const evidenceOpts = [
 	              activeStep: 5,
 	              visited: [1,2,3,4,5]
 	            }
-	          }
-	        ];
-	      }
+          }
+        ];
+      }
+
+      function replaceThreadCompany(rawThread, nextCompany){
+        const thread = jsonClone(rawThread) || {};
+        const company = String(nextCompany || '').trim() || 'Untitled company';
+        thread.company = company;
+
+        if(thread.snapshot && typeof thread.snapshot === 'object'){
+          thread.snapshot.company = company;
+        }
+
+        if(thread.modules && typeof thread.modules === 'object' && Array.isArray(thread.modules.organisation)){
+          let updated = false;
+          thread.modules.organisation = thread.modules.organisation.map((row)=>{
+            const label = String((row && row.label) || '').trim().toLowerCase();
+            if(label !== 'company') return row;
+            updated = true;
+            return Object.assign({}, row, { value: company });
+          });
+          if(!updated){
+            thread.modules.organisation.unshift({ label:'Company', value: company });
+          }
+        }
+
+        return thread;
+      }
+
+      function workspaceProfileLibrary(){
+        const now = Date.now();
+        const base = staticThreadModels();
+        const aeThreads = base.map((thread, idx)=> normalizeThreadModel(Object.assign({}, thread, {
+          id: `ae-${idx + 1}`,
+          priority: idx < 2 ? true : !!thread.priority,
+          archived: false,
+          archivedAt: 0,
+          updatedAt: now - (idx * 3600 * 1000)
+        }), idx));
+
+        const csNames = [
+          'Summit Manufacturing',
+          'HarborGrid Energy',
+          'Nova Retail Group',
+          'Westfield Health',
+          'Atlas Payments',
+          'Meridian Logistics'
+        ];
+        const csThreads = base.slice(0, 6).map((thread, idx)=> {
+          const renamed = replaceThreadCompany(thread, csNames[idx] || thread.company);
+          return normalizeThreadModel(Object.assign({}, renamed, {
+            id: `cs-${idx + 1}`,
+            priority: idx < 2,
+            archived: idx === 5,
+            archivedAt: idx === 5 ? (now - (4 * 24 * 3600 * 1000)) : 0,
+            updatedAt: now - ((idx + 1) * 5400 * 1000)
+          }), idx);
+        });
+
+        return [
+          {
+            id: 'ae_demo',
+            name: 'AE demo profile',
+            account: {
+              fullName: 'Will Bloor',
+              email: 'will.bloor@immersivelabs.com',
+              phone: '+1 555 123 4567',
+              defaultRole: 'senior_enterprise_account_manager',
+              defaultCountry: 'United States',
+              defaultRegion: 'NA',
+              fieldMode: 'guided',
+              prefillMode: 'on'
+            },
+            threads: aeThreads
+          },
+          {
+            id: 'cs_demo',
+            name: 'Customer success demo profile',
+            account: {
+              fullName: 'Alex Morgan',
+              email: 'alex.morgan@immersivelabs.com',
+              phone: '+1 555 987 6543',
+              defaultRole: 'lead_customer_success_manager',
+              defaultCountry: 'United States',
+              defaultRegion: 'NA',
+              fieldMode: 'guided',
+              prefillMode: 'on'
+            },
+            threads: csThreads
+          }
+        ];
+      }
+
+      function resetWorkspaceUiStateCaches(){
+        state.navPreviewThreadId = null;
+        state.dashboardSelectedIds = new Set();
+        state.archivedSelectedIds = new Set();
+        state.starPulseQueue = new Set();
+        state.completionRingAnimatedIds = new Set();
+        state.dashboardRowAnimatedIds = new Set();
+        state.workspaceCompanyAnimatedIds = new Set();
+        state.interstitialAnimatedThreadIds = new Set();
+      }
+
+      function applyWorkspaceThreadPortfolio(rows, opts){
+        const cfg = Object.assign({
+          profileStorageValue: undefined,
+          accountProfile: null,
+          toastMessage: ''
+        }, opts || {});
+
+        const sourceRows = Array.isArray(rows) ? rows : [];
+        const normalized = sourceRows.map((thread, idx)=> normalizeThreadModel(thread, idx));
+        const used = new Set();
+        normalized.forEach((thread, idx)=>{
+          let nextId = String((thread && thread.id) || `record-${idx + 1}`).trim();
+          if(!nextId) nextId = `record-${idx + 1}`;
+          if(used.has(nextId)){
+            const base = nextId;
+            let seq = 2;
+            while(used.has(`${base}-${seq}`)) seq += 1;
+            nextId = `${base}-${seq}`;
+          }
+          thread.id = nextId;
+          used.add(nextId);
+        });
+
+        state.savedThreads = normalized;
+        state.savedThreadsLoaded = true;
+        const firstActive = normalized.find((thread)=> !thread.archived) || normalized[0] || null;
+        state.activeThread = firstActive ? firstActive.id : 'current';
+        resetWorkspaceUiStateCaches();
+        persistSavedThreads();
+
+        try{
+          if(cfg.profileStorageValue === null){
+            window.localStorage.removeItem(WORKSPACE_PROFILE_KEY);
+          }else if(cfg.profileStorageValue !== undefined){
+            window.localStorage.setItem(WORKSPACE_PROFILE_KEY, String(cfg.profileStorageValue));
+          }
+        }catch(err){
+          // ignore storage failures
+        }
+
+        if(cfg.accountProfile && typeof cfg.accountProfile === 'object'){
+          applyAccountProfile(cfg.accountProfile, true);
+        }
+        setView('dashboard', { render:false });
+        update();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if(String(cfg.toastMessage || '').trim()){
+          toast(String(cfg.toastMessage).trim());
+        }
+      }
+
+      function loadWorkspaceProfile(profileId){
+        const profiles = workspaceProfileLibrary();
+        const profile = profiles.find((p)=> p.id === profileId);
+        if(!profile) return;
+
+        const rows = Array.isArray(profile.threads) ? profile.threads : [];
+        applyWorkspaceThreadPortfolio(rows, {
+          profileStorageValue: profile.id,
+          accountProfile: profile.account || {},
+          toastMessage: `Loaded ${profile.name}.`
+        });
+      }
+
+      function buildThreadsCsv(rows){
+        const join = (items)=> (items && items.length) ? items.join('; ') : '';
+        const val = (v)=> (v === null || v === undefined) ? '' : String(v);
+        const bool = (v)=> v ? 'true' : 'false';
+        const toJson = (v)=>{
+          try{
+            return JSON.stringify(v === undefined ? null : v);
+          }catch(err){
+            return '';
+          }
+        };
+        const roleLabels = roleOpts.map((opt)=> ({ id:opt.id, label:opt.label }));
+        const pressureLabels = pressureOpts.map((opt)=> ({ id:opt.id, label:opt.title }));
+        const riskLabels = riskEnvOpts.map((opt)=> ({ id:opt.id, label:opt.title }));
+        const driverLabels = driverOpts.map((opt)=> ({ id:opt.id, label:opt.title }));
+        const stackLabels = stackMaster.map((opt)=> ({ id:opt.id, label:opt.label }));
+        const regionLabels = { NA:'North America', UKI:'UK & Ireland', EU:'Europe (EU)', APAC:'APAC', Other:'Other / Global' };
+
+        const table = (rows || []).map((thread)=>{
+          const snapshot = (thread && thread.snapshot && typeof thread.snapshot === 'object') ? thread.snapshot : {};
+          const progress = threadReadinessProgress(thread);
+          const stackList = dashLabelsFromIds(snapshot.stack, stackLabels);
+          if(String(snapshot.stackOther || '').trim()) stackList.push(String(snapshot.stackOther).trim());
+          return {
+            record_id: thread.id,
+            company: thread.company,
+            stage: thread.stage,
+            completion: progress.completion,
+            tier: thread.tier,
+            open_gaps: (progress.gaps || []).length,
+            gap_summary: progress.gapSummary,
+            priority: bool(thread.priority),
+            archived: bool(thread.archived),
+            outcomes: join(thread.outcomes || []),
+            updated_at: thread.updatedAt ? new Date(thread.updatedAt).toISOString() : '',
+
+            full_name: snapshot.fullName || '',
+            role: optionLabel(roleLabels, snapshot.role),
+            company_size: snapshot.companySize || '',
+            operating_country: snapshot.operatingCountry || '',
+            industry: snapshot.industry || '',
+            region: snapshot.region ? (regionLabels[snapshot.region] || snapshot.region) : '',
+
+            pressure_sources: join(dashLabelsFromIds(snapshot.pressureSources, pressureLabels)),
+            urgent_win: optionLabel(urgentWinOpts, snapshot.urgentWin),
+            risk_environments: join(dashLabelsFromIds(snapshot.riskEnvs, riskLabels)),
+            measured_on_today: optionLabel(measuredOnOpts, snapshot.measuredOn),
+            organisation_pain: optionLabel(orgPainOpts, snapshot.orgPain),
+            drivers: join(dashLabelsFromIds(snapshot.drivers, driverLabels)),
+            evidence_audience: join(dashLabelsFromIds(snapshot.evidence, evidenceOpts)),
+
+            coverage_groups: join(dashLabelsFromIds(snapshot.groups, groupOpts)),
+            cadence: optionLabel(rhythmOpts, snapshot.rhythm),
+            measurement: optionLabel(measureOpts, snapshot.measure),
+            fit_realism: optionLabel(fitRealismOpts, snapshot.fitRealism),
+            fit_scope: optionLabel(fitScopeOpts, snapshot.fitScope),
+            fit_today: optionLabel(fitTodayOpts, snapshot.fitToday),
+            fit_services: optionLabel(fitServicesOpts, snapshot.fitServices),
+            fit_risk_frame: optionLabel(fitRiskFrameOpts, snapshot.fitRiskFrame),
+            regulations: join(dashLabelsFromIds(snapshot.regs, regMaster)),
+            stack: join(stackList),
+
+            currency: snapshot.currency || '',
+            revenue_b_usd: val(snapshot.revenueB),
+            spend_usd_annual: val(snapshot.investUSD),
+            team_cyber: val(snapshot.teamCyber),
+            team_dev: val(snapshot.teamDev),
+            team_workforce: val(snapshot.teamWf),
+            roi_pct_3yr: val(thread && thread.viz && thread.viz.roiPct),
+            npv_usd_3yr: val(thread && thread.viz && thread.viz.npv),
+            payback_months: val(thread && thread.viz && thread.viz.paybackMonths),
+
+            outcomes_json: toJson(thread && thread.outcomes),
+            gaps_json: toJson(progress && progress.gaps),
+            modules_json: toJson(thread && thread.modules),
+            snapshot_json: toJson(snapshot),
+            viz_json: toJson(thread && thread.viz),
+            record_json: toJson(thread)
+          };
+        });
+
+        const cols = table.length ? Object.keys(table[0]) : [];
+        if(!cols.length) return '';
+
+        const esc = (s)=>{
+          const str = String(s ?? '');
+          if(/[",\n]/.test(str)) return '"' + str.replace(/"/g, '""') + '"';
+          return str;
+        };
+        const header = cols.map(esc).join(',');
+        const lines = table.map((row)=> cols.map((col)=> esc(row[col])).join(','));
+        return [header].concat(lines).join('\n') + '\n';
+      }
+
+      function exportAllRecordsCsv(){
+        const rows = threadModels();
+        if(!rows.length){
+          toast('No records available to export.');
+          return;
+        }
+        const csv = buildThreadsCsv(rows);
+        if(!csv){
+          toast('No records available to export.');
+          return;
+        }
+        const day = new Date().toISOString().slice(0, 10);
+        const filename = `immersive-records-high-fidelity-${day}.csv`;
+        downloadText(csv, filename, 'text/csv;charset=utf-8;');
+        toast(`Exported ${rows.length} records (high fidelity CSV).`);
+      }
+
+      function csvCanonicalKey(raw){
+        return String(raw || '')
+          .replace(/^\uFEFF/, '')
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '');
+      }
+
+      function parseCsvMatrix(text){
+        const src = String(text || '');
+        if(!src.trim()) return [];
+        const rows = [];
+        let row = [];
+        let cell = '';
+        let inQuotes = false;
+        let idx = 0;
+
+        while(idx < src.length){
+          const ch = src[idx];
+          if(inQuotes){
+            if(ch === '"'){
+              if(src[idx + 1] === '"'){
+                cell += '"';
+                idx += 2;
+                continue;
+              }
+              inQuotes = false;
+              idx += 1;
+              continue;
+            }
+            cell += ch;
+            idx += 1;
+            continue;
+          }
+
+          if(ch === '"'){
+            inQuotes = true;
+            idx += 1;
+            continue;
+          }
+          if(ch === ','){
+            row.push(cell);
+            cell = '';
+            idx += 1;
+            continue;
+          }
+          if(ch === '\n'){
+            row.push(cell);
+            rows.push(row);
+            row = [];
+            cell = '';
+            idx += 1;
+            continue;
+          }
+          if(ch === '\r'){
+            idx += 1;
+            continue;
+          }
+          cell += ch;
+          idx += 1;
+        }
+
+        row.push(cell);
+        if(row.length > 1 || row[0] !== '' || rows.length === 0){
+          rows.push(row);
+        }
+        if(rows.length && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0] === ''){
+          rows.pop();
+        }
+        return rows;
+      }
+
+      function csvObjectsFromText(text){
+        const matrix = parseCsvMatrix(text);
+        if(matrix.length < 2) return [];
+        const headers = matrix[0].map((header)=> csvCanonicalKey(header));
+        if(!headers.some(Boolean)) return [];
+        const out = [];
+        matrix.slice(1).forEach((cells)=>{
+          const row = {};
+          let hasValue = false;
+          headers.forEach((header, idx)=>{
+            if(!header) return;
+            const value = String((cells && cells[idx]) ?? '');
+            row[header] = value;
+            if(value.trim()) hasValue = true;
+          });
+          if(hasValue) out.push(row);
+        });
+        return out;
+      }
+
+      function csvRowValue(row, keys){
+        const source = (row && typeof row === 'object') ? row : {};
+        const list = Array.isArray(keys) ? keys : [keys];
+        for(const key of list){
+          const canon = csvCanonicalKey(key);
+          if(!canon) continue;
+          if(Object.prototype.hasOwnProperty.call(source, canon)){
+            return String(source[canon] ?? '');
+          }
+        }
+        return '';
+      }
+
+      function csvListValues(raw){
+        const src = String(raw || '').replace(/\u2022/g, '·').trim();
+        if(!src) return [];
+        let parts = src.split(/[;|]/);
+        if(parts.length === 1 && src.includes('·')){
+          parts = src.split('·');
+        }
+        if(parts.length === 1 && src.includes(',')){
+          const commaParts = src.split(',').map((part)=> part.trim()).filter(Boolean);
+          parts = commaParts.some((part)=> part.length > 36) ? [src] : commaParts;
+        }
+        return parts.map((part)=> part.trim().replace(/\s+/g, ' ')).filter(Boolean);
+      }
+
+      function csvBoolValue(raw){
+        const val = String(raw || '').trim().toLowerCase();
+        return val === 'true' || val === '1' || val === 'yes' || val === 'y';
+      }
+
+      function csvPercentValue(raw){
+        const m = String(raw || '').match(/-?\d+(?:\.\d+)?/);
+        if(!m) return null;
+        return clamp(Math.round(Number(m[0]) || 0), 0, 100);
+      }
+
+      function csvCompletionSummary(completionRaw, pctRaw){
+        const completion = String(completionRaw || '').trim();
+        if(completion){
+          const slash = completion.match(/(\d+)\s*\/\s*(\d+)/);
+          const pctFromCompletion = csvPercentValue(completion);
+          if(slash){
+            const done = Math.max(0, Number(slash[1]) || 0);
+            const total = Math.max(1, Number(slash[2]) || 22);
+            const pct = (pctFromCompletion === null)
+              ? clamp(Math.round((done / total) * 100), 0, 100)
+              : pctFromCompletion;
+            return `${done}/${total} (${pct}%)`;
+          }
+          if(pctFromCompletion !== null){
+            const done = Math.round((pctFromCompletion / 100) * 22);
+            return `${done}/22 (${pctFromCompletion}%)`;
+          }
+        }
+        const pct = csvPercentValue(pctRaw);
+        if(pct !== null){
+          const done = Math.round((pct / 100) * 22);
+          return `${done}/22 (${pct}%)`;
+        }
+        return '0/22 (0%)';
+      }
+
+      function csvTryJson(raw){
+        const value = String(raw || '').trim();
+        if(!value) return null;
+        try{
+          return JSON.parse(value);
+        }catch(err){
+          return null;
+        }
+      }
+
+      function csvRegionCode(raw){
+        const value = String(raw || '').trim();
+        if(!value) return '';
+        const upper = value.toUpperCase();
+        if(upper === 'NA' || upper === 'UKI' || upper === 'EU' || upper === 'APAC') return upper;
+        if(upper === 'OTHER') return 'Other';
+        const norm = value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const map = {
+          'north america': 'NA',
+          'uk ireland': 'UKI',
+          'uk and ireland': 'UKI',
+          'europe': 'EU',
+          'europe eu': 'EU',
+          'apac': 'APAC',
+          'asia pacific': 'APAC',
+          'other': 'Other',
+          'other global': 'Other',
+          'global': 'Other'
+        };
+        return map[norm] || '';
+      }
+
+      function csvGapsFromRow(row){
+        const fromJson = csvTryJson(csvRowValue(row, ['gaps_json']));
+        if(Array.isArray(fromJson)){
+          return fromJson.map((gap)=> ({
+            title: String((gap && gap.title) || 'Gap'),
+            why: String((gap && gap.why) || ''),
+            step: clamp(Number(gap && gap.step) || 1, 1, 6)
+          }));
+        }
+
+        const summary = csvRowValue(row, ['gap_summary', 'remaining_gaps', 'gaps']);
+        const parts = csvListValues(summary);
+        if(parts.length){
+          return parts.map((title)=> ({
+            title,
+            why: 'This input is still needed to complete the readiness profile.',
+            step: 1
+          }));
+        }
+
+        const openGaps = Math.max(0, Number(csvRowValue(row, ['open_gaps'])) || 0);
+        if(!openGaps) return [];
+        return Array.from({ length: openGaps }, (_, idx)=> ({
+          title: `Gap ${idx + 1}`,
+          why: 'This input is still needed to complete the readiness profile.',
+          step: 1
+        }));
+      }
+
+      function csvThreadFromRow(row, idx){
+        const recordJson = csvTryJson(csvRowValue(row, ['record_json']));
+        if(recordJson && typeof recordJson === 'object' && !Array.isArray(recordJson)){
+          return recordJson;
+        }
+
+        const company = String(csvRowValue(row, ['company', 'company_name', 'account_company']) || '').trim();
+        if(!company) return null;
+
+        const outcomes = csvListValues(csvRowValue(row, ['outcomes', 'key_outcomes', 'outcomes_text']));
+        const gaps = csvGapsFromRow(row);
+        const gapSummary = String(csvRowValue(row, ['gap_summary', 'remaining_gaps']) || '').trim()
+          || (gaps.length ? gaps.slice(0, 2).map((gap)=> gap.title).join(' · ') : 'No open gaps');
+
+        const snapshotJson = csvTryJson(csvRowValue(row, ['snapshot_json']));
+        const modulesJson = csvTryJson(csvRowValue(row, ['modules_json']));
+        const vizJson = csvTryJson(csvRowValue(row, ['viz_json']));
+
+        const snapshot = (snapshotJson && typeof snapshotJson === 'object' && !Array.isArray(snapshotJson))
+          ? snapshotJson
+          : {
+              fullName: String(csvRowValue(row, ['full_name', 'name']) || '').trim(),
+              company,
+              role: optionIdFromAny(roleOpts, csvRowValue(row, ['role'])),
+              companySize: String(csvRowValue(row, ['company_size']) || '').trim(),
+              operatingCountry: String(csvRowValue(row, ['operating_country', 'country']) || '').trim(),
+              industry: String(csvRowValue(row, ['industry']) || '').trim(),
+              region: csvRegionCode(csvRowValue(row, ['region'])),
+              activeStep: 1,
+              visited: [1]
+            };
+
+        const fallbackRoiPct = csvPercentValue(csvRowValue(row, ['roi_pct_3yr', 'roi_3yr_pct']));
+        const fallbackNpv = Number(String(csvRowValue(row, ['npv_usd_3yr', 'npv_3yr']) || '').replace(/[^0-9.-]/g, ''));
+        const fallbackPayback = Number(String(csvRowValue(row, ['payback_months']) || '').replace(/[^0-9.-]/g, ''));
+        const fallbackSpend = Number(String(csvRowValue(row, ['spend_usd_annual', 'indicative_spend']) || '').replace(/[^0-9.-]/g, ''));
+        const viz = (vizJson && typeof vizJson === 'object' && !Array.isArray(vizJson))
+          ? vizJson
+          : {
+              roiPct: fallbackRoiPct === null ? undefined : fallbackRoiPct,
+              npv: Number.isFinite(fallbackNpv) ? fallbackNpv : undefined,
+              spend: Number.isFinite(fallbackSpend) ? fallbackSpend : undefined,
+              paybackMonths: Number.isFinite(fallbackPayback) ? fallbackPayback : null
+            };
+
+        const updatedRaw = csvRowValue(row, ['updated_at', 'last_updated']);
+        const updatedAt = Number(new Date(updatedRaw).getTime()) || Date.now() - (idx * 60000);
+        const idFromCsv = String(csvRowValue(row, ['record_id', 'id']) || `imported-${idx + 1}`).trim();
+
+        return {
+          id: idFromCsv || `imported-${idx + 1}`,
+          company,
+          stage: String(csvRowValue(row, ['stage']) || '').trim() || 'Discovery',
+          completion: csvCompletionSummary(csvRowValue(row, ['completion']), csvRowValue(row, ['completion_pct', 'completion_percent'])),
+          tier: String(csvRowValue(row, ['tier', 'recommended_tier']) || '').trim() || 'Core',
+          outcomes,
+          outcomesText: outcomes.length ? outcomes.join(' · ') : 'Awaiting outcome signals',
+          gapSummary,
+          gaps,
+          modules: (modulesJson && typeof modulesJson === 'object' && !Array.isArray(modulesJson)) ? modulesJson : undefined,
+          snapshot,
+          viz,
+          updatedAt,
+          priority: csvBoolValue(csvRowValue(row, ['priority', 'starred'])),
+          archived: csvBoolValue(csvRowValue(row, ['archived'])),
+          archivedAt: 0
+        };
+      }
+
+      function importWorkspaceCsvText(csvText, sourceName){
+        const rows = csvObjectsFromText(csvText);
+        if(!rows.length){
+          throw new Error('No CSV rows found.');
+        }
+        const imported = rows
+          .map((row, idx)=> csvThreadFromRow(row, idx))
+          .filter(Boolean);
+        if(!imported.length){
+          throw new Error('No valid records found. Include a company column or record_json payload.');
+        }
+        const label = String(sourceName || 'CSV').trim() || 'CSV';
+        applyWorkspaceThreadPortfolio(imported, {
+          profileStorageValue: 'uploaded_csv',
+          toastMessage: `Imported ${imported.length} records from ${label}.`
+        });
+      }
+
+      function importWorkspaceCsvFile(file){
+        const src = file;
+        if(!src) return;
+        const reader = new FileReader();
+        reader.onload = ()=>{
+          try{
+            importWorkspaceCsvText(String(reader.result || ''), src.name || 'CSV');
+          }catch(err){
+            toast(err && err.message ? err.message : 'Unable to import CSV.');
+          }
+        };
+        reader.onerror = ()=>{
+          toast('Could not read the selected CSV file.');
+        };
+        reader.readAsText(src);
+      }
 
       function jsonClone(value){
         try{
@@ -2476,7 +3187,9 @@ const evidenceOpts = [
         state.regMode = (snap.regMode === 'all') ? 'all' : 'suggested';
         state.regModeTouched = !!snap.regModeTouched;
         state.regSearch = snap.regSearch || '';
-        state.regsTouched = !!snap.regsTouched;
+        state.regsTouched = (typeof snap.regsTouched === 'boolean')
+          ? snap.regsTouched
+          : (Array.isArray(snap.regs) && snap.regs.length > 0);
         state.regs = new Set(Array.isArray(snap.regs) ? snap.regs : []);
         state.stack = new Set(Array.isArray(snap.stack) ? snap.stack : []);
         state.stackOther = snap.stackOther || '';
@@ -2821,19 +3534,204 @@ const evidenceOpts = [
         setActiveStep(Number(step) || dashboardFirstGapStep(currentThreadModel()));
       }
 
+      function normalizeMatchKey(value){
+        return String(value || '')
+          .toLowerCase()
+          .replace(/&/g, ' and ')
+          .replace(/[\u2018\u2019]/g, "'")
+          .replace(/[^a-z0-9]+/g, ' ')
+          .trim();
+      }
+
+      function inferredConsultationOutcomes(thread){
+        const source = (thread && typeof thread === 'object') ? thread : {};
+        const parts = [];
+        if(Array.isArray(source.outcomes)) parts.push(...source.outcomes);
+        if(String(source.outcomesText || '').trim()){
+          parts.push(...String(source.outcomesText).split('·'));
+        }
+        if(Array.isArray(source.viz && source.viz.outcomeBreakdown)){
+          parts.push(...source.viz.outcomeBreakdown.map((row)=> row && row.label));
+        }
+
+        const found = [];
+        const used = new Set();
+        const tryAdd = (opt)=>{
+          if(!opt || used.has(opt.id)) return;
+          used.add(opt.id);
+          found.push(opt);
+        };
+
+        parts
+          .map((part)=> normalizeMatchKey(part))
+          .filter(Boolean)
+          .forEach((needle)=>{
+            const match = primaryOutcomeOpts.find((opt)=>{
+              const keys = [
+                normalizeMatchKey(opt.id),
+                normalizeMatchKey(opt.short),
+                normalizeMatchKey(opt.label),
+                normalizeMatchKey(opt.oneLiner)
+              ].filter(Boolean);
+              return keys.some((key)=> needle.includes(key) || key.includes(needle));
+            });
+            if(match) tryAdd(match);
+          });
+
+        if(found.length) return found.slice(0, 3);
+        return inferredPrimaryOutcomes(3);
+      }
+
+      function consultationModelForThread(threadId){
+        const target = threadId || state.activeThread || 'current';
+        let thread = null;
+        const shouldUseLiveState = state.currentView === 'configurator' && (target === 'current' || target === state.activeThread);
+        if(shouldUseLiveState){
+          thread = currentThreadModel();
+        }else if(target !== 'current'){
+          thread = findSavedThread(target);
+        }
+        if(!thread){
+          thread = currentThreadModel();
+        }
+        const resolvedId = (thread && thread.id) ? thread.id : 'current';
+        const progress = threadReadinessProgress(thread);
+        const completion = String(progress.completion || thread.completion || '0/22 (0%)');
+        const outcomes = inferredConsultationOutcomes(thread);
+        const agenda = buildNextMeetingAgenda(outcomes);
+        const attendees = buildWhoToBring(outcomes);
+        const resources = buildRecommendedResources(outcomes);
+
+        const roiPct = Number(thread && thread.viz && thread.viz.roiPct);
+        const npv = Number(thread && thread.viz && thread.viz.npv);
+        const paybackMonths = Number(thread && thread.viz && thread.viz.paybackMonths);
+
+        const payload = [];
+        payload.push(`Recommended package: ${thread.tier || 'Core'}`);
+        payload.push(`Current status: ${(thread.stage || 'Discovery')} · ${completion}`);
+        if(String(thread.outcomesText || '').trim() && String(thread.outcomesText || '').trim() !== 'Awaiting outcome signals'){
+          payload.push(`Primary outcomes: ${String(thread.outcomesText).trim()}`);
+        }else if(outcomes.length){
+          payload.push(`Primary outcomes: ${outcomes.map((row)=> row.short || row.label).filter(Boolean).join(' · ')}`);
+        }else{
+          payload.push('Primary outcomes: Outcome confidence pending');
+        }
+        payload.push(`Open gaps: ${progress.gapSummary || 'No open gaps'}`);
+        if(Number.isFinite(roiPct)){
+          const roiParts = [`Indicative ROI: ${Math.round(roiPct)}%`];
+          if(Number.isFinite(npv)) roiParts.push(`3-year NPV ${fmtMoneyUSD(npv)}`);
+          if(Number.isFinite(paybackMonths)) roiParts.push(`payback ${fmtPayback(paybackMonths)}`);
+          payload.push(roiParts.join(' · '));
+        }
+
+        let topics = (progress.gaps || [])
+          .map((gap)=> String((gap && gap.title) || '').trim())
+          .filter(Boolean);
+        if(!topics.length){
+          topics = ['No critical gaps open. Focus on rollout sequencing and stakeholder alignment.'];
+        }
+        topics = topics.slice(0, 6);
+
+        return {
+          threadId: resolvedId,
+          company: thread.company || 'Untitled company',
+          tier: thread.tier || 'Core',
+          stage: thread.stage || 'Discovery',
+          completion,
+          payload,
+          attendees,
+          topics,
+          agenda,
+          resources
+        };
+      }
+
+      function consultationBriefText(model){
+        const rows = (model && typeof model === 'object') ? model : consultationModelForThread(state.consultationThreadId || state.activeThread || 'current');
+        const lines = [];
+        lines.push(`Consultation Brief — ${rows.company}`);
+        lines.push('');
+        lines.push(`Tier: ${rows.tier}`);
+        lines.push(`Stage: ${rows.stage}`);
+        lines.push(`Completion: ${rows.completion}`);
+        lines.push('');
+        lines.push('Payload for customer:');
+        (rows.payload || []).forEach((item)=> lines.push(`- ${item}`));
+        lines.push('');
+        lines.push('People to invite:');
+        (rows.attendees || []).forEach((item)=> lines.push(`- ${item}`));
+        lines.push('');
+        lines.push('Topics to cover:');
+        (rows.topics || []).forEach((item)=> lines.push(`- ${item}`));
+        lines.push('');
+        lines.push('Proposed agenda:');
+        (rows.agenda || []).forEach((item, idx)=> lines.push(`${idx + 1}. ${item}`));
+        lines.push('');
+        lines.push('Recommended resources:');
+        (rows.resources || []).forEach((item)=> lines.push(`- ${item}`));
+        return lines.join('\n');
+      }
+
+      function renderConsultationPanel(threadId){
+        const model = consultationModelForThread(threadId);
+        state.consultationThreadId = model.threadId;
+
+        const setText = (sel, val)=>{
+          const el = $(sel);
+          if(el) el.textContent = String(val || '');
+        };
+        const setList = (sel, items)=>{
+          const el = $(sel);
+          if(!el) return;
+          const rows = Array.isArray(items) && items.length ? items : ['—'];
+          el.innerHTML = rows.map((row)=> `<li>${escapeHtml(String(row || '—'))}</li>`).join('');
+        };
+
+        setText('#consultationCompany', model.company);
+        setText('#consultationSub', `Prepare the consultation handoff for ${model.company}.`);
+        setText('#consultTierPill', `Tier: ${model.tier}`);
+        setText('#consultStagePill', `Stage: ${model.stage}`);
+        setText('#consultCompletionPill', `Completion: ${model.completion}`);
+        setList('#consultPayload', model.payload);
+        setList('#consultAttendees', model.attendees);
+        setList('#consultTopics', model.topics);
+        setList('#consultAgenda', model.agenda);
+        setList('#consultResources', model.resources);
+      }
+
+      function toggleConsultation(open, opts){
+        const panel = $('#consultationPanel');
+        if(!panel) return;
+        const cfg = opts || {};
+        const on = !!open;
+        state.consultationOpen = on;
+
+        if(on){
+          const target = (cfg.threadId || state.consultationThreadId || state.activeThread || 'current');
+          renderConsultationPanel(target);
+          syncFormControlsFromState();
+          panel.classList.add('open');
+          panel.setAttribute('aria-hidden', 'false');
+        }else{
+          panel.classList.remove('open');
+          panel.setAttribute('aria-hidden', 'true');
+        }
+        document.body.classList.toggle('is-consultation-open', on);
+      }
+
       function openThreadBooking(threadId){
         const target = threadId || state.activeThread || 'current';
-        openThreadConfigurator(target, 6);
+        const preferLive = state.currentView === 'configurator';
+        const resolved = preferLive
+          ? 'current'
+          : ((target !== 'current' && findSavedThread(target)) ? target : 'current');
+        toggleConsultation(true, { threadId: resolved });
         window.setTimeout(()=>{
-          const bookForm = $('#bookForm');
-          if(bookForm){
-            bookForm.scrollIntoView({ behavior:'smooth', block:'start' });
-          }
           const emailField = $('#email');
           if(emailField && !String(emailField.value || '').trim()){
             emailField.focus();
           }
-        }, 240);
+        }, 120);
       }
 
       function packageOverviewForTier(tier){
@@ -4381,6 +5279,12 @@ const evidenceOpts = [
 
         const regionLabels = { NA:'North America', UKI:'UK & Ireland', EU:'Europe (EU)', APAC:'APAC', Other:'Other / Global' };
         const liveGaps = dashboardCurrentGaps();
+        const liveRequirements = readinessRequirements(state);
+        const missingRequirementKeys = new Set(
+          liveRequirements
+            .filter((req)=> !req.done && req.key)
+            .map((req)=> req.key)
+        );
         const gapSteps = new Set(
           liveGaps.map((gap)=> clamp(Number(gap && gap.step) || 1, 1, 6))
         );
@@ -4757,10 +5661,8 @@ const evidenceOpts = [
           const stepNo = clamp(Number(stepEl.dataset.step) || 1, 1, 6);
           const hasGap = gapSteps.has(stepNo);
           stepEl.dataset.incomplete = hasGap ? 'true' : 'false';
-          $$('.qBlock', stepEl).forEach((block)=>{
-            block.classList.toggle('is-incomplete', hasGap);
-          });
         });
+        applyRequiredFieldHighlights(missingRequirementKeys);
 
         // Your plan view
         setText('#planTitle', `${tier.name} is the best starting point`);
@@ -4883,6 +5785,9 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
 
         if(state.starPulseQueue && state.starPulseQueue.size){
           state.starPulseQueue.clear();
+        }
+        if(state.consultationOpen){
+          renderConsultationPanel(state.consultationThreadId || state.activeThread || 'current');
         }
 
         snapshotMotionReady = true;
@@ -5584,6 +6489,8 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const globalCreateRecord = $('#globalCreateRecord');
       const globalEditConfigurator = $('#globalEditConfigurator');
       const globalBookConsultation = $('#globalBookConsultation');
+      const consultationPanel = $('#consultationPanel');
+      const closeConsultationBtn = $('#closeConsultation');
       const accountOpenSettings = $('#accountOpenSettings');
       const jumpNextIncompleteBtns = $$('[data-jump-next-incomplete]');
       const saveRecordBtn = $('#saveRecordBtn');
@@ -5646,6 +6553,18 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         globalBookConsultation.addEventListener('click', ()=>{
           const thread = activeThreadModel();
           openThreadBooking((thread && thread.id) ? thread.id : (state.activeThread || 'current'));
+        });
+      }
+      if(closeConsultationBtn){
+        closeConsultationBtn.addEventListener('click', ()=>{
+          toggleConsultation(false);
+        });
+      }
+      if(consultationPanel){
+        consultationPanel.addEventListener('click', (e)=>{
+          if(e.target === consultationPanel){
+            toggleConsultation(false);
+          }
         });
       }
       if(workspaceCompaniesList){
@@ -5778,6 +6697,11 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const accountPrefillOptions = $$('#accountPrefillOptions [data-prefill]');
       const accountApplyNowBtn = $('#accountApplyNow');
       const accountResetBtn = $('#accountReset');
+      const accountLoadProfileAeBtn = $('#accountLoadProfileAe');
+      const accountLoadProfileCsBtn = $('#accountLoadProfileCs');
+      const accountUploadProfileCsvBtn = $('#accountUploadProfileCsv');
+      const accountUploadProfileFileInput = $('#accountUploadProfileFile');
+      const accountExportAllCsvBtn = $('#accountExportAllCsv');
       const toneOptions = $$('#toneOptions [data-tone]');
       const densityOptions = $$('#densityOptions [data-density]');
       const fontScaleOptions = $$('#fontScaleOptions [data-font-scale]');
@@ -6140,6 +7064,9 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         if(settings && settings.classList.contains('open')){
           toggleSettings(false);
         }
+        if(state.consultationOpen){
+          toggleConsultation(false);
+        }
         if($('#archiveModal')?.classList.contains('show')) closeArchivePrompt();
         if($('#modal')?.classList.contains('show')) $('#modal').classList.remove('show');
       });
@@ -6183,6 +7110,32 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
             prefillMode: 'on'
           }, true);
           toast('Account defaults reset.');
+        });
+      }
+      if(accountLoadProfileAeBtn){
+        accountLoadProfileAeBtn.addEventListener('click', ()=>{
+          loadWorkspaceProfile('ae_demo');
+        });
+      }
+      if(accountLoadProfileCsBtn){
+        accountLoadProfileCsBtn.addEventListener('click', ()=>{
+          loadWorkspaceProfile('cs_demo');
+        });
+      }
+      if(accountUploadProfileCsvBtn && accountUploadProfileFileInput){
+        accountUploadProfileCsvBtn.addEventListener('click', ()=>{
+          accountUploadProfileFileInput.click();
+        });
+        accountUploadProfileFileInput.addEventListener('change', ()=>{
+          const file = accountUploadProfileFileInput.files && accountUploadProfileFileInput.files[0];
+          if(!file) return;
+          importWorkspaceCsvFile(file);
+          accountUploadProfileFileInput.value = '';
+        });
+      }
+      if(accountExportAllCsvBtn){
+        accountExportAllCsvBtn.addEventListener('click', ()=>{
+          exportAllRecordsCsv();
         });
       }
       toneOptions.forEach((btn)=>{
@@ -6848,6 +7801,9 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           setActiveStep(state.activeStep + 1);
           requestAutoSave(AUTO_SAVE_FAST_MS);
         }
+        if(action === 'save'){
+          saveActiveRecord();
+        }
         if(action === 'back'){
           setActiveStep(state.activeStep - 1);
         }
@@ -6870,18 +7826,42 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           const report = buildReportModelV1();
           printReport(report);
         }
+        if(action === 'openConsultation'){
+          openThreadBooking(state.activeThread || 'current');
+        }
+        if(action === 'copyConsultationBrief'){
+          const model = consultationModelForThread(state.consultationThreadId || state.activeThread || 'current');
+          copyToClipboard(consultationBriefText(model));
+        }
+        if(action === 'downloadConsultationBrief'){
+          const model = consultationModelForThread(state.consultationThreadId || state.activeThread || 'current');
+          const datePart = new Date().toISOString().slice(0, 10);
+          const filename = `consultation-brief-${safeFilePart(model.company || 'record')}-${datePart}.txt`;
+          downloadText(consultationBriefText(model), filename, 'text/plain;charset=utf-8;');
+          toast('Downloaded consultation brief.');
+        }
         if(action === 'book'){
-          state.email = $('#email').value.trim();
-          state.phone = $('#phone').value.trim();
-          state.notes = $('#notes').value.trim();
-          state.optin = $('#optin').checked;
+          const emailField = $('#email');
+          const phoneField = $('#phone');
+          const notesField = $('#notes');
+          const optinField = $('#optin');
+          state.email = emailField ? emailField.value.trim() : '';
+          state.phone = phoneField ? phoneField.value.trim() : '';
+          state.notes = notesField ? notesField.value.trim() : '';
+          state.optin = !!(optinField && optinField.checked);
 
           if(!state.email){
             toast('Add a business email to book a consultation.');
-            $('#email').focus();
+            if(emailField) emailField.focus();
             return;
           }
 
+          const model = consultationModelForThread(state.consultationThreadId || state.activeThread || 'current');
+          const modalBody = $('#modalBody');
+          if(modalBody){
+            modalBody.textContent = `In production, this would create a consultation request for ${model.company}, attach the payload + agenda, and hand off attendees to scheduling + CRM.`;
+          }
+          toggleConsultation(false);
           $('#modal').classList.add('show');
         }
         if(action === 'closeModal'){

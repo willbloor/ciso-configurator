@@ -1801,7 +1801,7 @@ const evidenceOpts = [
           const company = String((thread && thread.company) || '').trim() || 'Record';
           const threadId = String((thread && thread.id) || state.recommendationsThreadId || 'current');
           items.push({ label:company, action:'interstitial-thread', threadId, current:false });
-          items.push({ label:'Content recommendations', action:'recommendations', current:true });
+          items.push({ label:'Resources', action:'recommendations', current:true });
         }
 
         list.innerHTML = items.map((item)=>{
@@ -6164,10 +6164,18 @@ const evidenceOpts = [
       let cachedRssCatalogRows = [];
       let rssCatalogHydrated = false;
       let rssCatalogHydratePromise = null;
+      let rssFailureToastShown = false;
       const defaultRssFeedSources = Object.freeze([
         { key:'c7-blog', label:"What's new", url:'https://rssgenerator.mooo.com/feeds/?p=aaHR0cHM6Ly93d3cuaW1tZXJzaXZlbGFicy5jb20vcmVzb3VyY2VzL3doYXRzLW5ldw==' },
         { key:'blog-post', label:'Blog', url:'https://rssgenerator.mooo.com/feeds/?p=aaHR0cHM6Ly93d3cuaW1tZXJzaXZlbGFicy5jb20vcmVzb3VyY2VzL2M3LWJsb2c=' }
       ]);
+      let rssCatalogFetchReport = {
+        loading: false,
+        attempted: 0,
+        succeeded: 0,
+        failed: 0,
+        errors: []
+      };
 
       function rewriteLegacyImmersiveBlogUrl(rawUrl){
         const value = String(rawUrl || '').trim();
@@ -6214,6 +6222,46 @@ const evidenceOpts = [
         if(!text) return 0;
         const ts = Date.parse(text);
         return Number.isFinite(ts) ? ts : 0;
+      }
+
+      function isRssCatalogSource(source){
+        return /^rss\s*:/i.test(String(source || '').trim());
+      }
+
+      function formatPublishedDate(value){
+        const ts = publishedTimestamp(value);
+        if(!ts) return '';
+        try{
+          return new Intl.DateTimeFormat(undefined, { year:'numeric', month:'short', day:'numeric' }).format(new Date(ts));
+        }catch(err){
+          return '';
+        }
+      }
+
+      function recommendationSourceLabel(card){
+        const source = String(card && card.source || '').trim();
+        if(source){
+          return isRssCatalogSource(source) ? source : `Catalog: ${source}`;
+        }
+        return 'Catalog: Webflow export';
+      }
+
+      function recommendationRssStatusText(cards){
+        const loaded = Array.isArray(cachedRssCatalogRows) ? cachedRssCatalogRows.length : 0;
+        const shown = Array.isArray(cards)
+          ? cards.reduce((sum, card)=> sum + (isRssCatalogSource(card && card.source) ? 1 : 0), 0)
+          : 0;
+        if(rssCatalogFetchReport.loading) return 'RSS: loading feeds…';
+        if(!rssCatalogHydrated) return 'RSS: waiting to load';
+        if(loaded > 0){
+          return shown > 0
+            ? `RSS: ${loaded} items loaded · ${shown} shown`
+            : `RSS: ${loaded} items loaded`;
+        }
+        if((rssCatalogFetchReport.failed || 0) > 0){
+          return 'RSS: unavailable, using catalog only';
+        }
+        return 'RSS: no items loaded';
       }
 
       function safeSlugForContent(value){
@@ -6299,8 +6347,18 @@ const evidenceOpts = [
       async function hydrateRssCatalogRows(){
         if(rssCatalogHydrated) return cachedRssCatalogRows;
         if(rssCatalogHydratePromise) return rssCatalogHydratePromise;
+        rssCatalogFetchReport = {
+          loading: true,
+          attempted: defaultRssFeedSources.length,
+          succeeded: 0,
+          failed: 0,
+          errors: []
+        };
         if(!(window && typeof window.fetch === 'function')){
           rssCatalogHydrated = true;
+          rssCatalogFetchReport.loading = false;
+          rssCatalogFetchReport.failed = defaultRssFeedSources.length;
+          rssCatalogFetchReport.errors = ['Fetch API unavailable in this browser'];
           return cachedRssCatalogRows;
         }
         rssCatalogHydratePromise = (async ()=>{
@@ -6308,10 +6366,17 @@ const evidenceOpts = [
           await Promise.all(defaultRssFeedSources.map(async (feed)=>{
             try{
               const response = await window.fetch(feed.url, { method:'GET', mode:'cors', credentials:'omit' });
-              if(!response || !response.ok) return;
+              if(!response || !response.ok){
+                rssCatalogFetchReport.failed += 1;
+                rssCatalogFetchReport.errors.push(`${feed.label}: HTTP ${response ? response.status : 'request failed'}`);
+                return;
+              }
               const xmlText = await response.text();
               rows.push(...parseRssRows(feed, xmlText));
+              rssCatalogFetchReport.succeeded += 1;
             }catch(err){
+              rssCatalogFetchReport.failed += 1;
+              rssCatalogFetchReport.errors.push(`${feed.label}: ${(err && err.message) ? err.message : 'request failed'}`);
               // Best effort only; existing content catalog remains the default source.
             }
           }));
@@ -6326,6 +6391,14 @@ const evidenceOpts = [
           });
           cachedRssCatalogRows = deduped.slice(0, 30);
           rssCatalogHydrated = true;
+          rssCatalogFetchReport.loading = false;
+          if(cachedRssCatalogRows.length === 0 && rssCatalogFetchReport.failed > 0){
+            console.warn('[RSS] Feed hydration failed; using catalog fallback.', rssCatalogFetchReport.errors);
+            if(!rssFailureToastShown && state.currentView === 'recommendations'){
+              toast('RSS feeds are unavailable right now. Showing catalog content only.');
+              rssFailureToastShown = true;
+            }
+          }
           cachedContentCatalogRows = null;
           if(state.currentView === 'recommendations'){
             const thread = resolveRecommendationThread(state.recommendationsThreadId || state.activeThread || 'current');
@@ -6387,12 +6460,18 @@ const evidenceOpts = [
               url: (() => {
                 const direct = normalizedHttpUrl(row.url);
                 if(direct) return direct;
+                const formatKey = String(row.format || '').trim().toLowerCase();
+                if(formatKey === 'blog-post' || formatKey === 'c7-blog'){
+                  return fallbackContentSearchUrl(row.title);
+                }
                 const inferred = inferredContentUrl(row.format, row.slug);
                 if(inferred) return inferred;
                 return fallbackContentSearchUrl(row.title);
               })(),
               linkLabel: (() => {
                 if(normalizedHttpUrl(row.url)) return 'Open content';
+                const formatKey = String(row.format || '').trim().toLowerCase();
+                if(formatKey === 'blog-post' || formatKey === 'c7-blog') return 'Find content';
                 if(inferredContentUrl(row.format, row.slug)) return 'Open content';
                 return 'Find content';
               })(),
@@ -6506,9 +6585,14 @@ const evidenceOpts = [
             .filter(Boolean)
         );
         if(!formatSet.size) return [];
+        const rssWeight = (row)=> isRssCatalogSource(row && row.sourceCsv) ? 1 : 0;
         const available = catalogItems()
           .filter((row)=> row && formatSet.has(String(row.format || '').toLowerCase()) && !usedIds.has(row.id))
-          .sort((left, right)=> publishedTimestamp(right.publishedOn) - publishedTimestamp(left.publishedOn));
+          .sort((left, right)=>{
+            const rssDelta = rssWeight(right) - rssWeight(left);
+            if(rssDelta) return rssDelta;
+            return publishedTimestamp(right.publishedOn) - publishedTimestamp(left.publishedOn);
+          });
         const picks = available.slice(0, Math.max(1, Number(limit) || 1));
         picks.forEach((row)=> usedIds.add(row.id));
         return picks;
@@ -6531,10 +6615,11 @@ const evidenceOpts = [
           outcomeLabel,
           title: matched.title,
           summary,
-          why: whyOverride || `Matched from existing ${formatLabelForContent(formatKey).toLowerCase()} content for ${outcomeLabel.toLowerCase()}.`,
+          why: whyOverride || `Selected because it supports your ${outcomeLabel.toLowerCase()} priority.`,
           url: matched.url || '',
           linkLabel: matched.linkLabel || 'Open content',
           source: matched.sourceCsv || '',
+          publishedOn: matched.publishedOn || '',
           imageUrl: cardImageUrlForItem(matched)
         };
       }
@@ -6750,20 +6835,65 @@ const evidenceOpts = [
         const improveTarget = outcomeTitles[0] || 'your highest-priority outcome';
         const proveTarget = outcomeTitles[1] || improveTarget;
         const benchmarkTarget = outcomeTitles[2] || outcomeTitles[0] || 'readiness performance';
+        const coverageLabel = coverageFocus.length ? naturalList(coverageFocus) : 'security, IT, and engineering teams';
+        const pressureLabel = pressureFocus.length ? naturalList(pressureFocus) : 'board, investor, and regulator scrutiny';
         const valueCards = [
           {
-            title: 'Improve',
-            text: `Improve day-to-day capability around ${String(improveTarget).toLowerCase()} with focused actions and owner-led execution.`
+            id: 'improve',
+            kicker: 'IMPROVE',
+            title: 'Improve skills where risk concentrates',
+            text: `Where gaps surface around ${String(improveTarget).toLowerCase()}, use hands-on, role-specific labs to build repeatable capability in ${coverageLabel}.`,
+            bullets: [
+              `Target upskilling for the workflows behind ${String(improveTarget).toLowerCase()}.`,
+              `Focus enablement across ${coverageLabel}.`,
+              'Track improvement trends by role, team, and programme over time.'
+            ],
+            mediaType: 'image',
+            mediaUrl: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/68e77550b8f89efeb6bfb3a6_cyber-drill-product.png',
+            mediaAlt: 'Improve card visual',
+            reverse: true
           },
           {
-            title: 'Prove',
-            text: `Prove readiness in the moments that matter with evidence mapped to ${String(proveTarget).toLowerCase()} and stakeholder expectations.`
+            id: 'prove',
+            kicker: 'PROVE',
+            title: 'Produce evidence of readiness under pressure',
+            text: `Run realistic simulations mapped to ${String(proveTarget).toLowerCase()}, then capture performance evidence that stands up to ${pressureLabel}.`,
+            bullets: [
+              'Pressure-test incident response, leadership, and cross-team coordination.',
+              'Validate playbooks across core teams and repeatable operating patterns.',
+              'Generate post-exercise evidence for investor, auditor, and regulator review.'
+            ],
+            mediaType: 'image',
+            mediaUrl: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/69848bd313059d7ecc7021f9_immersive-home-hero_poster.0000000.jpg',
+            mediaAlt: 'Prove card visual',
+            reverse: false
           },
           {
-            title: 'Benchmark & report',
-            text: `Benchmark and report progress over time so leadership can track movement in ${String(benchmarkTarget).toLowerCase()} and decide faster.`
+            id: 'benchmark-report',
+            kicker: 'BENCHMARK & REPORT',
+            title: 'Benchmark progress and report with confidence',
+            text: `Benchmark performance around ${String(benchmarkTarget).toLowerCase()} so leadership can compare teams, track movement, and prioritize faster.`,
+            bullets: [
+              'Compare readiness by role, function, and business unit.',
+              'Turn progress into concise reporting for executive stakeholders.',
+              'Use evidence-led follow-up plans to improve decision quality each cycle.'
+            ],
+            mediaType: 'image',
+            mediaUrl: 'https://cdn.prod.website-files.com/678a13476d0a697e355dec29/69724f5f954bd062b7a25aaf_Blog%20Post%20-%20Header%20Image.png',
+            mediaAlt: 'Benchmark and report card visual',
+            reverse: true
           }
         ];
+        const demoCard = {
+          kicker: 'PRODUCT TOUR',
+          title: 'Take a guided tour of the platform',
+          text: 'See how you can run scenario-based exercises, capture after-action evidence, and export summaries for stakeholders.',
+          ctaLabel: 'Take a Product Tour',
+          ctaUrl: 'https://www.immersivelabs.com/demo',
+          videoPoster: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_poster.0000000.jpg',
+          videoMp4: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_mp4.mp4',
+          videoWebm: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_webm.webm'
+        };
         const commercialSignals = [
           Number.isFinite(roiPct) ? { label:'ROI (3yr)', value:`${Math.round(roiPct)}%` } : null,
           Number.isFinite(npv) ? { label:'NPV (3yr)', value:fmtMoneyUSD(npv) } : null,
@@ -6775,11 +6905,11 @@ const evidenceOpts = [
         const agenda = buildNextMeetingAgenda(topOutcomes).slice(0, 4);
         const resources = buildRecommendedResources(topOutcomes).slice(0, 5);
         const detailSections = [
-          { title:'Profile', rows: organizationRows.slice(0, 5) },
-          { title:'Signals', rows: discoveryRows.slice(0, 5) },
-          { title:'Coverage', rows: coverageRows.slice(0, 5) },
-          { title:'Package fit', rows: packageFitRows.slice(0, 5) },
-          { title:'Context', rows: contextRows.slice(0, 5) }
+          { title:'Your team', rows: organizationRows.slice(0, 5) },
+          { title:'What we heard', rows: discoveryRows.slice(0, 5) },
+          { title:'Who we need to support', rows: coverageRows.slice(0, 5) },
+          { title:'Preferred delivery model', rows: packageFitRows.slice(0, 5) },
+          { title:'Operating context', rows: contextRows.slice(0, 5) }
         ].filter((section)=> section.rows.length);
         const generatedOn = new Date().toISOString().slice(0, 10);
         return {
@@ -6790,13 +6920,13 @@ const evidenceOpts = [
           stage: String(record.stage || 'Closed'),
           generatedOn,
           hero: {
-            eyebrow: `Complete profile | ${String(gate.completion || '22/22 (100%)')}`,
+            eyebrow: 'Customer dashboard',
             title: `${String(record.company || 'Customer')} readiness dashboard`,
-            subtitle: `Personalized workspace for ${profileName} (${roleLabel}), mapped from a full readiness profile and matched to existing Webflow content inventory.`,
+            subtitle: `Built from what ${profileName} shared, with recommendations focused on your top priorities and delivery outcomes.`,
             stats: [
-              { label:'Completion', value: String(gate.completion || '22/22 (100%)') },
               { label:'Primary outcome', value: (outcomeBlocks[0] && outcomeBlocks[0].title) || 'Priority outcome' },
               { label:'Package', value: String(gate.tier || 'Core') },
+              { label:'Operational focus', value: (outcomeBlocks[0] && outcomeBlocks[0].metric) || 'Primary focus' },
               { label:'Role', value: roleLabel }
             ]
           },
@@ -6807,6 +6937,7 @@ const evidenceOpts = [
           },
           needsSummary,
           valueCards,
+          demoCard,
           outcomeBlocks,
           commercialSignals,
           actions: agenda.length ? agenda : ['Align owners and convert the profile into a timed execution plan.'],
@@ -6827,10 +6958,10 @@ const evidenceOpts = [
                   formatKey:'content',
                   outcomeLabel:'Priority outcome',
                   title:'No mapped content found',
-                  summary:'Import or refresh Webflow catalog rows to populate this area.',
-                  why:'No matching rows were found for this profile.',
+                  summary:'No curated recommendations are available yet for this profile.',
+                  why:'We could not find a strong content match for your selected priorities yet.',
                   url:'https://www.immersivelabs.com/resources/c7-blog',
-                  linkLabel:'Open resources',
+                  linkLabel:'Explore resources',
                   imageUrl:picsumContentImage('no-mapped-content', 720, 420)
                 }],
           detailSections
@@ -6860,75 +6991,144 @@ const evidenceOpts = [
           ? model.packageRecommendation
           : { tier: String(model.tier || 'Core'), title: `${String(model.tier || 'Core')} package`, rationale: '' };
         const understandingText = String(model.needsSummary || (pitch ? pitch.pitch30 : '') || '').trim();
+        const understandingImageUrl = picsumContentImage(`${String(model.company || 'customer').trim()}-understanding`, 960, 640);
         const logoSrc = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg';
+        const demoCard = (model.demoCard && typeof model.demoCard === 'object') ? model.demoCard : null;
+        const safeToken = (value)=> String(value || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        const renderStoryCard = (card, idx)=>{
+          const entry = (card && typeof card === 'object') ? card : {};
+          const token = safeToken(entry.id || entry.kicker || entry.title || `focus-${idx + 1}`) || `focus-${idx + 1}`;
+          const reverseClass = entry.reverse ? ' reverse' : '';
+          const bullets = Array.isArray(entry.bullets) ? entry.bullets.map((item)=> String(item || '').trim()).filter(Boolean).slice(0, 4) : [];
+          const mediaType = String(entry.mediaType || 'image').toLowerCase();
+          const mediaUrl = String(entry.mediaUrl || '').trim();
+          const mediaAlt = String(entry.mediaAlt || entry.title || 'Story media').trim() || 'Story media';
+          const media = mediaType === 'video'
+            ? `<video autoplay loop muted playsinline preload="metadata"${entry.videoPoster ? ` poster="${esc(entry.videoPoster)}"` : ''}>${entry.videoMp4 ? `<source src="${esc(entry.videoMp4)}" type="video/mp4" />` : ''}${entry.videoWebm ? `<source src="${esc(entry.videoWebm)}" type="video/webm" />` : ''}</video>`
+            : (mediaUrl ? `<img src="${esc(mediaUrl)}" alt="${esc(mediaAlt)}" loading="lazy" />` : '');
+          return `<article class="storyCard${reverseClass}"><div class="storyInner"><div class="storyMedia storyMedia--${esc(token)}" aria-hidden="true">${media}</div><div class="storyContent"><div class="storyKicker">${esc(entry.kicker || 'FOCUS')}</div><h3>${esc(entry.title || 'Customer value focus')}</h3><p>${esc(entry.text || '')}</p>${bullets.length ? `<ul class="storyBullets">${bullets.map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}</div></div></article>`;
+        };
+        const storyCardsHtml = valueCards.map((card, idx)=> renderStoryCard(card, idx)).join('');
+        const demoCardHtml = demoCard
+          ? `<article class="storyCard storyCard--tour"><div class="storyInner"><div class="storyMedia storyMedia--tour" aria-hidden="true"><video autoplay loop muted playsinline preload="metadata"${demoCard.videoPoster ? ` poster="${esc(demoCard.videoPoster)}"` : ''}>${demoCard.videoMp4 ? `<source src="${esc(demoCard.videoMp4)}" type="video/mp4" />` : ''}${demoCard.videoWebm ? `<source src="${esc(demoCard.videoWebm)}" type="video/webm" />` : ''}</video></div><div class="storyContent storyContent--tour"><h3>${esc(demoCard.title || 'Take a guided tour')}</h3><p>${esc(demoCard.text || '')}</p><div class="storyTourCta">${demoCard.ctaUrl ? `<a class="storyTourBtn" href="${esc(demoCard.ctaUrl)}" target="_blank" rel="noopener noreferrer">${esc(demoCard.ctaLabel || 'Take a Product Tour')}</a>` : ''}</div></div></div></article>`
+          : '';
         return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>${esc(model.company || 'Customer')} | Immersive customer dashboard template</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root{
-      --bg:#f2f4fa;--surface:#fff;--ink:#0f172a;--muted:#5b677a;--line:rgba(15,23,42,.12);
-      --surface-dark:#0f172a;--surface-dark-2:#111e38;--ink-inverse:#eef4ff;
-      --radius-lg:20px;--radius-md:14px;--radius-sm:10px;--font:"Geologica","Segoe UI",Roboto,Arial,sans-serif;
-      --shadow:0 18px 44px rgba(15,23,42,.14);--shadow-soft:0 10px 28px rgba(15,23,42,.1);
+      --primary-colours--black:#17181c;--primary-colours--azure:#3c64ff;--primary-colours--white:#ffffff;
+      --background-color--alternate-25:#f5f5f9;--background-color--alternate-60:#d7d7e7;
+      --text-color--primary:var(--primary-colours--black);--text-color--secondary:rgba(23,24,28,.80);--text-color--subtle:rgba(23,24,28,.40);
+      --bg:var(--background-color--alternate-25);--surface:#fff;--ink:var(--text-color--primary);--muted:var(--text-color--secondary);--line:rgba(23,24,28,.14);
+      --surface-dark:#0f1116;--surface-dark-2:#111d34;--ink-inverse:#eef4ff;
+      --container:1680px;--radius-card:8px;--radius-btn:4px;--font:"Geologica","Segoe UI",Roboto,Arial,sans-serif;
+      --focus:0 0 0 3px rgba(60,100,255,.22);--shadow-soft:0 10px 28px rgba(7,18,44,.08);
     }
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.45}
-    .wrap{width:min(1280px,calc(100% - 2rem));margin:0 auto;padding:1.1rem 0 2.2rem}
-    .topbar{position:sticky;top:0;z-index:10;background:rgba(242,244,250,.92);border-bottom:1px solid var(--line)}
-    .topbarInner{width:min(1280px,calc(100% - 2rem));margin:0 auto;min-height:66px;display:flex;align-items:center;justify-content:space-between;gap:.9rem}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-weight:300;font-size:18px;line-height:1.2}
+    h1,h2,h3{margin:0;color:var(--text-color--primary);font-weight:500;letter-spacing:-.02em}
+    .wrap{max-width:var(--container);width:100%;margin:0 auto;padding:0 64px}
+    .topbar{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.96);border-bottom:1px solid var(--background-color--alternate-60)}
+    .topbarInner{max-width:var(--container);width:100%;margin:0 auto;padding:0 64px;height:76px;display:flex;align-items:center;justify-content:space-between;gap:.9rem}
     .brand{display:inline-flex;align-items:center}
-    .brand img{display:block;height:24px;width:auto}
-    .topPackagePill{border:1px solid color-mix(in srgb,#3c64ff 22%, var(--line));border-radius:999px;background:#fff;padding:.35rem .72rem;font-size:.78rem;color:#2a3f69;font-weight:700}
-    .hero{margin-top:1rem;border-radius:26px;background:radial-gradient(780px 340px at 88% 8%,rgba(107,134,255,.28),transparent 65%),radial-gradient(640px 300px at 14% -8%,rgba(60,100,255,.3),transparent 62%),linear-gradient(120deg,var(--surface-dark),var(--surface-dark-2));color:var(--ink-inverse);box-shadow:var(--shadow);border:1px solid rgba(255,255,255,.14);padding:1.4rem;display:grid;gap:1rem;grid-template-columns:minmax(0,1fr) 320px}
-    .heroEyebrow{margin:0 0 .55rem;font-size:.72rem;text-transform:uppercase;letter-spacing:.13em;color:#b9cbf4}
-    h1{margin:0;font-size:clamp(1.78rem,3.5vw,2.92rem);line-height:1.06;letter-spacing:-.03em;max-width:18ch}
-    .heroSub{margin:.7rem 0 0;color:#d2ddf7;max-width:66ch;font-size:1.01rem}
-    .heroStats{display:grid;gap:.55rem}
-    .heroStat{border:1px solid rgba(191,208,246,.22);border-radius:12px;background:rgba(8,15,29,.54);padding:.72rem .8rem}
-    .heroStatLabel{margin:0;font-size:.73rem;text-transform:uppercase;letter-spacing:.1em;color:#8ea4d2}
-    .heroStatValue{margin:.3rem 0 0;font-size:1.1rem;color:#f2f7ff;font-weight:600}
-    .layout{margin-top:1rem;display:grid;gap:1rem}
-    .panel{border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface);box-shadow:var(--shadow-soft);padding:1rem}
-    .panel h2{margin:0;font-size:1.04rem}
-    .panelSub{margin:.42rem 0 0;color:var(--muted);font-size:.9rem}
-    .packagePanel{display:grid;gap:.6rem}
-    .packageBadge{display:inline-flex;width:max-content;border:1px solid color-mix(in srgb,#3c64ff 24%, var(--line));border-radius:999px;background:#eef4ff;color:#1c2f56;font-size:.84rem;font-weight:700;padding:.38rem .74rem}
-    .packageText{margin:0;color:#344862;font-size:.92rem;line-height:1.45}
-    .valueStack{position:relative;display:grid;gap:0;margin-top:.86rem;padding-bottom:.4rem}
-    .valueCard{position:relative;border:1px solid color-mix(in srgb,#3c64ff 22%, var(--line));border-radius:14px;background:linear-gradient(180deg,#f7faff,#eef4ff);padding:.82rem;box-shadow:0 10px 24px rgba(15,23,42,.08)}
-    .valueCard + .valueCard{margin-top:-16px;margin-left:22px}
-    .valueCard h3{margin:0;font-size:.95rem;color:#1a2c4f}
-    .valueCard p{margin:.4rem 0 0;color:#425778;font-size:.88rem;line-height:1.4}
-    .outcomeGrid{margin-top:.86rem;display:grid;gap:.72rem;grid-template-columns:repeat(3,minmax(0,1fr))}
-    .outcomeCard{border:1px solid color-mix(in srgb,#3c64ff 24%, var(--line));border-radius:var(--radius-md);background:linear-gradient(180deg,#f6f9ff,#eef4ff);padding:.78rem;display:grid;gap:.32rem}
-    .outcomeCard h3{margin:0;font-size:1rem;line-height:1.2;color:#1a2c4f}
-    .outcomeCard p{margin:0;color:#4b5f83;font-size:.87rem;line-height:1.35}
-    .outcomeMetric{display:inline-flex;width:max-content;border:1px solid color-mix(in srgb,#3c64ff 22%, var(--line));border-radius:999px;background:#fff;padding:.22rem .55rem;font-size:.72rem;color:#27406f;font-weight:700}
-    .commercialRow{margin-top:.75rem;display:flex;flex-wrap:wrap;gap:.45rem}
-    .commercialPill{border:1px solid var(--line);border-radius:999px;background:#fff;padding:.3rem .62rem;font-size:.76rem;color:#354867}
-    .actionsList{margin:.8rem 0 0;padding-left:1.2rem;display:grid;gap:.5rem;font-size:.95rem}
-    .resourceRow{margin-top:.9rem;display:flex;flex-wrap:wrap;gap:.5rem}
-    .resourcePill{border:1px solid var(--line);border-radius:999px;padding:.36rem .66rem;background:#fff;font-size:.78rem;color:#2a3a57}
-    .understandingCard{margin-top:.82rem;border:1px solid var(--line);border-radius:var(--radius-md);background:#fff;padding:.86rem}
-    .understandingCard p{margin:0;color:#2b3d5c;font-size:.92rem;line-height:1.45}
-    .contentGrid{margin-top:.92rem;display:grid;gap:.75rem;grid-template-columns:repeat(3,minmax(0,1fr))}
-    .contentCard{border:1px solid var(--line);border-radius:var(--radius-md);background:#fff;padding:.84rem;display:grid;gap:.4rem}
-    .contentImageWrap{margin:-.84rem -.84rem .62rem;border-radius:12px 12px 0 0;overflow:hidden;aspect-ratio:16/9;background:#dce7ff}
+    .brand img{display:block;height:28px;width:auto}
+    .topPackagePill{border:1px solid rgba(60,100,255,.35);border-radius:var(--radius-btn);background:#fff;padding:10px 16px;font-size:16px;line-height:20.8px;color:var(--primary-colours--azure);font-weight:400}
+    .hero{margin-top:20px;border-radius:var(--radius-card);background:radial-gradient(960px 420px at 88% 8%,rgba(107,134,255,.24),transparent 65%),radial-gradient(820px 360px at 14% -8%,rgba(60,100,255,.24),transparent 62%),linear-gradient(120deg,var(--surface-dark),var(--surface-dark-2));color:var(--ink-inverse);border:1px solid rgba(255,255,255,.14);padding:34px 36px;display:grid;gap:24px;grid-template-columns:minmax(0,1fr) 360px}
+    .heroEyebrow{margin:0 0 12px;font-size:14px;line-height:18px;text-transform:uppercase;letter-spacing:.18em;color:#b9cbf4}
+    h1{font-size:clamp(40px,5vw,64px);line-height:1.02;max-width:16ch}
+    .heroSub{margin:14px 0 0;color:#d2ddf7;max-width:66ch;font-size:20px;line-height:1.25}
+    .heroStats{display:grid;gap:10px}
+    .heroStat{border:1px solid rgba(191,208,246,.22);border-radius:var(--radius-card);background:rgba(8,15,29,.54);padding:14px 16px}
+    .heroStatLabel{margin:0;font-size:13px;line-height:16px;text-transform:uppercase;letter-spacing:.12em;color:#8ea4d2}
+    .heroStatValue{margin:8px 0 0;font-size:20px;line-height:1.15;color:#f2f7ff;font-weight:400}
+    .layout{margin:20px 0 42px;display:grid;gap:16px}
+    .panel{border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-soft);padding:24px}
+    .panel h2{font-size:34px;line-height:1.05}
+    .panelSub{margin:10px 0 0;color:var(--muted);font-size:18px;line-height:1.25}
+    .panel--support h2{font-size:clamp(34px,4.2vw,48px)}
+    .panel--outcomes h2{font-size:34px}
+    .storyStack{--story-top:96px;--story-gap:20px;margin-top:16px;padding-bottom:120px}
+    .storyCard{position:relative;z-index:1;border:1px solid var(--line);border-radius:var(--radius-card);background:#fff;box-shadow:0 16px 52px rgba(7,18,44,.12),0 2px 10px rgba(7,18,44,.06);overflow:hidden}
+    .storyStack .storyCard{--story-i:0;--story-scale:1;position:sticky;top:calc(var(--story-top) + (var(--story-i) * var(--story-gap)));transform:scale(var(--story-scale));transform-origin:top center;will-change:transform;opacity:0;transition:opacity .45s ease,transform .22s ease}
+    .storyStack .storyCard.is-in{opacity:1}
+    .storyStack .storyCard:not(:first-child){margin-top:var(--story-gap)}
+    .storyStack .storyCard:nth-child(1){z-index:10;--story-i:0}
+    .storyStack .storyCard:nth-child(2){z-index:20;--story-i:1}
+    .storyStack .storyCard:nth-child(3){z-index:30;--story-i:2}
+    .storyInner{--story-min-h:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);min-height:var(--story-min-h);height:auto;transform:translateY(14px);transition:transform .45s ease}
+    .storyCard.is-in .storyInner{transform:translateY(0)}
+    .storyInner>.storyMedia,.storyInner>.storyContent{min-height:var(--story-min-h)}
+    .storyCard.reverse .storyMedia{order:2}
+    .storyCard.reverse .storyContent{order:1}
+    .storyMedia{position:relative;isolation:isolate;aspect-ratio:1 / 1;background:#f5f5f9;overflow:hidden}
+    .storyMedia::after{content:"";position:absolute;inset:0;background:radial-gradient(80% 120% at 88% 86%,rgba(95,163,255,.28),transparent 68%)}
+    .storyMedia img,.storyMedia video{position:relative;z-index:1;display:block;width:100%;height:100%;object-fit:cover}
+    .storyMedia--improve{background:linear-gradient(135deg,#f87289,#8f62f8)}
+    .storyMedia--prove{background:#f5f6fb}
+    .storyMedia--benchmark-report{background:#f7eee3}
+    .storyMedia--tour{background:linear-gradient(135deg,#071127,#223fbc)}
+    .storyMedia--prove img{position:absolute;z-index:1;right:-47%;top:50%;width:132%;height:auto;max-width:none;transform:translateY(-50%);object-fit:contain}
+    .storyMedia--benchmark-report img{position:absolute;z-index:1;right:-56%;top:50%;width:143%;height:auto;max-width:none;transform:translateY(-50%);object-fit:contain}
+    .storyMedia--prove::before{content:"";position:absolute;z-index:2;top:calc(11% - 20px);left:calc(8% + 130px);width:45.36%;aspect-ratio:1.45 / 1;background:url('https://cdn.prod.website-files.com/6735fba9a631272fb4513263/690e149f5f565f5b2e0f95e6_ui-pop.webp') center/contain no-repeat;filter:drop-shadow(0 12px 24px rgba(7,18,44,.18))}
+    .storyMedia--benchmark-report::before{content:"";position:absolute;z-index:3;left:16%;bottom:6%;width:21.6%;aspect-ratio:1.2 / 1;background:url('https://cdn.prod.website-files.com/6735fba9a631272fb4513263/690e14b11097d2dc702df512_report-ui-pop.webp') center/contain no-repeat;filter:drop-shadow(0 12px 24px rgba(7,18,44,.18))}
+    .storyContent{padding:52px 50px;display:flex;flex-direction:column;justify-content:center;gap:14px;background:#fff}
+    .storyContent--tour{background:#0f172a;color:#e9f1ff}
+    .storyKicker{margin:0 0 4px;font-size:14px;line-height:18px;letter-spacing:.22em;text-transform:uppercase;color:var(--text-color--primary);font-weight:300;opacity:.78}
+    .storyContent--tour .storyKicker{color:#9cb7ea;opacity:1}
+    .storyContent h3{margin:0;font-size:34px;line-height:1.05;color:#121b2f;font-weight:500}
+    .storyContent--tour h3{color:#f1f6ff}
+    .storyContent p{margin:0;color:#3f4e69;font-size:18px;line-height:1.25}
+    .storyContent--tour p{color:#c6d6f5}
+    .storyBullets{margin:14px 0 0;padding:0;list-style:none;display:grid;gap:10px}
+    .storyBullets li{position:relative;padding-left:18px;color:#2f3f5c;font-size:18px;line-height:1.25}
+    .storyBullets li::before{content:"";position:absolute;left:0;top:.62em;width:6px;height:6px;border-radius:999px;background:var(--primary-colours--azure)}
+    .storyTourCta{margin-top:8px}
+    .storyTourBtn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:12px 24px;border-radius:var(--radius-btn);background:var(--primary-colours--azure);color:#fff;font-size:16px;line-height:20.8px;font-weight:400;text-decoration:none}
+    .storyTourBtn:hover{background:rgb(86,119,248)}
+    .outcomeGrid{margin-top:16px;display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr))}
+    .outcomeCard{border:1px solid color-mix(in srgb,#3c64ff 22%, var(--line));border-radius:var(--radius-card);background:linear-gradient(180deg,#f6f9ff,#eef4ff);padding:16px;display:grid;gap:8px}
+    .outcomeCard h3{margin:0;font-size:24px;line-height:1.15;color:#1a2c4f}
+    .outcomeCard p{margin:0;color:#4b5f83;font-size:16px;line-height:1.3}
+    .outcomeMetric{display:inline-flex;width:max-content;border:1px solid color-mix(in srgb,#3c64ff 22%, var(--line));border-radius:999px;background:#fff;padding:4px 10px;font-size:13px;line-height:16px;color:#27406f;font-weight:500}
+    .commercialRow{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
+    .commercialPill{border:1px solid var(--line);border-radius:999px;background:#fff;padding:6px 12px;font-size:14px;line-height:18px;color:#354867}
+    .actionsList{margin:12px 0 0;padding-left:1.2rem;display:grid;gap:8px;font-size:18px;line-height:1.25}
+    .resourceRow{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
+    .resourcePill{border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:#fff;font-size:14px;line-height:18px;color:#2a3a57}
+    .understandingGrid{margin-top:14px;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);gap:12px}
+    .understandingMedia{margin:0;min-height:220px;border:1px solid var(--line);border-radius:var(--radius-card);overflow:hidden;background:#dce7ff}
+    .understandingMedia img{display:block;width:100%;height:100%;object-fit:cover}
+    .understandingCard{margin:0;border:1px solid var(--line);border-radius:var(--radius-card);background:#fff;padding:18px}
+    .understandingCard p{margin:0;color:#2b3d5c;font-size:18px;line-height:1.25}
+    .contentGrid{margin-top:16px;display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr))}
+    .contentCard{border:1px solid var(--line);border-radius:var(--radius-card);background:#fff;padding:16px;display:grid;gap:8px}
+    .contentImageWrap{margin:-16px -16px 8px;border-radius:var(--radius-card) var(--radius-card) 0 0;overflow:hidden;aspect-ratio:16/9;background:#dce7ff}
     .contentImage{display:block;width:100%;height:100%;object-fit:cover}
-    .contentEyebrow{margin:0;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:#65779b}
-    .contentCard h3{margin:0;font-size:1rem;line-height:1.25}
-    .contentText{margin:0;color:#4c5d7c;font-size:.88rem}
-    .contentLink{display:inline-flex;width:max-content;color:#1238d5;font-size:.84rem;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(18,56,213,.22);padding-bottom:1px}
-    .detailsGrid{margin-top:1rem;display:grid;gap:.75rem;grid-template-columns:repeat(3,minmax(0,1fr))}
-    .detailCard{border:1px solid var(--line);border-radius:var(--radius-md);background:#fff;padding:.76rem}
-    .detailCard h3{margin:0 0 .54rem;font-size:.9rem;color:#1b2a45}
-    .kvRow{display:grid;grid-template-columns:120px minmax(0,1fr);gap:.5rem;font-size:.82rem;padding:.22rem 0;border-bottom:1px dashed rgba(15,23,42,.08)}
-    .kvRow:last-child{border-bottom:none} .kvLabel{color:#60718f} .kvValue{color:#172742}
-    footer{margin-top:1rem;color:#6b7690;font-size:.77rem;text-align:right}
-    @media (max-width:1080px){.hero{grid-template-columns:minmax(0,1fr)}.outcomeGrid,.contentGrid,.detailsGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.valueCard + .valueCard{margin-left:14px}.kvRow{grid-template-columns:1fr;gap:.2rem}}
-    @media (max-width:720px){.outcomeGrid,.contentGrid,.detailsGrid{grid-template-columns:1fr}.valueCard + .valueCard{margin-top:.45rem;margin-left:0}.hero{border-radius:18px;padding:1rem}.panel{border-radius:14px}.wrap{width:min(1280px,calc(100% - 1rem))}}
+    .contentEyebrow{margin:0;font-size:13px;line-height:16px;letter-spacing:.1em;text-transform:uppercase;color:#65779b}
+    .contentCard h3{margin:0;font-size:24px;line-height:1.15}
+    .contentText{margin:0;color:#4c5d7c;font-size:16px;line-height:1.3}
+    .contentLink{display:inline-flex;width:max-content;color:#1238d5;font-size:16px;line-height:20px;font-weight:400;text-decoration:none;border-bottom:1px solid rgba(18,56,213,.22);padding-bottom:1px}
+    .detailsGrid{margin-top:16px;display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr))}
+    .detailCard{border:1px solid var(--line);border-radius:var(--radius-card);background:#fff;padding:16px}
+    .detailCard h3{margin:0 0 10px;font-size:24px;line-height:1.1;color:#1b2a45}
+    .kvRow{display:grid;grid-template-columns:140px minmax(0,1fr);gap:8px;font-size:14px;line-height:18px;padding:6px 0;border-bottom:1px dashed rgba(15,23,42,.08)}
+    .kvRow:last-child{border-bottom:none}.kvLabel{color:#60718f}.kvValue{color:#172742}
+    footer{margin:10px 0 40px;color:#6b7690;font-size:14px;line-height:18px;text-align:right}
+    @media (max-width:1280px){.wrap{padding:0 40px}.topbarInner{padding:0 40px}.hero{grid-template-columns:minmax(0,1fr) 300px}}
+    @media (max-width:1080px){.wrap{padding:0 24px}.topbarInner{padding:0 24px;height:68px}.hero{grid-template-columns:minmax(0,1fr);padding:26px}.storyStack{--story-top:0;--story-gap:20px;padding-bottom:0}.storyStack .storyCard{position:relative;top:auto;transform:none !important;transition:none;opacity:1;will-change:auto}.storyStack .storyCard:not(:first-child){margin-top:20px}.storyInner{grid-template-columns:1fr;min-height:0;height:auto;transform:none;transition:none}.storyInner>.storyMedia,.storyInner>.storyContent{min-height:0}.storyCard.reverse .storyMedia,.storyCard.reverse .storyContent{order:initial}.storyMedia{aspect-ratio:16 / 11}.storyMedia--prove img,.storyMedia--benchmark-report img{position:relative;top:auto;right:auto;width:100%;height:100%;transform:none;object-fit:cover}.storyMedia--prove::before,.storyMedia--benchmark-report::before{display:none}.storyContent{padding:30px 26px}.understandingGrid{grid-template-columns:1fr}.outcomeGrid,.contentGrid,.detailsGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.kvRow{grid-template-columns:1fr;gap:.2rem}}
+    @media (max-width:760px){.outcomeGrid,.contentGrid,.detailsGrid{grid-template-columns:1fr}.hero{padding:20px}.panel{padding:16px}.panel h2{font-size:28px}.storyContent h3{font-size:30px}.storyContent p,.storyBullets li,.actionsList,.understandingCard p{font-size:16px}.topPackagePill{font-size:14px;line-height:18px;padding:8px 12px}}
+    @media (max-width:479px){.wrap{padding:0 16px}.topbarInner{padding:0 16px}.heroEyebrow{font-size:12px}.heroSub{font-size:18px}h1{font-size:34px}}
+    @media (prefers-reduced-motion: reduce){.storyCard,.storyInner{transition:none !important;transform:none !important;opacity:1 !important}}
   </style>
 </head>
 <body>
@@ -6943,7 +7143,7 @@ const evidenceOpts = [
   <main class="wrap">
     <section class="hero">
       <div>
-        <p class="heroEyebrow">${esc(hero.eyebrow || `Complete profile | ${model.completion || '22/22 (100%)'}`)}</p>
+        <p class="heroEyebrow">${esc(hero.eyebrow || 'Customer dashboard')}</p>
         <h1>${esc(hero.title || `${model.company || 'Customer'} readiness dashboard`)}</h1>
         <p class="heroSub">${esc(hero.subtitle || '')}</p>
       </div>
@@ -6952,499 +7152,183 @@ const evidenceOpts = [
       </aside>
     </section>
     <section class="layout">
-      <article class="panel packagePanel">
-        <h2>Our recommended package</h2>
-        <span class="packageBadge">${esc(packageRecommendation.title || `${model.tier || 'Core'} package`)}</span>
-        <p class="packageText">${esc(packageRecommendation.rationale || '')}</p>
-      </article>
-      ${outcomeBlocks.length ? `<article class="panel"><h2>Top outcomes</h2><p class="panelSub">Primary customer goals inferred from the complete profile and package fit.</p><div class="outcomeGrid">${outcomeBlocks.map((outcome)=> `<article class="outcomeCard"><span class="outcomeMetric">${esc(outcome.metric || 'Priority focus')}</span><h3>${esc(outcome.title || 'Priority outcome')}</h3><p>${esc(outcome.detail || '')}</p></article>`).join('')}</div>${commercialSignals.length ? `<div class="commercialRow">${commercialSignals.map((signal)=> `<span class="commercialPill">${esc(signal.label || 'Signal')}: ${esc(signal.value || '—')}</span>`).join('')}</div>` : ''}</article>` : ''}
-      ${understandingText ? `<article class="panel"><h2>Our understanding of your needs</h2><p class="panelSub">Based on what you have told us in this profile.</p><div class="understandingCard"><p>${esc(understandingText)}</p></div></article>` : ''}
-      ${valueCards.length ? `<article class="panel"><h2>How we will support you</h2><p class="panelSub">Customer-focused value narrative across improve, prove, and benchmark/report.</p><div class="valueStack">${valueCards.map((card)=> `<article class="valueCard"><h3>${esc(card.title || 'Focus area')}</h3><p>${esc(card.text || '')}</p></article>`).join('')}</div></article>` : ''}
+      ${outcomeBlocks.length ? `<article class="panel panel--outcomes"><h2>Your top outcomes</h2><p class="panelSub">The three priorities we recommend focusing on first.</p><div class="outcomeGrid">${outcomeBlocks.map((outcome)=> `<article class="outcomeCard"><span class="outcomeMetric">${esc(outcome.metric || 'Priority focus')}</span><h3>${esc(outcome.title || 'Priority outcome')}</h3><p>${esc(outcome.detail || '')}</p></article>`).join('')}</div>${commercialSignals.length ? `<div class="commercialRow">${commercialSignals.map((signal)=> `<span class="commercialPill">${esc(signal.label || 'Signal')}: ${esc(signal.value || '—')}</span>`).join('')}</div>` : ''}</article>` : ''}
+      ${details.length ? `<article class="panel"><h2>What you told us in the meeting</h2><p class="panelSub">Your context, constraints, and operating priorities as we captured them.</p><div class="detailsGrid">${details.map((section)=> `<article class="detailCard"><h3>${esc(section.title || 'Section')}</h3>${(Array.isArray(section.rows) ? section.rows : []).map((row)=> `<div class="kvRow"><span class="kvLabel">${esc((row && row.label) || 'Field')}</span><span class="kvValue">${esc((row && row.value) || '—')}</span></div>`).join('')}</article>`).join('')}</div></article>` : ''}
+      ${understandingText ? `<article class="panel"><h2>Our understanding of your needs</h2><p class="panelSub">A concise view of what matters most right now.</p><div class="understandingGrid"><div class="understandingCard"><p>${esc(understandingText)}</p></div><figure class="understandingMedia"><img src="${esc(understandingImageUrl)}" alt="Illustrative customer context image" loading="lazy" /></figure></div></article>` : ''}
+      ${storyCardsHtml ? `<article class="panel panel--support"><h2>How we will support you</h2><p class="panelSub">A focused plan across improve, prove, and benchmark/report.</p><div class="storyStack">${storyCardsHtml}</div></article>` : ''}
+      ${demoCardHtml ? `<article class="panel"><h2>Take a product tour</h2><p class="panelSub">See how your teams can run exercises and export evidence-ready summaries.</p>${demoCardHtml}</article>` : ''}
       <article class="panel">
         <h2>Recommended next actions</h2>
-        <p class="panelSub">Action plan assembled from selected outcomes and profile context.</p>
+        <p class="panelSub">Suggested next steps for your team over the next 30 days.</p>
         <ol class="actionsList">${actions.map((line)=> `<li>${esc(line)}</li>`).join('')}</ol>
       </article>
       <article class="panel">
         <h2>Recommended resources</h2>
-        <p class="panelSub">Resources matched to your selected outcomes.</p>
+        <p class="panelSub">Resources and content packs aligned to your priorities.</p>
         <div class="resourceRow">${resources.map((item)=> `<span class="resourcePill">${esc(item)}</span>`).join('')}</div>
       </article>
       <article class="panel">
-        <h2>Mapped content for this profile</h2>
-        <p class="panelSub">Content blocks are matched using outcome relevance against the imported Webflow catalog.</p>
+        <h2>Recommended for you</h2>
+        <p class="panelSub">A short list of articles, webinars, and case studies selected for your team.</p>
         <div class="contentGrid">
-          ${cards.map((card, idx)=> `<article class="contentCard">${card.imageUrl ? `<div class="contentImageWrap"><img class="contentImage" src="${esc(card.imageUrl)}" alt="${esc(card.title || 'Recommended content image')}" loading="lazy" /></div>` : ''}<p class="contentEyebrow">Recommendation ${idx + 1} | ${esc(card.format || 'Content')}</p><h3>${esc(card.title || 'Content block')}</h3><p class="contentText"><strong>Outcome:</strong> ${esc(card.outcomeLabel || 'Priority outcome')}</p><p class="contentText">${esc(card.summary || '')}</p><p class="contentText"><strong>Why:</strong> ${esc(card.why || '')}</p>${card.url ? `<a class="contentLink" href="${esc(card.url)}" target="_blank" rel="noopener noreferrer">${esc(card.linkLabel || 'Open content')}</a>` : ''}</article>`).join('')}
+          ${cards.map((card, idx)=> `<article class="contentCard">${card.imageUrl ? `<div class="contentImageWrap"><img class="contentImage" src="${esc(card.imageUrl)}" alt="${esc(card.title || 'Recommended content image')}" loading="lazy" /></div>` : ''}<p class="contentEyebrow">Recommendation ${idx + 1} | ${esc(card.format || 'Content')}</p><h3>${esc(card.title || 'Content block')}</h3><p class="contentText"><strong>Focus area:</strong> ${esc(card.outcomeLabel || 'Priority outcome')}</p><p class="contentText">${esc(card.summary || '')}</p><p class="contentText"><strong>Why this is relevant:</strong> ${esc(card.why || '')}</p>${card.url ? `<a class="contentLink" href="${esc(card.url)}" target="_blank" rel="noopener noreferrer">${esc(card.linkLabel || 'Open content')}</a>` : ''}</article>`).join('')}
         </div>
       </article>
-      ${details.length ? `<article class="panel"><h2>Profile context cards</h2><p class="panelSub">Structured profile data rendered into app-style context cards for direct personalization.</p><div class="detailsGrid">${details.map((section)=> `<article class="detailCard"><h3>${esc(section.title || 'Section')}</h3>${(Array.isArray(section.rows) ? section.rows : []).map((row)=> `<div class="kvRow"><span class="kvLabel">${esc((row && row.label) || 'Field')}</span><span class="kvValue">${esc((row && row.value) || '—')}</span></div>`).join('')}</article>`).join('')}</div></article>` : ''}
     </section>
-    <footer>Generated from Immersive Configurator complete profile data.</footer>
+    <footer>Prepared for ${esc(model.company || 'your team')} by Immersive Labs.</footer>
   </main>
+  <script>
+    (function(){
+      var desktopQuery = window.matchMedia ? window.matchMedia('(min-width: 1081px)') : { matches:true };
+      var reduceMotionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches:false };
+      var maxShrink = 0.15;
+      var rafSync = 0;
+      var rafScale = 0;
+      var inViewObserver = null;
+      var contentObserver = null;
+
+      function clamp(value, min, max){
+        return Math.min(max, Math.max(min, value));
+      }
+
+      function allStoryCards(){
+        return Array.prototype.slice.call(document.querySelectorAll('.storyStack .storyCard'));
+      }
+
+      function storyGapPx(cards){
+        var first = (cards && cards.length) ? cards[0] : null;
+        if(!first) return 20;
+        var raw = window.getComputedStyle(first).getPropertyValue('--story-gap');
+        var parsed = parseFloat(raw);
+        return Number.isFinite(parsed) ? parsed : 20;
+      }
+
+      function syncStoryBlockHeights(){
+        var cards = allStoryCards();
+        if(!cards.length) return;
+        var isDesktop = !!desktopQuery.matches;
+        cards.forEach(function(card){
+          var row = card.querySelector('.storyInner');
+          var media = card.querySelector('.storyMedia');
+          var content = card.querySelector('.storyContent');
+          if(!row || !media || !content) return;
+          row.style.removeProperty('--story-min-h');
+          media.style.minHeight = '';
+          content.style.minHeight = '';
+          if(!isDesktop) return;
+          var mediaHeight = media.offsetHeight || 0;
+          var contentHeight = Math.max(content.offsetHeight || 0, content.scrollHeight || 0);
+          var nextHeight = Math.max(360, mediaHeight, contentHeight);
+          row.style.setProperty('--story-min-h', String(nextHeight) + 'px');
+          media.style.minHeight = String(nextHeight) + 'px';
+          content.style.minHeight = String(nextHeight) + 'px';
+        });
+      }
+
+      function updateStoryScales(){
+        var cards = allStoryCards();
+        if(!cards.length) return;
+        var disableTransitions = reduceMotionQuery.matches || !desktopQuery.matches;
+        if(disableTransitions){
+          cards.forEach(function(card){
+            card.style.setProperty('--story-scale', '1');
+          });
+          return;
+        }
+        var gap = storyGapPx(cards);
+        cards.forEach(function(card, idx){
+          var next = cards[idx + 1];
+          if(!next){
+            card.style.setProperty('--story-scale', '1');
+            return;
+          }
+          var rect = card.getBoundingClientRect();
+          var nextRect = next.getBoundingClientRect();
+          var full = card.offsetHeight || rect.height || 1;
+          var denom = Math.max(1, full - gap);
+          var overlap = (rect.top + full) - nextRect.top;
+          var progress = clamp(overlap / denom, 0, 1);
+          var scale = 1 - (maxShrink * progress);
+          card.style.setProperty('--story-scale', scale.toFixed(3));
+        });
+      }
+
+      function queueSync(){
+        window.cancelAnimationFrame(rafSync);
+        rafSync = window.requestAnimationFrame(syncStoryBlockHeights);
+      }
+
+      function queueScale(){
+        window.cancelAnimationFrame(rafScale);
+        rafScale = window.requestAnimationFrame(updateStoryScales);
+      }
+
+      function refreshStoryLayout(){
+        queueSync();
+        queueScale();
+      }
+
+      function markCardsInView(){
+        var cards = allStoryCards();
+        if(!cards.length) return;
+        var disable = reduceMotionQuery.matches || !desktopQuery.matches || !('IntersectionObserver' in window);
+        if(disable){
+          cards.forEach(function(card){
+            card.classList.add('is-in');
+          });
+          return;
+        }
+        if(inViewObserver){
+          inViewObserver.disconnect();
+        }
+        inViewObserver = new IntersectionObserver(function(entries){
+          entries.forEach(function(entry){
+            if(entry.isIntersecting) entry.target.classList.add('is-in');
+          });
+        }, { threshold:0.15 });
+        cards.forEach(function(card){
+          inViewObserver.observe(card);
+        });
+      }
+
+      window.addEventListener('resize', function(){
+        markCardsInView();
+        refreshStoryLayout();
+      }, { passive:true });
+      window.addEventListener('orientationchange', refreshStoryLayout, { passive:true });
+      window.addEventListener('scroll', queueScale, { passive:true });
+      window.addEventListener('load', function(){
+        markCardsInView();
+        refreshStoryLayout();
+      });
+      document.addEventListener('DOMContentLoaded', function(){
+        markCardsInView();
+        refreshStoryLayout();
+        if('ResizeObserver' in window){
+          contentObserver = new ResizeObserver(refreshStoryLayout);
+          document.querySelectorAll('.storyCard .storyContent').forEach(function(el){
+            contentObserver.observe(el);
+          });
+        }
+        document.querySelectorAll('.storyCard img, .storyCard video').forEach(function(asset){
+          asset.addEventListener('load', refreshStoryLayout, { once:true });
+          asset.addEventListener('loadedmetadata', refreshStoryLayout, { once:true });
+        });
+      });
+    })();
+  </script>
 </body>
 </html>`;
       }
 
       function customerTemplateHtmlFromCandidate(candidate){
-        const record = candidate && candidate.thread ? candidate.thread : null;
-        if(!record) return '';
-        const gate = candidate.gate || recommendationsGateFromThread(record);
-        const cards = Array.isArray(candidate.cards) ? candidate.cards : recommendationCardsForGate(gate);
-        const modules = (record.modules && typeof record.modules === 'object') ? record.modules : {};
-        const organizationRows = moduleRowsWithValues(modules.organisation || []);
-        const discoveryRows = moduleRowsWithValues(modules.discovery || []);
-        const coverageRows = moduleRowsWithValues(modules.coverage || []);
-        const packageFitRows = moduleRowsWithValues(modules.packageFit || []);
-        const contextRows = moduleRowsWithValues(modules.context || []);
-        const profileName = moduleValueByLabel(organizationRows, 'Name')
-          || String(record.snapshot && record.snapshot.fullName || '').trim()
-          || 'Customer team';
-        const roleLabel = moduleValueByLabel(organizationRows, 'Role') || 'Security leader';
-        const viz = (record.viz && typeof record.viz === 'object') ? record.viz : {};
-        const roiPct = Number(viz.roiPct);
-        const npv = Number(viz.npv);
-        const paybackMonths = Number(viz.paybackMonths);
-        const topOutcomes = Array.isArray(gate.topOutcomes) ? gate.topOutcomes : [];
-        const outcomesLabel = topOutcomes.length
-          ? topOutcomes.map((outcome)=> String((outcome && (outcome.short || outcome.label)) || '').trim()).filter(Boolean).join(' | ')
-          : 'Outcome priorities not captured';
-        const agenda = buildNextMeetingAgenda(topOutcomes).slice(0, 4);
-        const resources = buildRecommendedResources(topOutcomes).slice(0, 5);
-        const generatedOn = new Date().toISOString().slice(0, 10);
-
-        const escape = (value)=> String(value == null ? '' : value)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#39;');
-
-        const renderKvRows = (rows)=> rows.slice(0, 5).map((row)=> `
-            <div class="kvRow">
-              <span class="kvLabel">${escape(row.label || 'Field')}</span>
-              <span class="kvValue">${escape(row.value || '—')}</span>
-            </div>
-        `).join('');
-
-        const detailSections = [
-          { title:'Profile', rows: organizationRows },
-          { title:'Signals', rows: discoveryRows },
-          { title:'Coverage', rows: coverageRows },
-          { title:'Package fit', rows: packageFitRows },
-          { title:'Context', rows: contextRows }
-        ].filter((section)=> section.rows.length);
-
-        return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>${escape(record.company || 'Customer')} | Immersive customer dashboard template</title>
-  <style>
-    :root{
-      --bg:#f2f4fa;
-      --surface:#ffffff;
-      --surface-dark:#0f172a;
-      --surface-dark-2:#111c33;
-      --ink:#0f172a;
-      --ink-soft:#5b677a;
-      --ink-inverse:#eef4ff;
-      --line:rgba(15,23,42,.12);
-      --line-soft:rgba(255,255,255,.14);
-      --accent:#3C64FF;
-      --accent-2:#6B86FF;
-      --radius-lg:20px;
-      --radius-md:14px;
-      --radius-sm:10px;
-      --shadow:0 18px 44px rgba(15,23,42,.14);
-      --shadow-soft:0 10px 28px rgba(15,23,42,.1);
-      --font:"Geologica", "Segoe UI", Roboto, Arial, sans-serif;
-    }
-    *{ box-sizing:border-box; }
-    body{
-      margin:0;
-      font-family:var(--font);
-      background:var(--bg);
-      color:var(--ink);
-      line-height:1.45;
-    }
-    .wrap{
-      width:min(1280px, calc(100% - 2rem));
-      margin:0 auto;
-      padding:1.1rem 0 2.2rem;
-    }
-    .topbar{
-      position:sticky;
-      top:0;
-      z-index:10;
-      background:rgba(242,244,250,.92);
-      backdrop-filter:blur(10px);
-      border-bottom:1px solid var(--line);
-    }
-    .topbarInner{
-      width:min(1280px, calc(100% - 2rem));
-      margin:0 auto;
-      min-height:66px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:.9rem;
-    }
-    .brand{
-      font-size:1.6rem;
-      letter-spacing:-.02em;
-      font-weight:600;
-      color:#0b1222;
-    }
-    .chips{
-      display:flex;
-      flex-wrap:wrap;
-      gap:.45rem;
-      justify-content:flex-end;
-    }
-    .chip{
-      border:1px solid var(--line);
-      border-radius:999px;
-      background:#fff;
-      color:#334155;
-      font-size:.78rem;
-      padding:.34rem .7rem;
-      white-space:nowrap;
-      font-weight:500;
-    }
-    .hero{
-      margin-top:1rem;
-      border-radius:26px;
-      background:
-        radial-gradient(780px 340px at 88% 8%, rgba(107,134,255,.28), transparent 65%),
-        radial-gradient(640px 300px at 14% -8%, rgba(60,100,255,.3), transparent 62%),
-        linear-gradient(120deg, var(--surface-dark), var(--surface-dark-2));
-      color:var(--ink-inverse);
-      box-shadow:var(--shadow);
-      border:1px solid var(--line-soft);
-      padding:1.4rem;
-      display:grid;
-      gap:1rem;
-      grid-template-columns:minmax(0,1fr) 320px;
-    }
-    .heroEyebrow{
-      margin:0 0 .55rem;
-      text-transform:uppercase;
-      letter-spacing:.13em;
-      font-size:.72rem;
-      color:#b9cbf4;
-      font-weight:600;
-    }
-    h1{
-      margin:0;
-      font-size:clamp(1.78rem, 3.5vw, 2.92rem);
-      line-height:1.06;
-      letter-spacing:-.03em;
-      max-width:18ch;
-    }
-    .heroSub{
-      margin:.7rem 0 0;
-      color:#d2ddf7;
-      max-width:66ch;
-      font-size:1.01rem;
-    }
-    .heroMeta{
-      margin-top:1rem;
-      display:flex;
-      flex-wrap:wrap;
-      gap:.55rem;
-    }
-    .heroPill{
-      border:1px solid rgba(190,208,245,.35);
-      border-radius:999px;
-      padding:.42rem .72rem;
-      background:rgba(12,22,43,.45);
-      font-size:.8rem;
-      color:#dce7ff;
-      font-weight:500;
-      backdrop-filter:blur(4px);
-    }
-    .heroStats{
-      display:grid;
-      gap:.55rem;
-      align-content:flex-start;
-    }
-    .heroStat{
-      border:1px solid rgba(191,208,246,.22);
-      border-radius:12px;
-      background:rgba(8,15,29,.54);
-      padding:.72rem .8rem;
-    }
-    .heroStatLabel{
-      margin:0;
-      font-size:.73rem;
-      text-transform:uppercase;
-      letter-spacing:.1em;
-      color:#8ea4d2;
-      font-weight:600;
-    }
-    .heroStatValue{
-      margin:.3rem 0 0;
-      font-size:1.1rem;
-      letter-spacing:-.01em;
-      color:#f2f7ff;
-      font-weight:600;
-    }
-    .layout{
-      margin-top:1rem;
-      display:grid;
-      gap:1rem;
-      grid-template-columns:minmax(0,1fr);
-    }
-    .panel{
-      border:1px solid var(--line);
-      border-radius:var(--radius-lg);
-      background:var(--surface);
-      box-shadow:var(--shadow-soft);
-      padding:1rem;
-    }
-    .panel h2{
-      margin:0;
-      font-size:1.04rem;
-      letter-spacing:-.01em;
-    }
-    .panelSub{
-      margin:.42rem 0 0;
-      color:var(--ink-soft);
-      font-size:.9rem;
-    }
-    .actionsList{
-      margin:.8rem 0 0;
-      padding-left:1.2rem;
-      display:grid;
-      gap:.5rem;
-      color:#1f2a40;
-      font-size:.95rem;
-    }
-    .contentGrid{
-      margin-top:.92rem;
-      display:grid;
-      gap:.75rem;
-      grid-template-columns:repeat(3, minmax(0,1fr));
-    }
-    .contentCard{
-      border:1px solid var(--line);
-      border-radius:var(--radius-md);
-      background:#fff;
-      padding:.84rem;
-      display:grid;
-      gap:.4rem;
-    }
-    .contentEyebrow{
-      margin:0;
-      font-size:.7rem;
-      letter-spacing:.1em;
-      text-transform:uppercase;
-      color:#65779b;
-      font-weight:600;
-    }
-    .contentCard h3{
-      margin:0;
-      font-size:1rem;
-      line-height:1.25;
-      letter-spacing:-.01em;
-    }
-    .contentText{
-      margin:0;
-      color:#4c5d7c;
-      font-size:.88rem;
-    }
-    .contentLink{
-      margin-top:.25rem;
-      display:inline-flex;
-      width:max-content;
-      text-decoration:none;
-      color:#1238d5;
-      font-size:.84rem;
-      font-weight:600;
-      border-bottom:1px solid rgba(18,56,213,.22);
-      padding-bottom:1px;
-    }
-    .detailsGrid{
-      margin-top:1rem;
-      display:grid;
-      gap:.75rem;
-      grid-template-columns:repeat(3, minmax(0,1fr));
-    }
-    .detailCard{
-      border:1px solid var(--line);
-      border-radius:var(--radius-md);
-      background:#fff;
-      padding:.76rem;
-      min-height:160px;
-    }
-    .detailCard h3{
-      margin:0 0 .54rem;
-      font-size:.9rem;
-      letter-spacing:-.01em;
-      color:#1b2a45;
-    }
-    .kvRow{
-      display:grid;
-      grid-template-columns:120px minmax(0,1fr);
-      gap:.5rem;
-      font-size:.82rem;
-      padding:.22rem 0;
-      border-bottom:1px dashed rgba(15,23,42,.08);
-    }
-    .kvRow:last-child{ border-bottom:none; }
-    .kvLabel{ color:#60718f; font-weight:500; }
-    .kvValue{ color:#172742; }
-    .resourceRow{
-      margin-top:.9rem;
-      display:flex;
-      flex-wrap:wrap;
-      gap:.5rem;
-    }
-    .resourcePill{
-      border:1px solid var(--line);
-      border-radius:999px;
-      padding:.36rem .66rem;
-      background:#fff;
-      font-size:.78rem;
-      color:#2a3a57;
-      white-space:nowrap;
-    }
-    footer{
-      margin-top:1rem;
-      color:#6b7690;
-      font-size:.77rem;
-      text-align:right;
-    }
-    @media (max-width: 1080px){
-      .hero{
-        grid-template-columns:minmax(0,1fr);
-      }
-      .contentGrid{
-        grid-template-columns:repeat(2, minmax(0,1fr));
-      }
-      .detailsGrid{
-        grid-template-columns:repeat(2, minmax(0,1fr));
-      }
-      .kvRow{
-        grid-template-columns:1fr;
-        gap:.2rem;
-      }
-    }
-    @media (max-width: 720px){
-      .topbarInner{ min-height:58px; }
-      .brand{ font-size:1.3rem; }
-      .contentGrid,
-      .detailsGrid{
-        grid-template-columns:1fr;
-      }
-      .hero{
-        border-radius:18px;
-        padding:1rem;
-      }
-      .panel{
-        border-radius:14px;
-      }
-      .wrap{
-        width:min(1280px, calc(100% - 1rem));
-      }
-    }
-  </style>
-</head>
-<body>
-  <header class="topbar">
-    <div class="topbarInner">
-      <div class="brand">immersive</div>
-      <div class="chips">
-        <span class="chip">Customer dashboard template</span>
-        <span class="chip">${escape(record.company || 'Customer')}</span>
-        <span class="chip">${escape(gate.tier || 'Core')} package</span>
-      </div>
-    </div>
-  </header>
-  <main class="wrap">
-    <section class="hero">
-      <div>
-        <p class="heroEyebrow">Complete profile | ${escape(gate.completion || '22/22 (100%)')}</p>
-        <h1>${escape(record.company || 'Customer')} readiness dashboard</h1>
-        <p class="heroSub">Personalized workspace for ${escape(profileName)} (${escape(roleLabel)}), mapped from a full readiness profile and matched to existing Webflow content inventory.</p>
-        <div class="heroMeta">
-          <span class="heroPill">Priority outcomes: ${escape(outcomesLabel)}</span>
-          <span class="heroPill">Generated: ${escape(generatedOn)}</span>
-          <span class="heroPill">Stage: ${escape(record.stage || 'Closed')}</span>
-        </div>
-      </div>
-      <aside class="heroStats">
-        <article class="heroStat">
-          <p class="heroStatLabel">Completion</p>
-          <p class="heroStatValue">${escape(gate.completion || '22/22 (100%)')}</p>
-        </article>
-        <article class="heroStat">
-          <p class="heroStatLabel">ROI (3yr)</p>
-          <p class="heroStatValue">${Number.isFinite(roiPct) ? `${Math.round(roiPct)}%` : '—'}</p>
-        </article>
-        <article class="heroStat">
-          <p class="heroStatLabel">NPV (3yr)</p>
-          <p class="heroStatValue">${Number.isFinite(npv) ? escape(fmtMoneyUSD(npv)) : '—'}</p>
-        </article>
-        <article class="heroStat">
-          <p class="heroStatLabel">Payback</p>
-          <p class="heroStatValue">${Number.isFinite(paybackMonths) ? escape(fmtPayback(paybackMonths)) : '—'}</p>
-        </article>
-      </aside>
-    </section>
-
-    <section class="layout">
-      <article class="panel">
-        <h2>Recommended next actions</h2>
-        <p class="panelSub">Action plan assembled from selected outcomes and profile context.</p>
-        <ol class="actionsList">
-          ${(agenda.length ? agenda : ['Align owners and convert the profile into a timed execution plan.']).map((line)=> `<li>${escape(line)}</li>`).join('')}
-        </ol>
-        <div class="resourceRow">
-          ${(resources.length ? resources : ['Customer briefing pack', 'Outcome mapping workshop']).map((item)=> `<span class="resourcePill">${escape(item)}</span>`).join('')}
-        </div>
-      </article>
-
-      <article class="panel">
-        <h2>Mapped content for this profile</h2>
-        <p class="panelSub">Content blocks are matched using outcome relevance against the imported Webflow catalog.</p>
-        <div class="contentGrid">
-          ${(cards.length ? cards : [{ format:'Content', title:'No mapped content found', summary:'Import or refresh Webflow catalog rows to populate this area.', why:'No matching rows were found for this profile.', url:'' }]).map((card, idx)=> `
-            <article class="contentCard">
-              <p class="contentEyebrow">Recommendation ${idx + 1} | ${escape(card.format || 'Content')}</p>
-              <h3>${escape(card.title || 'Content block')}</h3>
-              <p class="contentText"><strong>Outcome:</strong> ${escape(card.outcomeLabel || 'Priority outcome')}</p>
-              <p class="contentText">${escape(card.summary || '')}</p>
-              <p class="contentText"><strong>Why:</strong> ${escape(card.why || '')}</p>
-              ${card.url ? `<a class="contentLink" href="${escape(card.url)}" target="_blank" rel="noopener noreferrer">${escape(card.linkLabel || 'Open content')}</a>` : ''}
-            </article>
-          `).join('')}
-        </div>
-      </article>
-
-      ${detailSections.length ? `
-      <article class="panel">
-        <h2>Profile context cards</h2>
-        <p class="panelSub">Structured profile data rendered into app-style context cards for direct personalization.</p>
-        <div class="detailsGrid">
-          ${detailSections.map((section)=> `
-            <article class="detailCard">
-              <h3>${escape(section.title)}</h3>
-              ${renderKvRows(section.rows)}
-            </article>
-          `).join('')}
-        </div>
-      </article>
-      ` : ''}
-    </section>
-    <footer>Generated from Immersive Configurator complete profile data.</footer>
-  </main>
-</body>
-</html>`;
+        const model = customerTemplateModelFromCandidate(candidate);
+        if(!model) return '';
+        return customerTemplateHtmlFromModel(model);
       }
 
       function clearCustomerTemplatePreview(){
+        teardownCustomerPreviewStoryLayout();
         state.customerTemplateDraft = null;
         state.customerTemplateEditorTarget = null;
         if(state.customerTemplateEditorOpen){
@@ -7457,6 +7341,160 @@ const evidenceOpts = [
         }
       }
 
+      let customerPreviewStoryRuntime = null;
+
+      function clampPreviewNumber(value, min, max){
+        return Math.min(max, Math.max(min, value));
+      }
+
+      function syncCustomerPreviewStoryLayout(scope){
+        const host = scope || $('#customerTemplatePreviewCanvas');
+        if(!host) return;
+        const rows = $$('.customerPreviewStoryStack .customerPreviewStoryInner', host);
+        if(!rows.length) return;
+        const desktop = !!(window.matchMedia && window.matchMedia('(min-width: 981px)').matches);
+        rows.forEach((row)=>{
+          const media = $('.customerPreviewStoryMedia', row);
+          const content = $('.customerPreviewStoryContent', row);
+          if(!media || !content) return;
+          row.style.removeProperty('--preview-story-min-h');
+          media.style.minHeight = '';
+          content.style.minHeight = '';
+          if(!desktop) return;
+          const nextHeight = Math.max(
+            180,
+            media.offsetHeight || 0,
+            content.offsetHeight || 0,
+            content.scrollHeight || 0
+          );
+          row.style.setProperty('--preview-story-min-h', `${nextHeight}px`);
+          media.style.minHeight = `${nextHeight}px`;
+          content.style.minHeight = `${nextHeight}px`;
+        });
+      }
+
+      function scaleCustomerPreviewStoryLayout(scope){
+        const host = scope || $('#customerTemplatePreviewCanvas');
+        if(!host) return;
+        const cards = $$('.customerPreviewStoryStack .customerPreviewStoryCard', host);
+        if(!cards.length) return;
+        const desktop = !!(window.matchMedia && window.matchMedia('(min-width: 981px)').matches);
+        const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        if(!desktop || reduceMotion){
+          cards.forEach((card)=> card.style.setProperty('--preview-story-scale', '1'));
+          return;
+        }
+        const rawGap = parseFloat(window.getComputedStyle(cards[0]).getPropertyValue('--preview-story-gap') || '');
+        const gap = Number.isFinite(rawGap) ? rawGap : 12;
+        const maxShrink = 0.12;
+        cards.forEach((card, idx)=>{
+          const next = cards[idx + 1];
+          if(!next){
+            card.style.setProperty('--preview-story-scale', '1');
+            return;
+          }
+          const rect = card.getBoundingClientRect();
+          const nextRect = next.getBoundingClientRect();
+          const full = card.offsetHeight || rect.height || 1;
+          const denom = Math.max(1, full - gap);
+          const overlap = (rect.top + full) - nextRect.top;
+          const progress = clampPreviewNumber(overlap / denom, 0, 1);
+          const scale = 1 - (maxShrink * progress);
+          card.style.setProperty('--preview-story-scale', scale.toFixed(3));
+        });
+      }
+
+      function teardownCustomerPreviewStoryLayout(){
+        if(!customerPreviewStoryRuntime) return;
+        try{
+          window.removeEventListener('resize', customerPreviewStoryRuntime.onResize);
+          window.removeEventListener('orientationchange', customerPreviewStoryRuntime.onResize);
+          window.removeEventListener('scroll', customerPreviewStoryRuntime.onScroll);
+          if(customerPreviewStoryRuntime.inViewObserver && typeof customerPreviewStoryRuntime.inViewObserver.disconnect === 'function'){
+            customerPreviewStoryRuntime.inViewObserver.disconnect();
+          }
+          if(customerPreviewStoryRuntime.contentObserver && typeof customerPreviewStoryRuntime.contentObserver.disconnect === 'function'){
+            customerPreviewStoryRuntime.contentObserver.disconnect();
+          }
+        }catch(err){
+          // no-op
+        }
+        customerPreviewStoryRuntime = null;
+      }
+
+      function initCustomerPreviewStoryLayout(scope){
+        const host = scope || $('#customerTemplatePreviewCanvas');
+        if(!host) return;
+        teardownCustomerPreviewStoryLayout();
+        const cards = $$('.customerPreviewStoryStack .customerPreviewStoryCard', host);
+        if(!cards.length) return;
+
+        const queueLayoutSync = ()=>{
+          if(!(window && typeof window.requestAnimationFrame === 'function')){
+            syncCustomerPreviewStoryLayout(host);
+            scaleCustomerPreviewStoryLayout(host);
+            return;
+          }
+          window.requestAnimationFrame(()=>{
+            syncCustomerPreviewStoryLayout(host);
+            scaleCustomerPreviewStoryLayout(host);
+          });
+        };
+
+        const desktop = !!(window.matchMedia && window.matchMedia('(min-width: 981px)').matches);
+        const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        if(reduceMotion || !desktop || !('IntersectionObserver' in window)){
+          cards.forEach((card)=> card.classList.add('is-in'));
+        }
+
+        let inViewObserver = null;
+        if(!reduceMotion && desktop && 'IntersectionObserver' in window){
+          inViewObserver = new IntersectionObserver((entries)=>{
+            entries.forEach((entry)=>{
+              if(entry.isIntersecting){
+                entry.target.classList.add('is-in');
+              }
+            });
+          }, { threshold: 0.15 });
+          cards.forEach((card)=> inViewObserver.observe(card));
+        }
+
+        let contentObserver = null;
+        if('ResizeObserver' in window){
+          contentObserver = new ResizeObserver(queueLayoutSync);
+          $$('.customerPreviewStoryCard .customerPreviewStoryContent', host).forEach((el)=>{
+            contentObserver.observe(el);
+          });
+        }
+
+        const onResize = ()=>{
+          queueLayoutSync();
+          const isDesktop = !!(window.matchMedia && window.matchMedia('(min-width: 981px)').matches);
+          if(!isDesktop){
+            cards.forEach((card)=> card.classList.add('is-in'));
+          }
+        };
+        const onScroll = ()=> scaleCustomerPreviewStoryLayout(host);
+
+        window.addEventListener('resize', onResize, { passive:true });
+        window.addEventListener('orientationchange', onResize, { passive:true });
+        window.addEventListener('scroll', onScroll, { passive:true });
+
+        customerPreviewStoryRuntime = {
+          onResize,
+          onScroll,
+          inViewObserver,
+          contentObserver
+        };
+
+        queueLayoutSync();
+
+        $$('.customerPreviewStoryCard img, .customerPreviewStoryCard video', host).forEach((asset)=>{
+          asset.addEventListener('load', queueLayoutSync, { once:true });
+          asset.addEventListener('loadedmetadata', queueLayoutSync, { once:true });
+        });
+      }
+
       function renderCustomerTemplatePreview(){
         const wrap = $('#customerTemplatePreviewWrap');
         const meta = $('#customerTemplatePreviewMeta');
@@ -7466,6 +7504,7 @@ const evidenceOpts = [
           ? state.customerTemplateDraft
           : null;
         if(!draft){
+          teardownCustomerPreviewStoryLayout();
           wrap.hidden = true;
           meta.textContent = 'Preview not generated yet.';
           canvas.innerHTML = '';
@@ -7482,11 +7521,29 @@ const evidenceOpts = [
         const commercialSignals = Array.isArray(draft.commercialSignals) ? draft.commercialSignals.filter((row)=> row && (row.label || row.value)).slice(0, 3) : [];
         const cards = Array.isArray(draft.contentCards) ? draft.contentCards.filter(Boolean).slice(0, 8) : [];
         const actions = Array.isArray(draft.actions) ? draft.actions.filter(Boolean).slice(0, 5) : [];
+        const details = Array.isArray(draft.detailSections) ? draft.detailSections.filter(Boolean).slice(0, 6) : [];
         const pitch = (draft.elevatorPitch && typeof draft.elevatorPitch === 'object') ? draft.elevatorPitch : null;
         const understandingText = String(draft.needsSummary || (pitch ? pitch.pitch30 : '') || '').trim();
+        const understandingImageUrl = picsumContentImage(`${String(draft.company || 'customer').trim()}-understanding`, 960, 640);
         const esc = (value)=> escapeHtml(String(value == null ? '' : value));
+        const demoCard = (draft.demoCard && typeof draft.demoCard === 'object') ? draft.demoCard : null;
+        const safeToken = (value)=> String(value || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        const renderPreviewStoryCard = (card, idx)=>{
+          const entry = (card && typeof card === 'object') ? card : {};
+          const token = safeToken(entry.id || entry.kicker || entry.title || `focus-${idx + 1}`) || `focus-${idx + 1}`;
+          const reverseClass = entry.reverse ? ' reverse' : '';
+          const bullets = Array.isArray(entry.bullets) ? entry.bullets.map((line)=> String(line || '').trim()).filter(Boolean).slice(0, 4) : [];
+          const mediaType = String(entry.mediaType || 'image').toLowerCase();
+          const media = mediaType === 'video'
+            ? `<video autoplay loop muted playsinline preload="metadata"${entry.videoPoster ? ` poster="${esc(entry.videoPoster)}"` : ''}>${entry.videoMp4 ? `<source src="${esc(entry.videoMp4)}" type="video/mp4" />` : ''}${entry.videoWebm ? `<source src="${esc(entry.videoWebm)}" type="video/webm" />` : ''}</video>`
+            : (entry.mediaUrl ? `<img src="${esc(entry.mediaUrl)}" alt="${esc(entry.mediaAlt || entry.title || 'Story visual')}" loading="lazy" />` : '');
+          return `<article class="customerPreviewStoryCard${reverseClass}"><div class="customerPreviewStoryInner"><div class="customerPreviewStoryMedia customerPreviewStoryMedia--${esc(token)}" aria-hidden="true">${media}</div><div class="customerPreviewStoryContent"><div class="customerPreviewStoryKicker">${esc(entry.kicker || 'FOCUS')}</div><h6>${esc(entry.title || 'Focus area')}</h6><p>${esc(entry.text || '')}</p>${bullets.length ? `<ul class="customerPreviewStoryBullets">${bullets.map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}</div></div></article>`;
+        };
         const logoSrc = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg';
-        meta.textContent = `Source: ${draft.company} · ${draft.completion} · ${draft.tier} package`;
+        meta.textContent = `Source: ${draft.company} · ${draft.tier} package`;
         canvas.innerHTML = `
           <article class="customerPreviewTopbar">
             <a class="customerPreviewBrand" href="https://www.immersivelabs.com/" target="_blank" rel="noopener noreferrer" aria-label="Immersive">
@@ -7496,7 +7553,7 @@ const evidenceOpts = [
           </article>
           <article class="customerPreviewHero">
             <div>
-              <p class="customerPreviewHeroEyebrow">${esc(hero.eyebrow || `Complete profile | ${draft.completion || '22/22 (100%)'}`)}</p>
+              <p class="customerPreviewHeroEyebrow">${esc(hero.eyebrow || 'Customer dashboard')}</p>
               <h4>${esc(hero.title || `${draft.company || 'Customer'} readiness dashboard`)}</h4>
               <p class="customerPreviewHeroSub">${esc(hero.subtitle || '')}</p>
               <div class="customerPreviewHeroActions">
@@ -7512,15 +7569,10 @@ const evidenceOpts = [
               `).join('')}
             </aside>
           </article>
-          <article class="customerPreviewSection customerPreviewPackagePanel">
-            <h5>Our recommended package</h5>
-            <span class="customerPreviewPackageBadge">${esc(packageRecommendation.title || `${draft.tier || 'Core'} package`)}</span>
-            <p>${esc(packageRecommendation.rationale || '')}</p>
-          </article>
           ${outcomeBlocks.length ? `
             <article class="customerPreviewSection">
-              <h5>Top outcomes</h5>
-              <p>Primary objectives from this completed profile.</p>
+              <h5>Your top outcomes</h5>
+              <p>The three priorities we recommend focusing on first.</p>
               <div class="customerPreviewOutcomeGrid">
                 ${outcomeBlocks.map((outcome)=> `
                   <article class="customerPreviewOutcomeCard">
@@ -7533,54 +7585,89 @@ const evidenceOpts = [
               ${commercialSignals.length ? `<div class="customerPreviewCommercial">${commercialSignals.map((signal)=> `<span>${esc(signal.label || 'Signal')}: ${esc(signal.value || '—')}</span>`).join('')}</div>` : ''}
             </article>
           ` : ''}
-          ${understandingText ? `
+          ${details.length ? `
             <article class="customerPreviewSection">
-              <h5>Our understanding of your needs</h5>
-              <p>Based on what you have told us in this profile.</p>
-              <div class="customerPreviewUnderstandingCard">
-                <p>${esc(understandingText)}</p>
-              </div>
-            </article>
-          ` : ''}
-          ${valueCards.length ? `
-            <article class="customerPreviewSection">
-              <h5>How we will support you</h5>
-              <p>Customer-focused narrative across improve, prove, and benchmark/report.</p>
-              <div class="customerPreviewValueStack">
-                ${valueCards.map((card)=> `
-                  <article class="customerPreviewValueCard">
-                    <h6>${esc(card.title || 'Focus area')}</h6>
-                    <p>${esc(card.text || '')}</p>
+              <h5>What you told us in the meeting</h5>
+              <p>Your context, constraints, and operating priorities as we captured them.</p>
+              <div class="customerPreviewDetailsGrid">
+                ${details.map((section)=> `
+                  <article class="customerPreviewDetailCard">
+                    <h6>${esc(section.title || 'Section')}</h6>
+                    ${(Array.isArray(section.rows) ? section.rows : []).map((row)=> `<p><strong>${esc((row && row.label) || 'Field')}:</strong> ${esc((row && row.value) || '—')}</p>`).join('')}
                   </article>
                 `).join('')}
               </div>
             </article>
           ` : ''}
+          ${understandingText ? `
+            <article class="customerPreviewSection">
+              <h5>Our understanding of your needs</h5>
+              <p>A concise view of what matters most right now.</p>
+              <div class="customerPreviewUnderstandingGrid">
+                <div class="customerPreviewUnderstandingCard">
+                  <p>${esc(understandingText)}</p>
+                </div>
+                <figure class="customerPreviewUnderstandingMedia">
+                  <img src="${esc(understandingImageUrl)}" alt="Illustrative customer context image" loading="lazy" />
+                </figure>
+              </div>
+            </article>
+          ` : ''}
+          ${valueCards.length ? `
+            <article class="customerPreviewSection customerPreviewSection--support">
+              <h5>How we will support you</h5>
+              <p>A focused plan across improve, prove, and benchmark/report.</p>
+              <div class="customerPreviewStoryStack">
+                ${valueCards.map((card, idx)=> renderPreviewStoryCard(card, idx)).join('')}
+              </div>
+            </article>
+          ` : ''}
+          ${demoCard ? `
+            <article class="customerPreviewSection">
+              <h5>Take a product tour</h5>
+              <p>See how your teams can run exercises and export evidence-ready summaries.</p>
+              <article class="customerPreviewStoryCard customerPreviewStoryCard--tour">
+                <div class="customerPreviewStoryInner">
+                  <div class="customerPreviewStoryMedia customerPreviewStoryMedia--tour" aria-hidden="true">
+                    <video autoplay loop muted playsinline preload="metadata"${demoCard.videoPoster ? ` poster="${esc(demoCard.videoPoster)}"` : ''}>
+                      ${demoCard.videoMp4 ? `<source src="${esc(demoCard.videoMp4)}" type="video/mp4" />` : ''}
+                      ${demoCard.videoWebm ? `<source src="${esc(demoCard.videoWebm)}" type="video/webm" />` : ''}
+                    </video>
+                  </div>
+                  <div class="customerPreviewStoryContent customerPreviewStoryContent--tour">
+                    <h6>${esc(demoCard.title || 'Take a guided tour')}</h6>
+                    <p>${esc(demoCard.text || '')}</p>
+                    ${demoCard.ctaUrl ? `<div class="customerPreviewStoryCta"><a class="btn small primary" href="${esc(demoCard.ctaUrl)}" target="_blank" rel="noopener noreferrer">${esc(demoCard.ctaLabel || 'Take a Product Tour')}</a></div>` : ''}
+                  </div>
+                </div>
+              </article>
+            </article>
+          ` : ''}
           <article class="customerPreviewSection">
             <h5>Recommended next actions</h5>
-            <p>Action plan generated from selected outcomes.</p>
+            <p>Suggested next steps for your team over the next 30 days.</p>
             <ol class="customerPreviewList">
               ${actions.map((line)=> `<li>${esc(line)}</li>`).join('')}
             </ol>
           </article>
           <article class="customerPreviewSection">
             <h5>Recommended resources</h5>
-            <p>Resources matched to your selected outcomes.</p>
+            <p>Resources and content packs aligned to your priorities.</p>
             <div class="customerPreviewCommercial">
               ${(Array.isArray(draft.resources) ? draft.resources : []).slice(0, 8).map((item)=> `<span>${esc(item)}</span>`).join('')}
             </div>
           </article>
           <article class="customerPreviewSection">
-            <h5>Mapped content cards</h5>
-            <p>Edit card copy and links from the right-side editor.</p>
+            <h5>Recommended for you</h5>
+            <p>A short list of articles, webinars, and case studies selected for your team.</p>
             <div class="customerPreviewContentGrid">
               ${cards.map((card, idx)=> `
                 <article class="customerPreviewContentCard">
                   ${card.imageUrl ? `<div class="customerPreviewImageWrap"><img class="customerPreviewContentImage" src="${esc(card.imageUrl)}" alt="${esc(card.title || 'Recommended content image')}" loading="lazy" /></div>` : ''}
-                  <p>${esc(card.format || 'Content')} · ${esc(card.outcomeLabel || 'Priority outcome')}</p>
+                  <p>${esc(card.format || 'Content')} · Focus area: ${esc(card.outcomeLabel || 'Priority outcome')}</p>
                   <h6>${esc(card.title || 'Content block')}</h6>
                   <p>${esc(card.summary || '')}</p>
-                  <p><strong>Why:</strong> ${esc(card.why || '')}</p>
+                  <p><strong>Why this is relevant:</strong> ${esc(card.why || '')}</p>
                   <div class="customerPreviewCardActions">
                     <button class="btn small" type="button" data-action="editCustomerTemplateCard" data-card-index="${idx}">Edit card</button>
                   </div>
@@ -7589,6 +7676,7 @@ const evidenceOpts = [
             </div>
           </article>
         `;
+        initCustomerPreviewStoryLayout(canvas);
       }
 
       function openCustomerTemplatePreview(preferredThreadId){
@@ -7938,11 +8026,13 @@ const evidenceOpts = [
         setText('#contentRecommendationsTier', `Package: ${tierName}`);
         setText('#contentRecommendationsOutcomes', `Outcomes: ${topOutcomeText}`);
         setText('#contentRecommendationsAudience', `Company: ${companyName}`);
+        setText('#contentRecommendationsTitle', `Resources for ${companyName}`);
+        setText('#contentRecommendationsRss', recommendationRssStatusText());
         setText(
           '#contentRecommendationsSub',
           gate.eligible
-            ? `Outcome-matched recommendations for ${companyName}, based on the ${tierName} package profile.`
-            : 'Recommendations unlock once profile completion reaches at least 90%.'
+            ? `A curated mix of resources tailored for ${companyName}.`
+            : 'Resources unlock once profile completion reaches at least 90%.'
         );
 
         const gateEl = $('#contentRecommendationsGate');
@@ -7968,13 +8058,14 @@ const evidenceOpts = [
         gateEl.innerHTML = '';
 
         const cards = recommendationCardsForGate(gate);
+        setText('#contentRecommendationsRss', recommendationRssStatusText(cards));
 
         if(!cards.length){
           gridEl.innerHTML = `
             <article class="contentRecCard">
               <p class="contentRecEyebrow">No mapped content found</p>
               <h3>No existing assets matched this profile yet</h3>
-              <p class="contentRecSummary">Recommendations are limited to content currently in your imported Webflow catalog.</p>
+              <p class="contentRecSummary">No strong recommendations are available for this profile yet. Add or refresh source content and try again.</p>
             </article>
           `;
           if(emailBtn){
@@ -7991,20 +8082,25 @@ const evidenceOpts = [
           emailBtn.title = 'Generate recommendation email draft';
         }
 
-        gridEl.innerHTML = cards.map((card, idx)=> `
-          <article class="contentRecCard">
-            <p class="contentRecEyebrow">Recommendation ${idx + 1} · ${escapeHtml(card.format)}</p>
-            <h3>${escapeHtml(card.title)}</h3>
-            <p class="contentRecOutcome"><strong>Outcome:</strong> ${escapeHtml(card.outcomeLabel)}</p>
-            <p class="contentRecSummary">${escapeHtml(card.summary)}</p>
-            <p class="contentRecWhy"><strong>Why this match:</strong> ${escapeHtml(card.why)}</p>
-            ${card.url
-              ? `<a class="contentRecLink" href="${escapeHtml(card.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Open content')}</a>`
-              : ''
-            }
-            <p class="contentRecSource">Source file: ${escapeHtml(card.source || 'Webflow export')}</p>
-          </article>
-        `).join('');
+        gridEl.innerHTML = cards.map((card, idx)=>{
+          const sourceLabel = recommendationSourceLabel(card);
+          const publishedLabel = formatPublishedDate(card.publishedOn);
+          return `
+            <article class="contentRecCard">
+              <p class="contentRecEyebrow">Recommendation ${idx + 1} · ${escapeHtml(card.format)}</p>
+              <h3>${escapeHtml(card.title)}</h3>
+              <p class="contentRecOutcome"><strong>Outcome:</strong> ${escapeHtml(card.outcomeLabel)}</p>
+              <p class="contentRecSummary">${escapeHtml(card.summary)}</p>
+              <p class="contentRecWhy"><strong>Why this match:</strong> ${escapeHtml(card.why)}</p>
+              ${card.url
+                ? `<a class="contentRecLink" href="${escapeHtml(card.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Open content')}</a>`
+                : ''
+              }
+              ${publishedLabel ? `<p class="contentRecMeta"><strong>Published:</strong> ${escapeHtml(publishedLabel)}</p>` : ''}
+              <p class="contentRecSource"><strong>Source:</strong> ${escapeHtml(sourceLabel)}</p>
+            </article>
+          `;
+        }).join('');
         renderCustomerTemplatePreview();
       }
 
@@ -10472,7 +10568,10 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       let shellResizeTimer = null;
       window.addEventListener('resize', ()=>{
         window.clearTimeout(shellResizeTimer);
-        shellResizeTimer = window.setTimeout(()=> update(), 80);
+        shellResizeTimer = window.setTimeout(()=>{
+          update();
+          syncCustomerPreviewStoryLayout();
+        }, 80);
       });
       document.addEventListener('keydown', (e)=>{
         if(e.key !== 'Escape') return;

@@ -2005,7 +2005,7 @@
       margin:0 0 8px;
       font-weight:650;
     }
-    input[type="text"], input[type="email"], input[type="tel"], input[type="number"], select, textarea{
+    input[type="text"], input[type="email"], input[type="tel"], input[type="number"], input[type="url"], select, textarea{
       width:100%;
       box-sizing:border-box;
       border:1px solid var(--border);
@@ -3685,6 +3685,7 @@
     .darkForm input[type="email"],
     .darkForm input[type="tel"],
     .darkForm input[type="number"],
+    .darkForm input[type="url"],
     .darkForm textarea{
       background: rgba(255,255,255,.06);
       border-color: rgba(255,255,255,.18);
@@ -3839,6 +3840,20 @@
   display:grid;
   gap:8px;
 }
+.contentRecImageWrap{
+  margin:-14px -14px 2px;
+  border-radius:12px 12px 0 0;
+  overflow:hidden;
+  aspect-ratio:16 / 9;
+  background:#d8e5ff;
+  border-bottom:1px solid color-mix(in srgb, var(--azure) 18%, var(--border));
+}
+.contentRecImage{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit:cover;
+}
 .contentRecCard h3{
   margin:0;
   font-size:1.02rem;
@@ -3884,6 +3899,359 @@
   .recommendationsHead{ flex-direction:column; }
   .recommendationsHeadActions{ justify-content:flex-start; }
   .recommendationsGrid{ grid-template-columns: 1fr; }
+}
+
+.customerTemplatePreviewWrap{
+  margin-top:18px;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background: var(--soft2);
+  padding:14px;
+  display:grid;
+  gap:12px;
+}
+.customerTemplatePreviewHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.customerTemplatePreviewHead h3{
+  margin:0;
+  font-size:1.04rem;
+  line-height:1.25;
+}
+.customerTemplatePreviewHead p{
+  margin:5px 0 0;
+  font-size:.86rem;
+  color: var(--muted);
+}
+.customerTemplatePreviewActions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.customerTemplatePreviewCanvas{
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:#f4f7ff;
+  padding:12px;
+  display:grid;
+  gap:10px;
+}
+.customerPreviewTopbar{
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:rgba(255,255,255,.92);
+  padding:10px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.customerPreviewBrand{
+  display:inline-flex;
+  align-items:center;
+}
+.customerPreviewBrand img{
+  display:block;
+  width:auto;
+  height:22px;
+}
+.customerPreviewTopPackage{
+  border:1px solid color-mix(in srgb, var(--azure) 24%, var(--border));
+  border-radius:999px;
+  background:#eef4ff;
+  color:#26406f;
+  font-size:.74rem;
+  font-weight:800;
+  padding:5px 10px;
+}
+.customerPreviewHero{
+  border-radius:12px;
+  border:1px solid rgba(196,210,248,.35);
+  background:
+    radial-gradient(420px 180px at 85% -20%, rgba(107,134,255,.34), transparent 60%),
+    linear-gradient(120deg, #0f172a, #111e38);
+  color:#eff4ff;
+  padding:12px;
+  display:grid;
+  gap:10px;
+  grid-template-columns:minmax(0, 1fr) 208px;
+}
+.customerPreviewHero h4{
+  margin:0;
+  font-size:1.25rem;
+  line-height:1.1;
+  letter-spacing:-0.02em;
+}
+.customerPreviewHeroEyebrow{
+  margin:0 0 5px;
+  font-size:.66rem;
+  text-transform:uppercase;
+  letter-spacing:.11em;
+  color:#bdd0fb;
+}
+.customerPreviewHeroSub{
+  margin:7px 0 0;
+  color:#d3ddf6;
+  font-size:.88rem;
+  line-height:1.45;
+}
+.customerPreviewHeroActions{
+  margin-top:10px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.customerPreviewStats{
+  display:grid;
+  gap:7px;
+  align-content:start;
+}
+.customerPreviewStat{
+  border:1px solid rgba(189,209,248,.25);
+  border-radius:10px;
+  background:rgba(11,21,40,.56);
+  padding:8px;
+}
+.customerPreviewStatLabel{
+  margin:0;
+  font-size:.66rem;
+  text-transform:uppercase;
+  letter-spacing:.11em;
+  color:#8ea3cf;
+}
+.customerPreviewStatValue{
+  margin:4px 0 0;
+  font-size:.86rem;
+  color:#f2f7ff;
+  font-weight:700;
+}
+.customerPreviewSection{
+  border:1px solid var(--border);
+  border-radius:12px;
+  background: var(--surface);
+  padding:10px;
+}
+.customerPreviewSection h5{
+  margin:0;
+  font-size:.92rem;
+}
+.customerPreviewSection p{
+  margin:5px 0 0;
+  font-size:.82rem;
+  color: var(--muted);
+}
+.customerPreviewPackagePanel{
+  display:grid;
+  gap:8px;
+}
+.customerPreviewPackagePanel p{
+  margin:0;
+}
+.customerPreviewPackageBadge{
+  width:max-content;
+  border:1px solid color-mix(in srgb, var(--azure) 24%, var(--border));
+  border-radius:999px;
+  background:#eef4ff;
+  color:#223a66;
+  font-size:.78rem;
+  font-weight:800;
+  padding:5px 10px;
+}
+.customerPreviewList{
+  margin:8px 0 0 18px;
+  display:grid;
+  gap:6px;
+  font-size:.86rem;
+  color: var(--text);
+}
+.customerPreviewValueStack{
+  margin-top:10px;
+  display:grid;
+  gap:0;
+  padding-bottom:4px;
+}
+.customerPreviewValueCard{
+  border:1px solid color-mix(in srgb, var(--azure) 24%, var(--border));
+  border-radius:10px;
+  background:linear-gradient(180deg, #f6f9ff, #edf3ff);
+  padding:9px;
+  display:grid;
+  gap:4px;
+  box-shadow:0 8px 20px rgba(15,23,42,.08);
+}
+.customerPreviewValueCard + .customerPreviewValueCard{
+  margin-top:-11px;
+  margin-left:14px;
+}
+.customerPreviewValueCard h6{
+  margin:0;
+  font-size:.9rem;
+  line-height:1.2;
+  color:#1a2c4f;
+}
+.customerPreviewValueCard p{
+  margin:0;
+  color:#4b5f83;
+  font-size:.8rem;
+  line-height:1.35;
+}
+.customerPreviewOutcomeGrid{
+  margin-top:9px;
+  display:grid;
+  gap:8px;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+}
+.customerPreviewOutcomeCard{
+  border:1px solid color-mix(in srgb, var(--azure) 26%, var(--border));
+  border-radius:10px;
+  background:linear-gradient(180deg, #f6f9ff, #edf3ff);
+  padding:9px;
+  display:grid;
+  gap:5px;
+}
+.customerPreviewOutcomeCard span{
+  width:max-content;
+  border:1px solid color-mix(in srgb, var(--azure) 24%, var(--border));
+  border-radius:999px;
+  background:#fff;
+  color:#314d7d;
+  font-size:.68rem;
+  font-weight:700;
+  letter-spacing:.03em;
+  padding:3px 8px;
+}
+.customerPreviewOutcomeCard h6{
+  margin:0;
+  font-size:.9rem;
+  line-height:1.3;
+  color:#1a2c4f;
+}
+.customerPreviewOutcomeCard p{
+  margin:0;
+  color:#4b5f83;
+  font-size:.8rem;
+  line-height:1.35;
+}
+.customerPreviewCommercial{
+  margin-top:8px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.customerPreviewCommercial span{
+  border:1px solid var(--border);
+  border-radius:999px;
+  background:#fff;
+  color: var(--text);
+  font-size:.74rem;
+  padding:4px 8px;
+}
+.customerPreviewUnderstandingCard{
+  margin-top:9px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background: var(--soft2);
+  padding:10px;
+}
+.customerPreviewUnderstandingCard p{
+  margin:0;
+  color: var(--text);
+  font-size:.87rem;
+  line-height:1.45;
+}
+.customerPreviewContentGrid{
+  margin-top:9px;
+  display:grid;
+  gap:8px;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+}
+.customerPreviewContentCard{
+  border:1px solid var(--border);
+  border-radius:10px;
+  background: var(--surface);
+  padding:9px;
+  display:grid;
+  gap:6px;
+}
+.customerPreviewImageWrap{
+  margin:-9px -9px 2px;
+  border-radius:10px 10px 0 0;
+  overflow:hidden;
+  aspect-ratio:16 / 9;
+  background:#d8e5ff;
+  border-bottom:1px solid color-mix(in srgb, var(--azure) 20%, var(--border));
+}
+.customerPreviewContentImage{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit:cover;
+}
+.customerPreviewContentCard h6{
+  margin:0;
+  font-size:.9rem;
+  line-height:1.3;
+}
+.customerPreviewContentCard p{
+  margin:0;
+  color: var(--muted);
+  font-size:.8rem;
+  line-height:1.35;
+}
+.customerPreviewCardActions{
+  display:flex;
+  justify-content:flex-end;
+}
+.customerTemplateEditorSheet{
+  width:min(620px, calc(100vw - 24px));
+}
+.customerTemplateEditorBody .row > div{
+  min-width:0;
+}
+.customerTemplateEditorBody input[type="text"],
+.customerTemplateEditorBody input[type="url"]{
+  min-height:52px;
+  padding:14px 16px;
+  font-size:1.04rem;
+}
+.customerTemplateEditorBody textarea{
+  min-height:108px;
+  padding:14px 16px;
+  font-size:1.02rem;
+  resize:vertical;
+}
+@media (max-width: 980px){
+  .customerPreviewHero{
+    grid-template-columns:minmax(0, 1fr);
+  }
+  .customerPreviewOutcomeGrid{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+  .customerPreviewContentGrid{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px){
+  .customerTemplatePreviewActions{
+    width:100%;
+    justify-content:flex-start;
+  }
+  .customerPreviewValueCard + .customerPreviewValueCard{
+    margin-top:6px;
+    margin-left:0;
+  }
+  .customerPreviewContentGrid{
+    grid-template-columns:1fr;
+  }
+  .customerPreviewOutcomeGrid{
+    grid-template-columns:1fr;
+  }
 }
 
     .flash{ animation: flash 1.2s ease; }
@@ -4446,6 +4814,7 @@
     input[type="email"].is-field-incomplete:not(:focus),
     input[type="tel"].is-field-incomplete:not(:focus),
     input[type="number"].is-field-incomplete:not(:focus),
+    input[type="url"].is-field-incomplete:not(:focus),
     select.is-field-incomplete:not(:focus),
     textarea.is-field-incomplete:not(:focus),
     input[aria-invalid="true"]:not(:focus),
@@ -4476,7 +4845,7 @@
       color: color-mix(in srgb, var(--text) 82%, var(--accent) 18%);
     }
 
-    input[type="text"], input[type="email"], input[type="tel"], input[type="number"], select, textarea{
+    input[type="text"], input[type="email"], input[type="tel"], input[type="number"], input[type="url"], select, textarea{
       border-radius: 12px;
       border-color: color-mix(in srgb, var(--border) 92%, transparent);
       background: color-mix(in srgb, var(--surface) 95%, var(--accent) 5%);
@@ -5798,6 +6167,7 @@
     html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) input[type="email"].is-field-incomplete:not(:focus),
     html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) input[type="tel"].is-field-incomplete:not(:focus),
     html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) input[type="number"].is-field-incomplete:not(:focus),
+    html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) input[type="url"].is-field-incomplete:not(:focus),
     html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) select.is-field-incomplete:not(:focus),
     html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) textarea.is-field-incomplete:not(:focus),
     html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) input[aria-invalid="true"]:not(:focus),
@@ -5821,6 +6191,7 @@
     html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) input[type="email"],
     html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) input[type="tel"],
     html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) input[type="number"],
+    html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) input[type="url"],
     html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) select,
     html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) textarea,
     html:is([data-shell-tone="dark"], [data-shell-tone="comfort"]) #regSearch{

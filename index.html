@@ -107,9 +107,13 @@
           </svg>
         </button>
         <button class="btn primary small" type="button" id="globalEditConfigurator" hidden>Edit record</button>
+        <button class="btn secondaryBlue small" type="button" id="globalViewRecommendations" hidden>View content recommendations</button>
         <button class="btn secondaryBlue small" type="button" id="globalBookConsultation" hidden>Book consultation</button>
       </div>
     </div>
+    <nav class="workspaceBreadcrumb" id="workspaceBreadcrumb" aria-label="Workspace breadcrumb" hidden>
+      <ol class="workspaceBreadcrumbList" id="workspaceBreadcrumbList"></ol>
+    </nav>
     <section id="dashboardView" aria-label="Dashboard view">
       <article class="dashboardShell">
         <header class="dashboardHead">
@@ -137,16 +141,25 @@
             <thead>
               <tr>
                 <th class="dashSelectCol" aria-label="Select rows"></th>
-                <th>
-                  <span class="dashColHeadLabel">Company</span>
+                <th data-dash-sort-col="company" aria-sort="none">
+                  <button class="dashSortToggle" type="button" data-dash-sort="company" data-dash-sort-label="Company">
+                    <span class="dashColHeadLabel">Company</span>
+                    <span class="dashSortIndicator" aria-hidden="true"></span>
+                  </button>
                   <button class="dashColResizer" type="button" data-dash-col-resize="company" aria-label="Resize Company column"></button>
                 </th>
-                <th>
-                  <span class="dashColHeadLabel">Completion</span>
+                <th data-dash-sort-col="completion" aria-sort="none">
+                  <button class="dashSortToggle" type="button" data-dash-sort="completion" data-dash-sort-label="Completion">
+                    <span class="dashColHeadLabel">Completion</span>
+                    <span class="dashSortIndicator" aria-hidden="true"></span>
+                  </button>
                   <button class="dashColResizer" type="button" data-dash-col-resize="completion" aria-label="Resize Completion column"></button>
                 </th>
-                <th>
-                  <span class="dashColHeadLabel">Tier</span>
+                <th data-dash-sort-col="tier" aria-sort="none">
+                  <button class="dashSortToggle" type="button" data-dash-sort="tier" data-dash-sort-label="Tier">
+                    <span class="dashColHeadLabel">Tier</span>
+                    <span class="dashSortIndicator" aria-hidden="true"></span>
+                  </button>
                   <button class="dashColResizer" type="button" data-dash-col-resize="tier" aria-label="Resize Tier column"></button>
                 </th>
                 <th>
@@ -157,7 +170,16 @@
                   <span class="dashColHeadLabel">Remaining gaps</span>
                   <button class="dashColResizer" type="button" data-dash-col-resize="gaps" aria-label="Resize Remaining gaps column"></button>
                 </th>
-                <th><span class="dashColHeadLabel">Actions</span></th>
+                <th>
+                  <div class="dashDateHead">
+                    <button class="dashDateModeToggle" type="button" data-dashboard-date-toggle="true">
+                      <span class="dashDateToggleLabel">Date modified</span>
+                    </button>
+                    <button class="dashDateSortToggle" type="button" data-dashboard-date-sort="true" aria-label="Sort date descending">
+                      <span class="dashSortIndicator" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody id="dashboardRows"></tbody>
@@ -190,12 +212,36 @@
             <thead>
               <tr>
                 <th class="dashSelectCol" aria-label="Select rows"></th>
-                <th>Company</th>
-                <th>Completion</th>
-                <th>Tier</th>
-                <th>Key outcomes</th>
-                <th>Remaining gaps</th>
-                <th><span class="dashColHeadLabel">Actions</span></th>
+                <th data-dash-sort-col="company" aria-sort="none">
+                  <button class="dashSortToggle" type="button" data-dash-sort="company" data-dash-sort-label="Company">
+                    <span class="dashColHeadLabel">Company</span>
+                    <span class="dashSortIndicator" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th data-dash-sort-col="completion" aria-sort="none">
+                  <button class="dashSortToggle" type="button" data-dash-sort="completion" data-dash-sort-label="Completion">
+                    <span class="dashColHeadLabel">Completion</span>
+                    <span class="dashSortIndicator" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th data-dash-sort-col="tier" aria-sort="none">
+                  <button class="dashSortToggle" type="button" data-dash-sort="tier" data-dash-sort-label="Tier">
+                    <span class="dashColHeadLabel">Tier</span>
+                    <span class="dashSortIndicator" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th><span class="dashColHeadLabel">Key outcomes</span></th>
+                <th><span class="dashColHeadLabel">Remaining gaps</span></th>
+                <th>
+                  <div class="dashDateHead">
+                    <button class="dashDateModeToggle" type="button" data-dashboard-date-toggle="true">
+                      <span class="dashDateToggleLabel">Date modified</span>
+                    </button>
+                    <button class="dashDateSortToggle" type="button" data-dashboard-date-sort="true" aria-label="Sort date descending">
+                      <span class="dashSortIndicator" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody id="archivedRows"></tbody>
@@ -299,6 +345,29 @@
 
     <section id="interstitialView" aria-label="Conversation overview">
       <article class="interShell" id="interstitialContent"></article>
+    </section>
+
+    <section id="contentRecommendationsView" aria-label="Content recommendations view">
+      <article class="recommendationsShell">
+        <header class="recommendationsHead">
+          <div>
+            <h2>Content recommendations</h2>
+            <p class="recommendationsSub" id="contentRecommendationsSub">Outcome-matched content recommendations for this profile.</p>
+          </div>
+          <div class="recommendationsHeadActions">
+            <span class="dashboardPill" id="contentRecommendationsCompletion">Completion: 0/22 (0%)</span>
+            <button class="btn primary small" type="button" id="generateRecommendationEmailBtn" data-action="openRecommendationEmail">Generate email</button>
+            <button class="btn small" type="button" id="contentRecommendationsBackBtn" data-action="backToReview">Back to review</button>
+          </div>
+        </header>
+        <div class="recommendationsMeta">
+          <span class="dashboardPill" id="contentRecommendationsTier">Package: —</span>
+          <span class="dashboardPill" id="contentRecommendationsOutcomes">Outcomes: —</span>
+          <span class="dashboardPill" id="contentRecommendationsAudience">Company: —</span>
+        </div>
+        <div class="recommendationsGate" id="contentRecommendationsGate" hidden></div>
+        <div class="recommendationsGrid" id="contentRecommendationsGrid"></div>
+      </article>
     </section>
 
     <div class="grid">
@@ -1021,6 +1090,10 @@
                       <button class="link" type="button" data-jump="3" data-target="#qPackageFit">Edit</button>
                     </div>
                     <div class="sumBody" id="sumTier">—</div>
+                    <div class="reviewRecommendationAccess">
+                      <button class="btn secondaryBlue small" type="button" id="viewContentRecommendationsBtn" data-action="openRecommendations" data-locked="true" disabled>View content recommendations</button>
+                      <p class="reviewRecommendationHint" id="viewContentRecommendationsHint">Complete at least 90% of this profile to unlock recommendations.</p>
+                    </div>
                   </div>
 
                   <div class="sumCard">
@@ -1352,6 +1425,44 @@
       </div>
     </aside>
   </div>
+  <div class="consultation emailBuilderOverlay" id="emailBuilderPanel" aria-hidden="true">
+    <aside class="consultationSheet emailBuilderSheet" role="dialog" aria-modal="true" aria-label="Recommendation email builder">
+      <div class="consultationHead">
+        <div>
+          <div class="settingsLabel" style="margin:0 0 8px;">Email builder</div>
+          <h3 class="consultationTitle" id="emailBuilderCompany">Record</h3>
+          <p class="consultationSub" id="emailBuilderSub">Structured customer email based on current recommendations.</p>
+        </div>
+        <button class="btn small" id="closeEmailBuilder" type="button">Close</button>
+      </div>
+      <div class="consultationMeta">
+        <span class="dashboardPill" id="emailBuilderTierPill">Tier: Core</span>
+        <span class="dashboardPill" id="emailBuilderCompletionPill">Completion: 0/22 (0%)</span>
+        <span class="dashboardPill" id="emailBuilderOutcomePill">Outcomes: —</span>
+      </div>
+      <div class="consultationBody">
+        <section class="consultationSection">
+          <h4>Subject</h4>
+          <p class="emailBuilderSubject" id="emailBuilderSubject">Immersive recommendations</p>
+        </section>
+        <section class="consultationSection">
+          <h4>Email draft</h4>
+          <div class="emailBuilderDraft" id="emailBuilderDraft"></div>
+        </section>
+        <section class="consultationSection">
+          <h4>Resource blocks</h4>
+          <ul id="emailBuilderResources"></ul>
+        </section>
+        <section class="consultationSection consultationFormSection">
+          <h4>Actions</h4>
+          <div class="consultationActions">
+            <button class="btn secondaryBlue small" type="button" data-action="copyRecommendationEmail">Copy email</button>
+            <button class="btn small" type="button" data-action="copyRecommendationSubject">Copy subject</button>
+          </div>
+        </section>
+      </div>
+    </aside>
+  </div>
 
   <div class="settings" id="settings" aria-hidden="true">
     <div class="settingsPanel" role="dialog" aria-label="My settings">
@@ -1403,6 +1514,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+    <script src="assets/js/content-catalog.js"></script>
     <script src="assets/js/app.js"></script>
 </body>
 </html>

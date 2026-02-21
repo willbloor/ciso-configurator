@@ -271,6 +271,8 @@
         activeThread: 'current',
         activeStep: 1,
         visited: new Set([1]),
+        dashboardSort: 'name-asc',
+        dashboardDateMode: 'modified',
         dashboardSelectedIds: new Set(),
         archivedSelectedIds: new Set(),
         starPulseQueue: new Set(),
@@ -281,6 +283,10 @@
         navPreviewThreadId: null,
         consultationOpen: false,
         consultationThreadId: 'current',
+        emailBuilderOpen: false,
+        emailBuilderThreadId: 'current',
+        recommendationsThreadId: 'current',
+        recommendationsReturnView: 'configurator',
 
         // record persistence
         savedThreads: [],
@@ -297,6 +303,39 @@
       let archivePromptMode = 'archive';
       let archivePromptIds = [];
       const DASHBOARD_COL_STORAGE_KEY = 'cfg_dashboard_col_widths_v1';
+      const DASHBOARD_SORT_STORAGE_KEY = 'cfg_dashboard_sort_v1';
+      const DASHBOARD_DATE_MODE_STORAGE_KEY = 'cfg_dashboard_date_mode_v1';
+      const DASHBOARD_SORT_MODES = Object.freeze(new Set([
+        'name-asc',
+        'name-desc',
+        'completion-desc',
+        'completion-asc',
+        'tier-desc',
+        'tier-asc',
+        'outcomes-desc',
+        'outcomes-asc',
+        'gaps-desc',
+        'gaps-asc',
+        'created-desc',
+        'created-asc',
+        'modified-desc',
+        'modified-asc',
+        'status-asc',
+        'status-desc'
+      ]));
+      const DASHBOARD_SORT_COLUMN_TO_MODES = Object.freeze({
+        company: Object.freeze({ asc:'name-asc', desc:'name-desc' }),
+        completion: Object.freeze({ asc:'completion-asc', desc:'completion-desc' }),
+        tier: Object.freeze({ asc:'tier-asc', desc:'tier-desc' })
+      });
+      const DASHBOARD_SORT_MODE_TO_COLUMN = Object.freeze({
+        'name-asc': Object.freeze({ column:'company', direction:'asc' }),
+        'name-desc': Object.freeze({ column:'company', direction:'desc' }),
+        'completion-asc': Object.freeze({ column:'completion', direction:'asc' }),
+        'completion-desc': Object.freeze({ column:'completion', direction:'desc' }),
+        'tier-asc': Object.freeze({ column:'tier', direction:'asc' }),
+        'tier-desc': Object.freeze({ column:'tier', direction:'desc' })
+      });
       const DASHBOARD_COLS = {
         company: { css:'--dash-col-company', min:12, max:34, fallback:17 },
         completion: { css:'--dash-col-completion', min:9, max:24, fallback:13 },
@@ -306,6 +345,126 @@
         actions: { css:'--dash-col-actions', min:8, max:20, fallback:11 }
       };
       let dashboardColWidths = Object.create(null);
+
+      function sanitizeDashboardSortMode(raw){
+        const value = String(raw || '').trim().toLowerCase();
+        if(DASHBOARD_SORT_MODES.has(value)) return value;
+        return 'name-asc';
+      }
+
+      function loadDashboardSortMode(){
+        try{
+          const stored = window.localStorage.getItem(DASHBOARD_SORT_STORAGE_KEY);
+          const sanitized = sanitizeDashboardSortMode(stored);
+          return sanitized;
+        }catch(err){
+          return 'name-asc';
+        }
+      }
+
+      function persistDashboardSortMode(){
+        try{
+          window.localStorage.setItem(DASHBOARD_SORT_STORAGE_KEY, sanitizeDashboardSortMode(state.dashboardSort));
+        }catch(err){
+          // ignore storage failures
+        }
+      }
+      state.dashboardSort = loadDashboardSortMode();
+
+      function sanitizeDashboardDateMode(raw){
+        const value = String(raw || '').trim().toLowerCase();
+        return value === 'created' ? 'created' : 'modified';
+      }
+
+      function loadDashboardDateMode(){
+        try{
+          const stored = window.localStorage.getItem(DASHBOARD_DATE_MODE_STORAGE_KEY);
+          return sanitizeDashboardDateMode(stored);
+        }catch(err){
+          return 'modified';
+        }
+      }
+
+      function persistDashboardDateMode(){
+        try{
+          window.localStorage.setItem(DASHBOARD_DATE_MODE_STORAGE_KEY, sanitizeDashboardDateMode(state.dashboardDateMode));
+        }catch(err){
+          // ignore storage failures
+        }
+      }
+      state.dashboardDateMode = loadDashboardDateMode();
+
+      function dashboardSortDescriptor(mode){
+        const normalized = sanitizeDashboardSortMode(mode || state.dashboardSort);
+        return DASHBOARD_SORT_MODE_TO_COLUMN[normalized] || null;
+      }
+
+      function dashboardSortNextModeForColumn(column){
+        const key = String(column || '').trim().toLowerCase();
+        const pair = DASHBOARD_SORT_COLUMN_TO_MODES[key];
+        if(!pair) return sanitizeDashboardSortMode(state.dashboardSort);
+        const current = dashboardSortDescriptor(state.dashboardSort);
+        if(current && current.column === key){
+          return current.direction === 'asc' ? pair.desc : pair.asc;
+        }
+        return pair.asc;
+      }
+
+      function updateDashboardSortControls(){
+        const normalizedMode = sanitizeDashboardSortMode(state.dashboardSort);
+        if(normalizedMode !== state.dashboardSort){
+          state.dashboardSort = normalizedMode;
+          persistDashboardSortMode();
+        }
+        const active = dashboardSortDescriptor(normalizedMode);
+        $$('[data-dash-sort]').forEach((btn)=>{
+          const column = String(btn.getAttribute('data-dash-sort') || '').trim().toLowerCase();
+          const isActive = !!active && active.column === column;
+          const direction = isActive ? active.direction : 'asc';
+          const nextDir = (isActive && direction === 'asc') ? 'descending' : 'ascending';
+          const label = String(btn.getAttribute('data-dash-sort-label') || btn.textContent || column || 'column').trim();
+          btn.dataset.active = isActive ? 'true' : 'false';
+          btn.dataset.direction = direction;
+          btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+          btn.setAttribute('aria-label', `Sort by ${label} (${nextDir})`);
+          const th = btn.closest('th');
+          if(th){
+            th.setAttribute('aria-sort', isActive ? (direction === 'asc' ? 'ascending' : 'descending') : 'none');
+          }
+        });
+      }
+
+      function updateDashboardDateControls(){
+        const mode = sanitizeDashboardDateMode(state.dashboardDateMode);
+        if(mode !== state.dashboardDateMode){
+          state.dashboardDateMode = mode;
+          persistDashboardDateMode();
+        }
+        const sortMode = sanitizeDashboardSortMode(state.dashboardSort);
+        const isModified = mode === 'modified';
+        const label = isModified ? 'Date modified' : 'Date created';
+        const nextLabel = isModified ? 'Date created' : 'Date modified';
+        const isDateSort = sortMode === `${mode}-asc` || sortMode === `${mode}-desc`;
+        const direction = (sortMode === `${mode}-asc`) ? 'asc' : 'desc';
+        $$('[data-dashboard-date-toggle]').forEach((btn)=>{
+          const labelEl = btn.querySelector('.dashDateToggleLabel');
+          if(labelEl) labelEl.textContent = label;
+          else btn.textContent = label;
+          btn.setAttribute('title', `Click to switch to ${nextLabel}`);
+          btn.setAttribute('aria-label', `${label}. Click to switch to ${nextLabel}.`);
+        });
+        $$('[data-dashboard-date-sort]').forEach((btn)=>{
+          const nextDir = direction === 'asc' ? 'descending' : 'ascending';
+          btn.dataset.direction = direction;
+          btn.dataset.active = isDateSort ? 'true' : 'false';
+          btn.setAttribute('title', `Sort ${label} ${nextDir}`);
+          btn.setAttribute('aria-label', `Sort ${label} ${nextDir}`);
+          const th = btn.closest('th');
+          if(th){
+            th.setAttribute('aria-sort', isDateSort ? (direction === 'asc' ? 'ascending' : 'descending') : 'none');
+          }
+        });
+      }
 
       function loadDashboardColWidths(){
         try{
@@ -1372,17 +1531,21 @@ const evidenceOpts = [
       function setView(view, opts){
         const cfg = Object.assign({ render: true }, opts || {});
         const prev = state.currentView || 'dashboard';
-        const next = (view === 'dashboard' || view === 'archived' || view === 'interstitial' || view === 'account') ? view : 'configurator';
+        const next = (view === 'dashboard' || view === 'archived' || view === 'interstitial' || view === 'account' || view === 'recommendations') ? view : 'configurator';
         state.currentView = next;
         if(prev !== next && state.consultationOpen){
           toggleConsultation(false);
+        }
+        if(prev !== next && state.emailBuilderOpen){
+          toggleEmailBuilder(false);
         }
         document.body.classList.toggle('is-configurator-view', next === 'configurator');
         document.body.classList.toggle('is-dashboard-view', next === 'dashboard');
         document.body.classList.toggle('is-archived-view', next === 'archived');
         document.body.classList.toggle('is-interstitial-view', next === 'interstitial');
         document.body.classList.toggle('is-account-view', next === 'account');
-        if(next === 'dashboard' || next === 'archived' || next === 'account'){
+        document.body.classList.toggle('is-recommendations-view', next === 'recommendations');
+        if(next === 'dashboard' || next === 'archived' || next === 'account' || next === 'recommendations'){
           state.navPreviewThreadId = null;
         }
         if(next !== 'configurator'){
@@ -1419,10 +1582,14 @@ const evidenceOpts = [
         const createBtn = $('#globalCreateRecord');
         const deleteBtn = $('#globalDeleteRecord');
         const editBtn = $('#globalEditConfigurator');
+        const recsBtn = $('#globalViewRecommendations');
         const bookBtn = $('#globalBookConsultation');
         const view = state.currentView || 'configurator';
         const interThread = (view === 'interstitial') ? activeThreadModel() : null;
         const canDeleteThread = !!(interThread && interThread.id && interThread.id !== 'current' && findSavedThread(interThread.id));
+        const interRecsGate = (view === 'interstitial' && interThread)
+          ? recommendationsGateFromThread(interThread)
+          : null;
 
         const setActionBtnVisible = (el, visible)=>{
           if(!el) return;
@@ -1433,7 +1600,17 @@ const evidenceOpts = [
         setActionBtnVisible(createBtn, view === 'dashboard');
         setActionBtnVisible(deleteBtn, view === 'interstitial' && canDeleteThread);
         setActionBtnVisible(editBtn, view === 'interstitial');
+        setActionBtnVisible(recsBtn, view === 'interstitial');
         setActionBtnVisible(bookBtn, view === 'interstitial');
+        if(recsBtn){
+          const unlocked = !!(interRecsGate && interRecsGate.eligible);
+          recsBtn.disabled = false;
+          recsBtn.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
+          recsBtn.dataset.locked = unlocked ? 'false' : 'true';
+          recsBtn.title = unlocked
+            ? 'Open content recommendations'
+            : `Locked until completion reaches 90% (current: ${(interRecsGate && interRecsGate.completion) || '0/22 (0%)'})`;
+        }
         let targetSlot = null;
         if(view === 'dashboard') targetSlot = dashboardSlot;
         if(view === 'interstitial') targetSlot = interstitialSlot;
@@ -1451,6 +1628,54 @@ const evidenceOpts = [
         }else{
           actionBtns.style.display = 'none';
         }
+      }
+
+      function renderWorkspaceBreadcrumb(){
+        const nav = $('#workspaceBreadcrumb');
+        const list = $('#workspaceBreadcrumbList');
+        if(!nav || !list) return;
+
+        const view = state.currentView || 'configurator';
+        const isWorkspaceView = (
+          view === 'interstitial'
+          || view === 'archived'
+          || view === 'account'
+          || view === 'recommendations'
+        );
+        nav.hidden = !isWorkspaceView;
+        if(!isWorkspaceView){
+          list.innerHTML = '';
+          return;
+        }
+
+        const items = [
+          { label:'Dashboard', action:'dashboard', current:false }
+        ];
+
+        if(view === 'archived'){
+          items.push({ label:'My archive', action:'archived', current:true });
+        }else if(view === 'account'){
+          items.push({ label:'My account', action:'account', current:true });
+        }else if(view === 'interstitial'){
+          const thread = activeThreadModel();
+          const company = String((thread && thread.company) || '').trim() || 'Record';
+          const threadId = String((thread && thread.id) || state.activeThread || 'current');
+          items.push({ label:company, action:'interstitial-thread', threadId, current:true });
+        }else if(view === 'recommendations'){
+          const thread = resolveRecommendationThread(state.recommendationsThreadId || state.activeThread || 'current');
+          const company = String((thread && thread.company) || '').trim() || 'Record';
+          const threadId = String((thread && thread.id) || state.recommendationsThreadId || 'current');
+          items.push({ label:company, action:'interstitial-thread', threadId, current:false });
+          items.push({ label:'Content recommendations', action:'recommendations', current:true });
+        }
+
+        list.innerHTML = items.map((item)=>{
+          if(item.current){
+            return `<li class="workspaceBreadcrumbItem"><span class="workspaceBreadcrumbCurrent" aria-current="page">${escapeHtml(item.label)}</span></li>`;
+          }
+          const threadAttr = item.threadId ? ` data-thread-id="${escapeHtml(item.threadId)}"` : '';
+          return `<li class="workspaceBreadcrumbItem"><button type="button" class="workspaceBreadcrumbLink" data-workspace-crumb="${escapeHtml(item.action)}"${threadAttr}>${escapeHtml(item.label)}</button></li>`;
+        }).join('');
       }
 
       function setActiveStep(n){
@@ -1799,16 +2024,15 @@ const evidenceOpts = [
 
       function threadReadinessProgress(thread){
         if(!thread || thread.id === 'current'){
-          return readinessProgressFromContext(state);
+          return Object.assign({}, readinessProgressFromContext(state), { source:'computed' });
         }
         const snapshot = (thread.snapshot && typeof thread.snapshot === 'object') ? thread.snapshot : {};
         const computed = readinessProgressFromContext(snapshot);
-        const storedCompletion = String(thread.completion || '').trim();
-        const hasStoredCompletion = /\(\s*\d+\s*%\s*\)/.test(storedCompletion);
         return {
-          completion: hasStoredCompletion ? storedCompletion : computed.completion,
+          completion: computed.completion,
           gaps: computed.gaps,
-          gapSummary: computed.gapSummary
+          gapSummary: computed.gapSummary,
+          source: 'computed'
         };
       }
 
@@ -1876,6 +2100,375 @@ const evidenceOpts = [
               { label:'Tools / stack', value: listOrDash(stackLabels) }
             ]
           }
+        };
+      }
+
+      const STATIC_THREAD_SNAPSHOT_SEEDS = Object.freeze({
+        northbridge: {
+          role: 'ciso',
+          fullName: 'Will Bloor',
+          company: 'Northbridge Bank',
+          companySize: '2k-10k',
+          operatingCountry: 'United Kingdom',
+          pressureSources: ['board', 'regulator', 'insurer'],
+          urgentWin: 'boardEvidence',
+          riskEnvs: ['cloud', 'identity'],
+          measuredOn: 'audit',
+          orgPain: '',
+          groups: ['soc', 'exec', 'grc'],
+          rhythm: 'quarterly',
+          measure: '',
+          fitRealism: 'tooling',
+          fitScope: '',
+          fitToday: '',
+          fitServices: '',
+          fitRiskFrame: 'governance',
+          industry: 'Financial Services',
+          region: 'UKI',
+          regs: [],
+          regsTouched: false,
+          activeStep: 3,
+          visited: [1, 2, 3, 4]
+        },
+        aster: {
+          role: 'secMgr',
+          fullName: 'Will Bloor',
+          company: 'Aster Mobility',
+          companySize: '2k-10k',
+          operatingCountry: 'Ireland',
+          pressureSources: ['board', 'customers'],
+          urgentWin: 'attackSurface',
+          riskEnvs: ['enterpriseApps', 'cloud'],
+          measuredOn: 'training',
+          orgPain: 'skillsCoverage',
+          drivers: ['nearMiss', 'skills', 'change'],
+          groups: ['soc', 'product'],
+          rhythm: '',
+          measure: 'completion',
+          fitRealism: 'generic',
+          fitScope: 'single',
+          fitToday: 'training',
+          fitServices: '',
+          fitRiskFrame: 'skills',
+          industry: 'Payments / FinTech',
+          region: 'APAC',
+          regs: [],
+          regsTouched: false,
+          activeStep: 2,
+          visited: [1, 2, 3, 4]
+        },
+        pioneer: {
+          role: 'ciso',
+          fullName: 'Will Bloor',
+          company: 'Pioneer Cloud',
+          companySize: '10k-50k',
+          operatingCountry: 'United States',
+          pressureSources: ['board', 'regulator', 'customers'],
+          urgentWin: 'boardEvidence',
+          riskEnvs: ['cloud', 'identity'],
+          measuredOn: 'mttd',
+          orgPain: 'externalProof',
+          groups: ['soc', 'cloud', 'exec'],
+          rhythm: 'program',
+          measure: 'performance',
+          fitRealism: 'bespoke',
+          fitScope: 'enterprise',
+          fitToday: 'scrutiny',
+          fitServices: 'whiteglove',
+          fitRiskFrame: 'governance',
+          industry: 'Technology / SaaS',
+          region: 'NA',
+          regs: ['nistscf', 'iso27001', 'soc2'],
+          regsTouched: true,
+          activeStep: 6,
+          visited: [1, 2, 3, 4, 5, 6]
+        },
+        cedar: {
+          role: 'secMgr',
+          fullName: 'Will Bloor',
+          company: 'Cedar Health',
+          companySize: '2k-10k',
+          operatingCountry: 'United States',
+          pressureSources: ['board', 'internal'],
+          urgentWin: 'boardEvidence',
+          riskEnvs: ['enterpriseApps', 'socir'],
+          measuredOn: 'audit',
+          orgPain: 'externalProof',
+          groups: ['soc', 'grc', 'workforce'],
+          rhythm: 'monthly',
+          measure: 'performance',
+          fitRealism: 'tooling',
+          fitScope: 'multi',
+          fitToday: 'adhoc',
+          fitServices: 'guided',
+          fitRiskFrame: 'governance',
+          industry: 'Healthcare / Life Sciences',
+          region: 'NA',
+          regs: ['hipaa', 'hitrust', 'iso27001'],
+          regsTouched: true,
+          activeStep: 6,
+          visited: [1, 2, 3, 4, 5, 6]
+        },
+        arclight: {
+          role: 'practitioner',
+          fullName: 'Will Bloor',
+          company: 'Arclight Retail',
+          companySize: '500-2k',
+          operatingCountry: 'United States',
+          pressureSources: ['internal'],
+          urgentWin: '',
+          riskEnvs: [],
+          measuredOn: '',
+          orgPain: '',
+          groups: ['soc'],
+          rhythm: '',
+          measure: '',
+          fitRealism: '',
+          fitScope: '',
+          fitToday: '',
+          fitServices: '',
+          fitRiskFrame: '',
+          industry: 'Retail / eCommerce',
+          region: '',
+          regs: [],
+          regsTouched: false,
+          activeStep: 2,
+          visited: [1, 2]
+        },
+        blueharbor: {
+          role: 'secMgr',
+          fullName: 'Will Bloor',
+          company: 'Blueharbor Logistics',
+          companySize: '2k-10k',
+          operatingCountry: 'United States',
+          pressureSources: ['board', 'customers'],
+          urgentWin: '',
+          riskEnvs: [],
+          measuredOn: '',
+          orgPain: '',
+          groups: ['soc'],
+          rhythm: '',
+          measure: '',
+          fitRealism: '',
+          fitScope: '',
+          fitToday: '',
+          fitServices: '',
+          fitRiskFrame: '',
+          industry: 'Transportation / Logistics',
+          region: 'NA',
+          regs: [],
+          regsTouched: false,
+          activeStep: 2,
+          visited: [1, 2]
+        },
+        nexus: {
+          role: 'ciso',
+          fullName: 'Will Bloor',
+          company: 'Nexus Utilities',
+          companySize: '2k-10k',
+          operatingCountry: 'United States',
+          pressureSources: ['regulator', 'internal'],
+          urgentWin: 'boardEvidence',
+          riskEnvs: ['ot', 'socir'],
+          measuredOn: 'audit',
+          orgPain: 'externalProof',
+          groups: ['soc', 'grc'],
+          rhythm: 'quarterly',
+          measure: '',
+          fitRealism: '',
+          fitScope: '',
+          fitToday: 'adhoc',
+          fitServices: '',
+          fitRiskFrame: '',
+          industry: 'Energy / Utilities',
+          region: '',
+          regs: [],
+          regsTouched: false,
+          activeStep: 3,
+          visited: [1, 2, 3, 4]
+        },
+        lunar: {
+          role: 'ciso',
+          fullName: 'Will Bloor',
+          company: 'Lunar Systems',
+          companySize: '10k-50k',
+          operatingCountry: 'United States',
+          pressureSources: ['board', 'customers', 'insurer'],
+          urgentWin: 'fasterDecisions',
+          riskEnvs: ['cloud', 'identity'],
+          measuredOn: 'mttd',
+          orgPain: 'coordination',
+          groups: ['soc', 'cloud', 'identity'],
+          rhythm: 'monthly',
+          measure: 'performance',
+          fitRealism: 'tooling',
+          fitScope: 'multi',
+          fitToday: 'adhoc',
+          fitServices: 'guided',
+          fitRiskFrame: 'readiness',
+          industry: 'Technology / SaaS',
+          region: '',
+          regs: [],
+          regsTouched: false,
+          activeStep: 4,
+          visited: [1, 2, 3, 4]
+        }
+      });
+
+      function staticThreadSnapshotSeed(threadId, companyName){
+        const key = String(threadId || '').trim();
+        if(!key) return null;
+        const seed = STATIC_THREAD_SNAPSHOT_SEEDS[key];
+        if(!seed) return null;
+        const seedCompany = String((seed && seed.company) || '').trim().toLowerCase();
+        const company = String(companyName || '').trim().toLowerCase();
+        if(company && seedCompany && company !== seedCompany) return null;
+        return jsonClone(seed) || null;
+      }
+
+      function mergeSnapshotWithSeed(snapshotInput, seedInput, companyFallback){
+        const snapshot = (snapshotInput && typeof snapshotInput === 'object')
+          ? (jsonClone(snapshotInput) || {})
+          : {};
+        const seed = (seedInput && typeof seedInput === 'object') ? seedInput : null;
+        const fallbackCompany = String(companyFallback || '').trim();
+        const hasText = (value)=> String(value || '').trim().length > 0;
+        const looksLikeLegacyAutoSnapshot = !!(
+          seed
+          && !hasText(snapshot.companySize)
+          && !hasText(snapshot.operatingCountry)
+          && !Array.isArray(snapshot.pressureSources)
+          && !Array.isArray(snapshot.riskEnvs)
+          && !hasText(snapshot.urgentWin)
+          && !hasText(snapshot.measuredOn)
+          && !hasText(snapshot.orgPain)
+          && !Array.isArray(snapshot.groups)
+          && !hasText(snapshot.rhythm)
+          && !hasText(snapshot.measure)
+          && !hasText(snapshot.fitRealism)
+          && !hasText(snapshot.fitScope)
+          && !hasText(snapshot.fitToday)
+          && !hasText(snapshot.fitServices)
+          && !hasText(snapshot.fitRiskFrame)
+          && !hasText(snapshot.industry)
+          && !hasText(snapshot.region)
+          && !Array.isArray(snapshot.regs)
+        );
+
+        if(looksLikeLegacyAutoSnapshot){
+          const migrated = jsonClone(seed) || {};
+          if(!hasText(migrated.company) && hasText(snapshot.company)){
+            migrated.company = String(snapshot.company).trim();
+          }
+          if(!Array.isArray(migrated.visited) || !migrated.visited.length){
+            migrated.visited = [1];
+          }
+          return migrated;
+        }
+
+        const scalarKeys = [
+          'role', 'fullName', 'company', 'companySize', 'operatingCountry',
+          'industry', 'region', 'urgentWin', 'measuredOn', 'orgPain',
+          'rhythm', 'measure', 'fitRealism', 'fitScope', 'fitToday',
+          'fitServices', 'fitRiskFrame', 'milestone', 'regMode', 'regSearch',
+          'stackOther', 'currency', 'realization', 'email', 'phone', 'notes'
+        ];
+        const listKeys = [
+          'pressureSources', 'riskEnvs', 'drivers', 'evidence',
+          'groups', 'regs', 'stack', 'visited'
+        ];
+
+        if(seed){
+          scalarKeys.forEach((key)=>{
+            if(!hasText(snapshot[key]) && hasText(seed[key])){
+              snapshot[key] = seed[key];
+            }
+          });
+          listKeys.forEach((key)=>{
+            if((!Array.isArray(snapshot[key]) || !snapshot[key].length) && Array.isArray(seed[key]) && seed[key].length){
+              snapshot[key] = seed[key].slice();
+            }
+          });
+          if(!Number.isFinite(Number(snapshot.activeStep)) && Number.isFinite(Number(seed.activeStep))){
+            snapshot.activeStep = clamp(Number(seed.activeStep) || 1, 1, 6);
+          }
+          if(typeof snapshot.regsTouched !== 'boolean' && typeof seed.regsTouched === 'boolean'){
+            snapshot.regsTouched = seed.regsTouched;
+          }
+          if(typeof snapshot.regModeTouched !== 'boolean' && typeof seed.regModeTouched === 'boolean'){
+            snapshot.regModeTouched = seed.regModeTouched;
+          }
+        }
+
+        if(!hasText(snapshot.company) && fallbackCompany){
+          snapshot.company = fallbackCompany;
+        }
+        if(!Array.isArray(snapshot.visited) || !snapshot.visited.length){
+          snapshot.visited = [1];
+        }
+        return snapshot;
+      }
+
+      function threadModulesFromSnapshot(snapshot, opts){
+        const snap = (snapshot && typeof snapshot === 'object') ? snapshot : {};
+        const cfg = (opts && typeof opts === 'object') ? opts : {};
+        const outcomes = Array.isArray(cfg.outcomes)
+          ? cfg.outcomes.map((item)=> String(item || '').trim()).filter(Boolean)
+          : [];
+        const outcomesText = String(cfg.outcomesText || (outcomes.length ? outcomes.join(' · ') : '')).trim();
+        const sizeMap = {
+          lt500:'< 500 employees',
+          '500-2k':'500–2,000 employees',
+          '2k-10k':'2,000–10,000 employees',
+          '10k-50k':'10,000–50,000 employees',
+          '50kplus':'50,000+ employees'
+        };
+        const regionLabels = { NA:'North America', UKI:'UK & Ireland', EU:'Europe (EU)', APAC:'APAC', Other:'Other / Global' };
+        const pressureLabels = dashLabelsFromIds(snap.pressureSources, pressureOpts.map((p)=> ({ id:p.id, label:p.title })));
+        const riskLabels = dashLabelsFromIds(snap.riskEnvs, riskEnvOpts.map((r)=> ({ id:r.id, label:r.title })));
+        const driverLabels = dashLabelsFromIds(snap.drivers, driverOpts.map((d)=> ({ id:d.id, label:d.title })));
+        const evidenceLabels = dashLabelsFromIds(snap.evidence, evidenceOpts);
+        const groupLabels = dashLabelsFromIds(snap.groups, groupOpts);
+        const regLabels = dashLabelsFromIds(snap.regs, regMaster);
+        const stackLabels = dashLabelsFromIds(snap.stack, stackMaster);
+        if(String(snap.stackOther || '').trim()) stackLabels.push(String(snap.stackOther).trim());
+
+        return {
+          organisation: [
+            { label:'Name', value: String(snap.fullName || '').trim() || '—' },
+            { label:'Company', value: String(snap.company || '').trim() || '—' },
+            { label:'Role', value: optionLabel(roleOpts, snap.role) },
+            { label:'Company size', value: snap.companySize ? (sizeMap[snap.companySize] || snap.companySize) : '—' },
+            { label:'Operating country', value: String(snap.operatingCountry || '').trim() || '—' }
+          ],
+          discovery: [
+            { label:'Pressure sources', value: listOrDash(pressureLabels) },
+            { label:'Urgent win', value: optionLabel(urgentWinOpts, snap.urgentWin) },
+            { label:'Risk environment', value: listOrDash(riskLabels) },
+            { label:'Measured on today', value: optionLabel(measuredOnOpts, snap.measuredOn) },
+            { label:'Organisation challenge', value: optionLabel(orgPainOpts, snap.orgPain) },
+            { label:'Conversation triggers', value: listOrDash(driverLabels) },
+            { label:'Evidence audience', value: listOrDash(evidenceLabels) },
+            { label:'Primary outcomes', value: outcomesText || '—' }
+          ],
+          coverage: [
+            { label:'Coverage groups', value: listOrDash(groupLabels) },
+            { label:'Cadence', value: optionLabel(rhythmOpts, snap.rhythm) },
+            { label:'Measurement', value: optionLabel(measureOpts, snap.measure) }
+          ],
+          packageFit: [
+            { label:'Realism', value: optionLabel(fitRealismOpts, snap.fitRealism) },
+            { label:'Scope', value: optionLabel(fitScopeOpts, snap.fitScope) },
+            { label:'Current state', value: optionLabel(fitTodayOpts, snap.fitToday) },
+            { label:'Delivery model', value: optionLabel(fitServicesOpts, snap.fitServices) },
+            { label:'Risk frame', value: optionLabel(fitRiskFrameOpts, snap.fitRiskFrame) }
+          ],
+          context: [
+            { label:'Industry', value: String(snap.industry || '').trim() || '—' },
+            { label:'Region', value: snap.region ? (regionLabels[snap.region] || snap.region) : '—' },
+            { label:'Regulatory references', value: listOrDash(regLabels) },
+            { label:'Tools / stack', value: listOrDash(stackLabels) }
+          ]
         };
       }
 
@@ -2358,7 +2951,17 @@ const evidenceOpts = [
 
       function workspaceProfileLibrary(){
         const now = Date.now();
-        const base = staticThreadModels();
+        const base = staticThreadModels().map((thread)=> {
+          const snapshotSeed = staticThreadSnapshotSeed(thread && thread.id, thread && thread.company);
+          const snapshot = mergeSnapshotWithSeed(
+            (thread && thread.snapshot && typeof thread.snapshot === 'object')
+              ? thread.snapshot
+              : defaultSnapshotForThread(thread),
+            snapshotSeed,
+            thread && thread.company
+          );
+          return Object.assign({}, thread, { snapshot });
+        });
         const aeThreads = base.map((thread, idx)=> normalizeThreadModel(Object.assign({}, thread, {
           id: `ae-${idx + 1}`,
           priority: idx < 2 ? true : !!thread.priority,
@@ -2529,6 +3132,7 @@ const evidenceOpts = [
             priority: bool(thread.priority),
             archived: bool(thread.archived),
             outcomes: join(thread.outcomes || []),
+            created_at: thread.createdAt ? new Date(thread.createdAt).toISOString() : '',
             updated_at: thread.updatedAt ? new Date(thread.updatedAt).toISOString() : '',
 
             full_name: snapshot.fullName || '',
@@ -2869,8 +3473,10 @@ const evidenceOpts = [
               paybackMonths: Number.isFinite(fallbackPayback) ? fallbackPayback : null
             };
 
-        const updatedRaw = csvRowValue(row, ['updated_at', 'last_updated']);
-        const updatedAt = Number(new Date(updatedRaw).getTime()) || Date.now() - (idx * 60000);
+        const createdRaw = csvRowValue(row, ['created_at', 'date_created', 'created']);
+        const updatedRaw = csvRowValue(row, ['updated_at', 'last_updated', 'date_modified', 'modified']);
+        const createdAt = coerceTimestamp(createdRaw);
+        const updatedAt = coerceTimestamp(updatedRaw) || Date.now() - (idx * 60000);
         const idFromCsv = String(csvRowValue(row, ['record_id', 'id']) || `imported-${idx + 1}`).trim();
 
         return {
@@ -2886,6 +3492,7 @@ const evidenceOpts = [
           modules: (modulesJson && typeof modulesJson === 'object' && !Array.isArray(modulesJson)) ? modulesJson : undefined,
           snapshot,
           viz,
+          createdAt,
           updatedAt,
           priority: csvBoolValue(csvRowValue(row, ['priority', 'starred'])),
           archived: csvBoolValue(csvRowValue(row, ['archived'])),
@@ -2941,28 +3548,45 @@ const evidenceOpts = [
         return m ? clamp(Number(m[1]) || 0, 0, 100) : 0;
       }
 
+      const DEMO_RECORD_ANCHOR_TS = Number(new Date('2026-02-21T12:00:00Z').getTime()) || Date.now();
+
+      function coerceTimestamp(value){
+        const numeric = Number(value);
+        if(Number.isFinite(numeric) && numeric > 0) return numeric;
+        const parsed = Number(new Date(String(value || '')).getTime());
+        if(Number.isFinite(parsed) && parsed > 0) return parsed;
+        return 0;
+      }
+
+      function seededThreadUpdatedAt(idx){
+        const i = Math.max(0, Number(idx) || 0);
+        return DEMO_RECORD_ANCHOR_TS - ((i + 1) * 8 * 3600 * 1000);
+      }
+
+      function seededThreadCreatedAt(updatedAt, idx){
+        const i = Math.max(0, Number(idx) || 0);
+        const lifespanDays = 2 + (i % 6);
+        return Math.max(0, Number(updatedAt || 0) - (lifespanDays * 24 * 3600 * 1000));
+      }
+
       function defaultSnapshotForThread(thread){
-        const pct = completionPctFromSummary(thread && thread.completion);
-        let visitedMax = 1;
-        if(pct >= 100) visitedMax = 6;
-        else if(pct >= 80) visitedMax = 5;
-        else if(pct >= 60) visitedMax = 4;
-        else if(pct >= 40) visitedMax = 2;
         const firstGap = Number(thread && thread.gaps && thread.gaps[0] && thread.gaps[0].step);
         return {
-          fullName: 'Will Bloor',
+          fullName: '',
           company: (thread && thread.company) ? String(thread.company) : 'Record',
-          role: 'ciso',
-          activeStep: clamp(Number.isFinite(firstGap) ? firstGap : visitedMax, 1, 6),
-          visited: Array.from({ length: visitedMax }, (_, idx)=> idx + 1)
+          role: '',
+          activeStep: clamp(Number.isFinite(firstGap) ? firstGap : 1, 1, 6),
+          visited: [1]
         };
       }
 
       function normalizeThreadModel(raw, idx){
         const source = (raw && typeof raw === 'object') ? raw : {};
+        const sourceCompany = String(source.company || (source.snapshot && source.snapshot.company) || 'Record');
         const outcomes = Array.isArray(source.outcomes)
           ? source.outcomes.map((it)=> String(it || '').trim()).filter(Boolean)
           : [];
+        const outcomesText = String(source.outcomesText || (outcomes.length ? outcomes.join(' · ') : 'Awaiting outcome signals'));
         const gaps = Array.isArray(source.gaps)
           ? source.gaps.map((gap)=> ({
               title: String((gap && gap.title) || 'Gap'),
@@ -2970,30 +3594,35 @@ const evidenceOpts = [
               step: clamp(Number(gap && gap.step) || 1, 1, 6)
             }))
           : [];
-        const modulesIn = (source.modules && typeof source.modules === 'object') ? source.modules : {};
-        const modules = {
-          organisation: Array.isArray(modulesIn.organisation) ? modulesIn.organisation : [{ label:'Company', value: source.company || 'Record' }],
-          discovery: Array.isArray(modulesIn.discovery) ? modulesIn.discovery : [{ label:'Primary outcomes', value: outcomes.join(' · ') || '—' }],
-          coverage: Array.isArray(modulesIn.coverage) ? modulesIn.coverage : [{ label:'Coverage groups', value:'—' }],
-          packageFit: Array.isArray(modulesIn.packageFit) ? modulesIn.packageFit : [{ label:'Delivery model', value:'—' }],
-          context: Array.isArray(modulesIn.context) ? modulesIn.context : [{ label:'Region', value:'—' }]
-        };
         const vizIn = (source.viz && typeof source.viz === 'object') ? source.viz : {};
-        const snapshot = (source.snapshot && typeof source.snapshot === 'object')
-          ? source.snapshot
-          : defaultSnapshotForThread({ company: source.company, completion: source.completion, gaps });
+        const snapshotSeed = staticThreadSnapshotSeed(source.id, sourceCompany);
+        const snapshot = mergeSnapshotWithSeed(
+          (source.snapshot && typeof source.snapshot === 'object')
+            ? source.snapshot
+            : defaultSnapshotForThread({ company: sourceCompany, completion: source.completion, gaps }),
+          snapshotSeed,
+          sourceCompany
+        );
+        const progress = readinessProgressFromContext(snapshot);
+        const modules = threadModulesFromSnapshot(snapshot, { outcomes, outcomesText });
+        const company = String(snapshot.company || sourceCompany || 'Record');
+        const sourceUpdatedAt = coerceTimestamp(source.updatedAt);
+        const sourceCreatedAt = coerceTimestamp(source.createdAt);
+        const updatedAt = sourceUpdatedAt || seededThreadUpdatedAt(idx);
+        const createdAt = sourceCreatedAt || seededThreadCreatedAt(updatedAt, idx);
+        const normalizedCreatedAt = Math.min(createdAt, updatedAt);
 
         return {
           id: String(source.id || `record-${idx + 1}`),
-          company: String(source.company || 'Record'),
+          company,
           stage: String(source.stage || 'Discovery'),
-          completion: String(source.completion || '0/22 (0%)'),
+          completion: progress.completion,
           tier: String(source.tier || 'Core'),
           outcomes,
-          outcomesText: String(source.outcomesText || (outcomes.length ? outcomes.join(' · ') : 'Awaiting outcome signals')),
-          gapSummary: String(source.gapSummary || (gaps.length ? gaps.slice(0,2).map((g)=> g.title).join(' · ') : 'No open gaps')),
-          gaps,
-          modules: jsonClone(modules) || modules,
+          outcomesText,
+          gapSummary: progress.gapSummary,
+          gaps: progress.gaps,
+          modules,
           viz: {
             roiPct: Number(vizIn.roiPct),
             npv: Number(vizIn.npv),
@@ -3009,7 +3638,8 @@ const evidenceOpts = [
               : []
           },
           snapshot: jsonClone(snapshot) || defaultSnapshotForThread(source),
-          updatedAt: Number(source.updatedAt) || 0,
+          createdAt: normalizedCreatedAt,
+          updatedAt,
           priority: !!source.priority,
           archived: !!source.archived,
           archivedAt: Number(source.archivedAt) || 0
@@ -3041,6 +3671,7 @@ const evidenceOpts = [
         const stored = loadSavedThreadsFromStorage();
         if(stored.length){
           state.savedThreads = stored;
+          persistSavedThreads();
         }else{
           state.savedThreads = staticThreadModels().map((thread, idx)=> normalizeThreadModel(thread, idx));
           persistSavedThreads();
@@ -3114,6 +3745,98 @@ const evidenceOpts = [
         };
       }
 
+      function normalizeSnapshotForDiff(source){
+        const src = (source && typeof source === 'object') ? source : {};
+        const toSortedStrList = (value)=> (
+          Array.isArray(value)
+            ? value.map((item)=> String(item || '').trim()).filter(Boolean).sort()
+            : []
+        );
+        const toSortedNumList = (value)=> (
+          Array.isArray(value)
+            ? value
+                .map((item)=> clamp(Number(item) || 1, 1, 6))
+                .sort((a, b)=> a - b)
+            : []
+        );
+        return {
+          role: String(src.role || '').trim(),
+          fullName: String(src.fullName || '').trim(),
+          company: String(src.company || '').trim(),
+          companySize: String(src.companySize || '').trim(),
+          operatingCountry: String(src.operatingCountry || '').trim(),
+          industry: String(src.industry || '').trim(),
+          region: String(src.region || '').trim(),
+          pressureSources: toSortedStrList(src.pressureSources),
+          urgentWin: String(src.urgentWin || '').trim(),
+          riskEnvs: toSortedStrList(src.riskEnvs),
+          measuredOn: String(src.measuredOn || '').trim(),
+          orgPain: String(src.orgPain || '').trim(),
+          drivers: toSortedStrList(src.drivers),
+          milestone: String(src.milestone || '').trim(),
+          evidence: toSortedStrList(src.evidence),
+          outcomeDrilldowns: jsonClone(src.outcomeDrilldowns || {}) || {},
+          groups: toSortedStrList(src.groups),
+          rhythm: String(src.rhythm || '').trim(),
+          measure: String(src.measure || '').trim(),
+          fitRealism: String(src.fitRealism || '').trim(),
+          fitScope: String(src.fitScope || '').trim(),
+          fitToday: String(src.fitToday || '').trim(),
+          fitServices: String(src.fitServices || '').trim(),
+          fitRiskFrame: String(src.fitRiskFrame || '').trim(),
+          regMode: String(src.regMode || '').trim() || 'suggested',
+          regModeTouched: !!src.regModeTouched,
+          regSearch: String(src.regSearch || '').trim(),
+          regsTouched: !!src.regsTouched,
+          regs: toSortedStrList(src.regs),
+          stack: toSortedStrList(src.stack),
+          stackOther: String(src.stackOther || '').trim(),
+          currency: String(src.currency || '').trim() || 'USD',
+          fx: {
+            USD: 1,
+            GBP: Number(src.fx && src.fx.GBP) || 0.80,
+            EUR: Number(src.fx && src.fx.EUR) || 0.90
+          },
+          revenueB: Number(src.revenueB) || IMMERSIVE_MODEL.baselineRevenueB,
+          investUSD: Number(src.investUSD) || IMMERSIVE_MODEL.baselineInvestment,
+          investManual: !!src.investManual,
+          teamCyber: Number(src.teamCyber) || IMMERSIVE_MODEL.baselineCyber,
+          teamDev: Number(src.teamDev) || IMMERSIVE_MODEL.baselineDev,
+          teamWf: Number(src.teamWf) || IMMERSIVE_MODEL.baselineWorkforce,
+          teamManual: !!src.teamManual,
+          realization: String(src.realization || '').trim() || 'conservative',
+          paybackDelayMonths: Number(src.paybackDelayMonths) || 3,
+          cyberSalaryUSD: Number(src.cyberSalaryUSD) || 180000,
+          devSalaryUSD: Number(src.devSalaryUSD) || 160000,
+          email: String(src.email || '').trim(),
+          phone: String(src.phone || '').trim(),
+          notes: String(src.notes || '').trim(),
+          optin: !!src.optin,
+          visited: (()=> {
+            const list = toSortedNumList(src.visited);
+            return list.length ? list : [1];
+          })()
+        };
+      }
+
+      function snapshotsEquivalentForData(left, right){
+        const a = normalizeSnapshotForDiff(left);
+        const b = normalizeSnapshotForDiff(right);
+        return JSON.stringify(a) === JSON.stringify(b);
+      }
+
+      function activeSavedThreadHasUnsavedState(){
+        if(state.currentView !== 'configurator') return false;
+        const activeId = String(state.activeThread || '').trim();
+        if(!activeId || activeId === 'current') return false;
+        const saved = findSavedThread(activeId);
+        if(!saved) return false;
+        const savedSnapshot = (saved.snapshot && typeof saved.snapshot === 'object')
+          ? saved.snapshot
+          : defaultSnapshotForThread(saved);
+        return !snapshotsEquivalentForData(buildThreadSnapshotFromState(), savedSnapshot);
+      }
+
       function buildSavedVizFromState(){
         const viz = interVizModel({ id:'current' });
         return {
@@ -3135,6 +3858,8 @@ const evidenceOpts = [
       function buildSavedThreadFromState(threadId, meta){
         const summary = currentThreadModel();
         const metaIn = (meta && typeof meta === 'object') ? meta : {};
+        const now = Date.now();
+        const existingCreatedAt = coerceTimestamp(metaIn.createdAt);
         return normalizeThreadModel({
           id: threadId || nextSavedThreadId(),
           company: summary.company,
@@ -3148,7 +3873,8 @@ const evidenceOpts = [
           modules: summary.modules,
           viz: buildSavedVizFromState(),
           snapshot: buildThreadSnapshotFromState(),
-          updatedAt: Date.now(),
+          createdAt: existingCreatedAt || now,
+          updatedAt: now,
           priority: !!metaIn.priority,
           archived: !!metaIn.archived,
           archivedAt: Number(metaIn.archivedAt) || 0
@@ -3248,6 +3974,7 @@ const evidenceOpts = [
           const existing = (state.activeThread && state.activeThread !== 'current') ? findSavedThread(state.activeThread) : null;
           const recordId = existing ? existing.id : nextSavedThreadId();
           const nextThread = buildSavedThreadFromState(recordId, existing ? {
+            createdAt: Number(existing.createdAt) || 0,
             priority: !!existing.priority,
             archived: !!existing.archived,
             archivedAt: Number(existing.archivedAt) || 0
@@ -3300,23 +4027,158 @@ const evidenceOpts = [
         return currentThreadModel();
       }
 
-      function dashboardSortThreads(rows){
+      function workflowStageRank(stageRaw){
+        const stage = String(stageRaw || '').trim().toLowerCase();
+        if(stage === 'discovery') return 1;
+        if(stage === 'validation') return 2;
+        if(stage === 'closed') return 3;
+        return 4;
+      }
+
+      function dashboardTierRank(tierRaw){
+        const tier = String(tierRaw || '').trim().toLowerCase();
+        if(tier === 'core') return 1;
+        if(tier === 'advanced') return 2;
+        if(tier === 'ultimate') return 3;
+        return 4;
+      }
+
+      function sortThreadsByPriorityRecency(rows){
         return (rows || []).slice().sort((a, b)=>{
           const byPriority = Number(!!b.priority) - Number(!!a.priority);
           if(byPriority) return byPriority;
           const byUpdated = Number(b.updatedAt || 0) - Number(a.updatedAt || 0);
           if(byUpdated) return byUpdated;
-          return String(a.company || '').localeCompare(String(b.company || ''));
+          return String(a.company || '').localeCompare(String(b.company || ''), undefined, { sensitivity:'base' });
         });
+      }
+
+      function dashboardSortThreads(rows, mode){
+        const sortMode = sanitizeDashboardSortMode(mode || state.dashboardSort);
+        const compareName = (left, right)=> String(left || '').localeCompare(String(right || ''), undefined, { sensitivity:'base' });
+        const cache = new WeakMap();
+        const snapshot = (thread)=>{
+          if(cache.has(thread)) return cache.get(thread);
+          const progress = threadReadinessProgress(thread);
+          const result = {
+            company: String(thread && thread.company || ''),
+            tierRank: dashboardTierRank(thread && thread.tier),
+            outcomes: String(thread && thread.outcomesText || ''),
+            completionPct: completionPctFromSummary(progress && progress.completion),
+            gapsCount: Array.isArray(progress && progress.gaps) ? progress.gaps.length : 0,
+            gapSummary: String(progress && progress.gapSummary || ''),
+            stageRank: workflowStageRank(thread && thread.stage),
+            createdAt: Number(thread && thread.createdAt || 0),
+            updatedAt: Number(thread && thread.updatedAt || 0)
+          };
+          cache.set(thread, result);
+          return result;
+        };
+
+        return (rows || []).slice().sort((a, b)=>{
+          const left = snapshot(a);
+          const right = snapshot(b);
+
+          if(sortMode === 'name-desc'){
+            const byName = compareName(right.company, left.company);
+            if(byName) return byName;
+          }else if(sortMode === 'name-asc'){
+            const byName = compareName(left.company, right.company);
+            if(byName) return byName;
+          }else if(sortMode === 'completion-desc'){
+            const byCompletion = right.completionPct - left.completionPct;
+            if(byCompletion) return byCompletion;
+            const byGaps = left.gapsCount - right.gapsCount;
+            if(byGaps) return byGaps;
+          }else if(sortMode === 'completion-asc'){
+            const byCompletion = left.completionPct - right.completionPct;
+            if(byCompletion) return byCompletion;
+            const byGaps = right.gapsCount - left.gapsCount;
+            if(byGaps) return byGaps;
+          }else if(sortMode === 'tier-desc'){
+            const byTier = right.tierRank - left.tierRank;
+            if(byTier) return byTier;
+          }else if(sortMode === 'tier-asc'){
+            const byTier = left.tierRank - right.tierRank;
+            if(byTier) return byTier;
+          }else if(sortMode === 'outcomes-desc'){
+            const byOutcomes = compareName(right.outcomes, left.outcomes);
+            if(byOutcomes) return byOutcomes;
+          }else if(sortMode === 'outcomes-asc'){
+            const byOutcomes = compareName(left.outcomes, right.outcomes);
+            if(byOutcomes) return byOutcomes;
+          }else if(sortMode === 'gaps-desc'){
+            const byGaps = right.gapsCount - left.gapsCount;
+            if(byGaps) return byGaps;
+            const byGapSummary = compareName(right.gapSummary, left.gapSummary);
+            if(byGapSummary) return byGapSummary;
+          }else if(sortMode === 'gaps-asc'){
+            const byGaps = left.gapsCount - right.gapsCount;
+            if(byGaps) return byGaps;
+            const byGapSummary = compareName(left.gapSummary, right.gapSummary);
+            if(byGapSummary) return byGapSummary;
+          }else if(sortMode === 'created-desc'){
+            const byCreated = right.createdAt - left.createdAt;
+            if(byCreated) return byCreated;
+          }else if(sortMode === 'created-asc'){
+            const byCreated = left.createdAt - right.createdAt;
+            if(byCreated) return byCreated;
+          }else if(sortMode === 'modified-desc'){
+            const byUpdated = right.updatedAt - left.updatedAt;
+            if(byUpdated) return byUpdated;
+          }else if(sortMode === 'modified-asc'){
+            const byUpdated = left.updatedAt - right.updatedAt;
+            if(byUpdated) return byUpdated;
+          }else if(sortMode === 'status-desc'){
+            const byStatus = right.stageRank - left.stageRank;
+            if(byStatus) return byStatus;
+          }else if(sortMode === 'status-asc'){
+            const byStatus = left.stageRank - right.stageRank;
+            if(byStatus) return byStatus;
+          }
+
+          const byUpdatedFallback = right.updatedAt - left.updatedAt;
+          if(byUpdatedFallback) return byUpdatedFallback;
+          return compareName(left.company, right.company);
+        });
+      }
+
+      function formatDashboardDate(ts){
+        const value = Number(ts || 0);
+        if(!Number.isFinite(value) || value <= 0) return '—';
+        try{
+          return new Date(value).toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
+        }catch(err){
+          return new Date(value).toISOString();
+        }
+      }
+
+      function formatDashboardDateCreated(ts){
+        const value = Number(ts || 0);
+        if(!Number.isFinite(value) || value <= 0) return '—';
+        try{
+          return new Date(value).toLocaleDateString(undefined, { dateStyle:'medium' });
+        }catch(err){
+          return new Date(value).toISOString().slice(0, 10);
+        }
+      }
+
+      function dashboardDateValueForMode(row){
+        const mode = sanitizeDashboardDateMode(state.dashboardDateMode);
+        if(mode === 'created') return Number(row && row.createdAt || 0);
+        return Number(row && row.updatedAt || 0);
       }
 
       function dashboardRowsModel(){
         const filtered = threadModels().filter((thread)=> !thread.archived);
-        return dashboardSortThreads(filtered).map((thread)=> {
+        return dashboardSortThreads(filtered, state.dashboardSort).map((thread)=> {
           const progress = threadReadinessProgress(thread);
           return ({
           id: thread.id,
           company: thread.company,
+          stage: thread.stage,
+          createdAt: Number(thread.createdAt || 0),
+          updatedAt: Number(thread.updatedAt || 0),
           completion: progress.completion,
           tier: thread.tier,
           outcomes: thread.outcomesText,
@@ -3329,11 +4191,14 @@ const evidenceOpts = [
 
       function archivedRowsModel(){
         const filtered = threadModels().filter((thread)=> !!thread.archived);
-        return dashboardSortThreads(filtered).map((thread)=> {
+        return dashboardSortThreads(filtered, state.dashboardSort).map((thread)=> {
           const progress = threadReadinessProgress(thread);
           return ({
           id: thread.id,
           company: thread.company,
+          stage: thread.stage,
+          createdAt: Number(thread.createdAt || 0),
+          updatedAt: Number(thread.updatedAt || 0),
           completion: progress.completion,
           tier: thread.tier,
           outcomes: thread.outcomesText,
@@ -3351,7 +4216,7 @@ const evidenceOpts = [
           state.workspaceCompanyAnimatedIds = new Set();
         }
 
-        const starredRows = dashboardSortThreads(
+        const starredRows = sortThreadsByPriorityRecency(
           threadModels().filter((thread)=> !thread.archived && !!thread.priority)
         );
         const rows = starredRows.slice();
@@ -3764,11 +4629,18 @@ const evidenceOpts = [
         setList('#consultResources', model.resources);
       }
 
+      function syncOverlayBodyLock(){
+        document.body.classList.toggle('is-consultation-open', !!(state.consultationOpen || state.emailBuilderOpen));
+      }
+
       function toggleConsultation(open, opts){
         const panel = $('#consultationPanel');
         if(!panel) return;
         const cfg = opts || {};
         const on = !!open;
+        if(on && state.emailBuilderOpen){
+          toggleEmailBuilder(false);
+        }
         state.consultationOpen = on;
 
         if(on){
@@ -3781,7 +4653,29 @@ const evidenceOpts = [
           panel.classList.remove('open');
           panel.setAttribute('aria-hidden', 'true');
         }
-        document.body.classList.toggle('is-consultation-open', on);
+        syncOverlayBodyLock();
+      }
+
+      function toggleEmailBuilder(open, opts){
+        const panel = $('#emailBuilderPanel');
+        if(!panel) return;
+        const cfg = opts || {};
+        const on = !!open;
+        if(on && state.consultationOpen){
+          toggleConsultation(false);
+        }
+        state.emailBuilderOpen = on;
+
+        if(on){
+          const target = (cfg.threadId || state.emailBuilderThreadId || state.recommendationsThreadId || state.activeThread || 'current');
+          renderRecommendationEmailBuilder(target);
+          panel.classList.add('open');
+          panel.setAttribute('aria-hidden', 'false');
+        }else{
+          panel.classList.remove('open');
+          panel.setAttribute('aria-hidden', 'true');
+        }
+        syncOverlayBodyLock();
       }
 
       function openThreadBooking(threadId){
@@ -4070,11 +4964,6 @@ const evidenceOpts = [
 
         host.innerHTML = `
           <header class="interHead">
-            <div class="interCrumbs">
-              <button type="button" class="interCrumbHome" data-inter-crumb="dashboard" aria-label="Go to dashboard">Dashboard</button>
-              <span aria-hidden="true">/</span>
-              <span>${escapeHtml(companyDisplay)}</span>
-            </div>
             <div class="interTitleRow">
               <div>
                 <div class="interTitleMain" id="interTitleMain">
@@ -4216,13 +5105,6 @@ const evidenceOpts = [
             openThreadConfigurator(thread.id, step);
           });
         });
-        const interDashboardCrumb = $('#interstitialContent [data-inter-crumb="dashboard"]');
-        if(interDashboardCrumb){
-          interDashboardCrumb.addEventListener('click', ()=>{
-            setView('dashboard');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          });
-        }
         const interStarBtn = $('#interstitialContent [data-inter-star-id]');
         if(interStarBtn){
           interStarBtn.addEventListener('click', ()=>{
@@ -4343,6 +5225,9 @@ const evidenceOpts = [
           const newlyAnimatedRows = [];
           body.innerHTML = rows.map((row, idx)=> {
             const pct = completionPctFromSummary(row.completion);
+            const dateValue = dashboardDateValueForMode(row);
+            const createdLabel = formatDashboardDateCreated(dateValue);
+            const createdTitle = formatDashboardDate(dateValue);
             const checked = state.dashboardSelectedIds.has(row.id) ? 'checked' : '';
             const animateStar = !!state.starPulseQueue && state.starPulseQueue.has(row.id);
             const shouldAnimateRing = !state.completionRingAnimatedIds.has(row.id);
@@ -4372,11 +5257,7 @@ const evidenceOpts = [
                 <td><span class="dash-tier">${escapeHtml(row.tier)}</span></td>
                 <td><span class="dash-outcomes">${escapeHtml(row.outcomes)}</span></td>
                 <td><span class="dash-gaps">${escapeHtml(row.gaps)}</span></td>
-                <td>
-                  <span class="dashActions">
-                    <button class="dashActionBtn open" type="button" data-dashboard-open-btn="${escapeHtml(row.id)}">${escapeHtml(row.openLabel)}</button>
-                  </span>
-                </td>
+                <td><span class="dash-created" title="${escapeHtml(createdTitle)}">${escapeHtml(createdLabel)}</span></td>
               </tr>
             `;
           }).join('');
@@ -4395,7 +5276,10 @@ const evidenceOpts = [
         }
         const last = $('#dashLastUpdated');
         if(last){
-          last.textContent = rows.length ? 'Saved records' : 'No saved records yet';
+          const newestUpdate = rows.reduce((max, row)=> Math.max(max, Number(row.updatedAt || 0)), 0);
+          last.textContent = rows.length
+            ? `Last modified: ${formatDashboardDate(newestUpdate)}`
+            : 'No saved records yet';
         }
 
         const selectCount = $('#dashSelectCount');
@@ -4451,6 +5335,9 @@ const evidenceOpts = [
           const newlyAnimatedRows = [];
           body.innerHTML = rows.map((row, idx)=> {
             const pct = completionPctFromSummary(row.completion);
+            const dateValue = dashboardDateValueForMode(row);
+            const createdLabel = formatDashboardDateCreated(dateValue);
+            const createdTitle = formatDashboardDate(dateValue);
             const checked = state.archivedSelectedIds.has(row.id) ? 'checked' : '';
             const ringId = `archived:${row.id}`;
             const shouldAnimateRing = !state.completionRingAnimatedIds.has(ringId);
@@ -4471,11 +5358,7 @@ const evidenceOpts = [
                 <td><span class="dash-tier">${escapeHtml(row.tier)}</span></td>
                 <td><span class="dash-outcomes">${escapeHtml(row.outcomes)}</span></td>
                 <td><span class="dash-gaps">${escapeHtml(row.gaps)}</span></td>
-                <td>
-                  <span class="dashActions">
-                    <button class="dashActionBtn open" type="button" data-archived-unarchive-id="${escapeHtml(row.id)}">Unarchive</button>
-                  </span>
-                </td>
+                <td><span class="dash-created" title="${escapeHtml(createdTitle)}">${escapeHtml(createdLabel)}</span></td>
               </tr>
             `;
           }).join('');
@@ -5118,6 +6001,588 @@ const evidenceOpts = [
         return res.slice(0, 3);
       }
 
+      const contentFormatLabels = {
+        webinar: 'Webinar',
+        'case-study': 'Case study',
+        ebook: 'Ebook',
+        'media-coverage': 'Media coverage',
+        'c7-blog': 'C7 blog',
+        'blog-post': 'Blog post'
+      };
+      const outcomeContentKeywordMap = {
+        fasterResponse: ['incident response', 'response', 'detection', 'soc', 'threat', 'exercise', 'simulation', 'mttr', 'mttd'],
+        secureEnterprise: ['appsec', 'secure development', 'cloud', 'identity', 'vulnerability', 'devsecops', 'enterprise', 'security stack'],
+        secureAI: ['ai', 'artificial intelligence', 'llm', 'model', 'genai', 'safe ai'],
+        complianceEvidence: ['compliance', 'regulatory', 'audit', 'framework', 'nist', 'dora', 'evidence', 'board', 'benchmark'],
+        cyberWorkforce: ['workforce', 'skills', 'upskill', 'training', 'certification', 'readiness', 'resilience'],
+        supplyChain: ['third-party', 'third party', 'supplier', 'supply chain', 'vendor', 'procurement']
+      };
+      const outcomePreferredFormats = {
+        fasterResponse: ['case-study', 'webinar', 'blog-post', 'c7-blog', 'ebook'],
+        secureEnterprise: ['case-study', 'blog-post', 'c7-blog', 'webinar', 'ebook'],
+        secureAI: ['blog-post', 'c7-blog', 'webinar', 'ebook', 'case-study'],
+        complianceEvidence: ['ebook', 'case-study', 'webinar', 'blog-post', 'c7-blog'],
+        cyberWorkforce: ['ebook', 'case-study', 'webinar', 'blog-post', 'c7-blog'],
+        supplyChain: ['case-study', 'ebook', 'blog-post', 'webinar', 'c7-blog']
+      };
+      let cachedContentCatalogRows = null;
+
+      function normalizeContentToken(value){
+        return String(value || '')
+          .toLowerCase()
+          .replace(/&/g, ' and ')
+          .replace(/[^a-z0-9]+/g, ' ')
+          .trim();
+      }
+
+      function normalizedHttpUrl(raw){
+        const value = String(raw || '').trim();
+        if(!value) return '';
+        if(/^https?:\/\//i.test(value)) return value;
+        if(value.startsWith('//')) return `https:${value}`;
+        if(value.startsWith('/')) return `https://www.immersivelabs.com${value}`;
+        return '';
+      }
+
+      function inferredContentUrl(format, slug){
+        const cleanSlug = String(slug || '').trim();
+        if(!cleanSlug) return '';
+        const fmt = String(format || '').trim().toLowerCase();
+        if(fmt === 'blog-post' || fmt === 'c7-blog' || fmt === 'media-coverage'){
+          return `https://www.immersivelabs.com/blog/${encodeURIComponent(cleanSlug)}/`;
+        }
+        if(fmt === 'case-study'){
+          return `https://www.immersivelabs.com/resources/case-study/${encodeURIComponent(cleanSlug)}/`;
+        }
+        if(fmt === 'ebook'){
+          return `https://www.immersivelabs.com/resources/ebook/${encodeURIComponent(cleanSlug)}/`;
+        }
+        if(fmt === 'webinar'){
+          return `https://www.immersivelabs.com/resources/webinars/${encodeURIComponent(cleanSlug)}/`;
+        }
+        return '';
+      }
+
+      function fallbackContentSearchUrl(title){
+        const query = String(title || '').trim();
+        if(!query) return '';
+        return `https://www.google.com/search?q=${encodeURIComponent(`site:immersivelabs.com ${query}`)}`;
+      }
+
+      function catalogItems(){
+        if(Array.isArray(cachedContentCatalogRows)) return cachedContentCatalogRows;
+        const rows = (window && Array.isArray(window.immersiveContentCatalog))
+          ? window.immersiveContentCatalog
+          : [];
+        cachedContentCatalogRows = rows
+          .filter((row)=> row && typeof row === 'object' && String(row.title || '').trim())
+          .map((row)=> ({
+            id: String(row.id || '').trim() || `content:${normalizeContentToken(row.title)}`,
+            title: String(row.title || '').trim(),
+            slug: String(row.slug || '').trim(),
+            format: String(row.format || '').trim().toLowerCase(),
+            category: String(row.category || '').trim(),
+            topicTags: Array.isArray(row.topicTags) ? row.topicTags.map((tag)=> String(tag || '').trim()).filter(Boolean) : [],
+            contributors: Array.isArray(row.contributors) ? row.contributors.map((name)=> String(name || '').trim()).filter(Boolean) : [],
+            url: (() => {
+              const direct = normalizedHttpUrl(row.url);
+              if(direct) return direct;
+              const inferred = inferredContentUrl(row.format, row.slug);
+              if(inferred) return inferred;
+              return fallbackContentSearchUrl(row.title);
+            })(),
+            linkLabel: (() => {
+              if(normalizedHttpUrl(row.url)) return 'Open content';
+              if(inferredContentUrl(row.format, row.slug)) return 'Open content';
+              return 'Find content';
+            })(),
+            publishedOn: String(row.publishedOn || '').trim(),
+            sourceCsv: String(row.sourceCsv || '').trim()
+          }));
+        return cachedContentCatalogRows;
+      }
+
+      function keywordsForOutcome(meta){
+        const id = String((meta && meta.id) || '').trim();
+        if(id && Array.isArray(outcomeContentKeywordMap[id])) return outcomeContentKeywordMap[id];
+        const raw = `${String((meta && meta.label) || '')} ${String((meta && meta.short) || '')}`.trim();
+        return normalizeContentToken(raw)
+          .split(' ')
+          .filter((token)=> token && token.length > 3);
+      }
+
+      function preferredFormatsForOutcome(meta){
+        const id = String((meta && meta.id) || '').trim();
+        if(id && Array.isArray(outcomePreferredFormats[id])) return outcomePreferredFormats[id];
+        return ['case-study', 'ebook', 'webinar', 'blog-post', 'c7-blog', 'media-coverage'];
+      }
+
+      function contentSearchText(item){
+        const bits = [
+          item.title,
+          item.slug,
+          item.format,
+          item.category,
+          ...(Array.isArray(item.topicTags) ? item.topicTags : []),
+          ...(Array.isArray(item.contributors) ? item.contributors : [])
+        ];
+        return normalizeContentToken(bits.join(' '));
+      }
+
+      function scoreCatalogItem(item, keywords, preferredFormats){
+        const fmt = String(item.format || '').toLowerCase();
+        let score = 0;
+        const fmtIndex = preferredFormats.indexOf(fmt);
+        if(fmtIndex >= 0){
+          score += Math.max(14, 34 - (fmtIndex * 4));
+        }else{
+          score += 10;
+        }
+        const haystack = contentSearchText(item);
+        let keywordHits = 0;
+        let partialHits = 0;
+        (keywords || []).forEach((kw, idx)=>{
+          const needle = normalizeContentToken(kw);
+          if(!needle) return;
+          if(haystack.includes(needle)){
+            keywordHits += 1;
+            score += idx < 3 ? 12 : 8;
+            return;
+          }
+          const tokens = needle.split(' ').filter((token)=> token.length > 3);
+          if(tokens.some((token)=> haystack.includes(token))){
+            partialHits += 1;
+            score += idx < 3 ? 6 : 4;
+          }
+        });
+        if(keywordHits === 0 && partialHits === 0 && (keywords || []).length){
+          score -= 8;
+        }
+        if(item.url) score += 3;
+        return score;
+      }
+
+      function formatLabelForContent(format){
+        const key = String(format || '').trim().toLowerCase();
+        return contentFormatLabels[key] || 'Content';
+      }
+
+      function pickCatalogItemsForOutcome(meta, usedIds, limit){
+        const rows = catalogItems();
+        if(!rows.length) return [];
+        const keywords = keywordsForOutcome(meta);
+        const preferredFormats = preferredFormatsForOutcome(meta);
+        const available = rows.filter((row)=> !usedIds.has(row.id));
+        if(!available.length) return [];
+
+        const scored = available
+          .map((row)=> ({ row, score: scoreCatalogItem(row, keywords, preferredFormats) }))
+          .sort((a, b)=> (b.score - a.score));
+        if(!scored.length) return [];
+        const maxItems = Math.max(1, Number(limit) || 1);
+        const bestScore = scored[0].score;
+        const toleranceFloor = bestScore - 20;
+        let picks = scored.filter((entry)=> entry.score >= toleranceFloor);
+        if(!picks.length) picks = scored;
+        picks = picks.slice(0, maxItems).map((entry)=> entry.row);
+        picks.forEach((row)=> usedIds.add(row.id));
+        return picks;
+      }
+
+      function recommendationCardBlueprint(outcome, matched){
+        const meta = outcomeById(outcome && outcome.id) || outcome || {};
+        if(!matched) return null;
+        const topicLine = (matched.topicTags || []).slice(0, 3).join(' · ');
+        const summary = topicLine
+          ? `Topics: ${topicLine}`
+          : (matched.category ? `Category: ${matched.category}` : 'Catalog item from current Webflow export.');
+        const outcomeLabel = meta.short || meta.label || 'Priority outcome';
+        return {
+          format: formatLabelForContent(matched.format),
+          outcomeLabel,
+          title: matched.title,
+          summary,
+          why: `Matched from existing ${formatLabelForContent(matched.format).toLowerCase()} content for ${outcomeLabel.toLowerCase()}.`,
+          url: matched.url || '',
+          linkLabel: matched.linkLabel || 'Open content',
+          source: matched.sourceCsv || ''
+        };
+      }
+
+      function recommendationCardsForGate(gate){
+        const outcomes = Array.isArray(gate && gate.topOutcomes) ? gate.topOutcomes : [];
+        if(!outcomes.length) return [];
+        const usedContentIds = new Set();
+        const maxCards = 6;
+        const minCards = 3;
+        const desiredCards = Math.min(maxCards, Math.max(minCards, outcomes.length * 2));
+        const perOutcomeLimit = outcomes.length === 1 ? desiredCards : 2;
+        const cards = [];
+
+        outcomes.forEach((outcome)=>{
+          if(cards.length >= desiredCards) return;
+          const meta = outcomeById(outcome && outcome.id) || outcome || {};
+          const remaining = desiredCards - cards.length;
+          const picks = pickCatalogItemsForOutcome(meta, usedContentIds, Math.min(perOutcomeLimit, remaining));
+          picks.forEach((item)=>{
+            const card = recommendationCardBlueprint(outcome, item);
+            if(card) cards.push(card);
+          });
+        });
+
+        if(cards.length < desiredCards){
+          const fallbackOutcome = outcomes[0] || {};
+          const remaining = desiredCards - cards.length;
+          const extras = pickCatalogItemsForOutcome(
+            { id: '', label: 'Priority outcome', short: 'Priority outcome' },
+            usedContentIds,
+            remaining
+          );
+          extras.forEach((item)=>{
+            const card = recommendationCardBlueprint(fallbackOutcome, item);
+            if(card) cards.push(card);
+          });
+        }
+
+        return cards.slice(0, maxCards);
+      }
+
+      function resolveRecommendationThread(threadId){
+        const target = String(threadId || '').trim();
+        if(target && target !== 'current'){
+          const saved = findSavedThread(target);
+          if(saved) return saved;
+        }
+        return currentThreadModel();
+      }
+
+      function recommendationsGateFromThread(thread){
+        const target = (thread && typeof thread === 'object') ? thread : currentThreadModel();
+        const progress = threadReadinessProgress(target);
+        const completion = String(progress.completion || target.completion || '0/22 (0%)');
+        const completionPct = completionPctFromSummary(completion);
+        let topOutcomes = inferredConsultationOutcomes(target);
+        if(!topOutcomes.length){
+          const fallbackOutcomeLabels = Array.from(new Set(
+            [
+              ...(Array.isArray(target.outcomes) ? target.outcomes : []),
+              ...splitOverviewList(target.outcomesText || '')
+            ]
+              .map((label)=> String(label || '').trim())
+              .filter(Boolean)
+          )).slice(0, 3);
+          topOutcomes = fallbackOutcomeLabels.map((label)=> ({
+            id: '',
+            label,
+            short: label,
+            desc: 'Content aligned to this selected outcome.'
+          }));
+        }
+        return {
+          threadId: String(target.id || 'current'),
+          company: String(target.company || '').trim() || 'Untitled company',
+          tier: String(target.tier || 'Core').trim() || 'Core',
+          completion,
+          completionPct,
+          eligible: completionPct >= 90,
+          topOutcomes
+        };
+      }
+
+      function recommendationsGateFromState(){
+        if(state.activeThread && state.activeThread !== 'current'){
+          if(state.currentView === 'configurator' && activeSavedThreadHasUnsavedState()){
+            return recommendationsGateFromThread(currentThreadModel());
+          }
+          const saved = findSavedThread(state.activeThread);
+          if(saved) return recommendationsGateFromThread(saved);
+        }
+        return recommendationsGateFromThread(currentThreadModel());
+      }
+
+      function syncRecommendationAccessCta(gateInput){
+        const btn = $('#viewContentRecommendationsBtn');
+        const hint = $('#viewContentRecommendationsHint');
+        const gate = (gateInput && typeof gateInput === 'object') ? gateInput : recommendationsGateFromState();
+        if(btn){
+          btn.disabled = false;
+          btn.setAttribute('aria-disabled', gate.eligible ? 'false' : 'true');
+          btn.dataset.locked = gate.eligible ? 'false' : 'true';
+        }
+        if(hint){
+          hint.textContent = gate.eligible
+            ? `Unlocked at ${gate.completion}. Open recommendations for this package and profile.`
+            : `Complete at least 90% to unlock recommendations (current: ${gate.completion}).`;
+        }
+      }
+
+      function renderContentRecommendationsView(gateInput){
+        const shell = $('#contentRecommendationsView');
+        if(!shell) return;
+        const gate = (gateInput && typeof gateInput === 'object')
+          ? gateInput
+          : recommendationsGateFromThread(resolveRecommendationThread(state.recommendationsThreadId || 'current'));
+
+        const setText = (sel, value)=>{
+          const el = $(sel);
+          if(!el) return;
+          el.textContent = String(value || '');
+        };
+
+        const backBtn = $('#contentRecommendationsBackBtn');
+        if(backBtn){
+          backBtn.textContent = (state.recommendationsReturnView === 'interstitial') ? 'Back to overview' : 'Back to review';
+        }
+        const emailBtn = $('#generateRecommendationEmailBtn');
+        if(emailBtn){
+          emailBtn.disabled = !gate.eligible;
+          emailBtn.dataset.locked = gate.eligible ? 'false' : 'true';
+          emailBtn.title = gate.eligible
+            ? 'Generate recommendation email draft'
+            : `Locked until completion reaches 90% (current: ${gate.completion})`;
+        }
+
+        const tierName = gate.tier || 'Core';
+        const companyName = gate.company || 'Untitled company';
+        const topOutcomeText = gate.topOutcomes.length
+          ? gate.topOutcomes.map((row)=> (row && (row.short || row.label)) || '').filter(Boolean).join(' · ')
+          : 'Outcome signals still forming';
+
+        setText('#contentRecommendationsCompletion', `Completion: ${gate.completion}`);
+        setText('#contentRecommendationsTier', `Package: ${tierName}`);
+        setText('#contentRecommendationsOutcomes', `Outcomes: ${topOutcomeText}`);
+        setText('#contentRecommendationsAudience', `Company: ${companyName}`);
+        setText(
+          '#contentRecommendationsSub',
+          gate.eligible
+            ? `Outcome-matched recommendations for ${companyName}, based on the ${tierName} package profile.`
+            : 'Recommendations unlock once profile completion reaches at least 90%.'
+        );
+
+        const gateEl = $('#contentRecommendationsGate');
+        const gridEl = $('#contentRecommendationsGrid');
+        if(!gridEl || !gateEl) return;
+
+        if(!gate.eligible){
+          gateEl.hidden = false;
+          gateEl.innerHTML = `
+            <strong>Recommendations are locked.</strong>
+            <p>Current completion is ${escapeHtml(gate.completion)}. Reach at least 90% to unlock this page.</p>
+          `;
+          gridEl.innerHTML = '';
+          if(emailBtn){
+            emailBtn.disabled = true;
+            emailBtn.dataset.locked = 'true';
+          }
+          return;
+        }
+
+        gateEl.hidden = true;
+        gateEl.innerHTML = '';
+
+        const cards = recommendationCardsForGate(gate);
+
+        if(!cards.length){
+          gridEl.innerHTML = `
+            <article class="contentRecCard">
+              <p class="contentRecEyebrow">No mapped content found</p>
+              <h3>No existing assets matched this profile yet</h3>
+              <p class="contentRecSummary">Recommendations are limited to content currently in your imported Webflow catalog.</p>
+            </article>
+          `;
+          if(emailBtn){
+            emailBtn.disabled = true;
+            emailBtn.dataset.locked = 'true';
+            emailBtn.title = 'No mapped recommendations available to build an email yet.';
+          }
+          return;
+        }
+        if(emailBtn){
+          emailBtn.disabled = false;
+          emailBtn.dataset.locked = 'false';
+          emailBtn.title = 'Generate recommendation email draft';
+        }
+
+        gridEl.innerHTML = cards.map((card, idx)=> `
+          <article class="contentRecCard">
+            <p class="contentRecEyebrow">Recommendation ${idx + 1} · ${escapeHtml(card.format)}</p>
+            <h3>${escapeHtml(card.title)}</h3>
+            <p class="contentRecOutcome"><strong>Outcome:</strong> ${escapeHtml(card.outcomeLabel)}</p>
+            <p class="contentRecSummary">${escapeHtml(card.summary)}</p>
+            <p class="contentRecWhy"><strong>Why this match:</strong> ${escapeHtml(card.why)}</p>
+            ${card.url
+              ? `<a class="contentRecLink" href="${escapeHtml(card.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Open content')}</a>`
+              : ''
+            }
+            <p class="contentRecSource">Source file: ${escapeHtml(card.source || 'Webflow export')}</p>
+          </article>
+        `).join('');
+      }
+
+      function moduleValueByLabel(rows, label){
+        const target = normalizeContentToken(label);
+        const found = (rows || []).find((row)=> normalizeContentToken(row && row.label) === target);
+        return String((found && found.value) || '').trim();
+      }
+
+      function recommendationEmailModelForThread(threadId){
+        const thread = resolveRecommendationThread(threadId || state.recommendationsThreadId || state.activeThread || 'current');
+        const gate = recommendationsGateFromThread(thread);
+        const cards = gate.eligible ? recommendationCardsForGate(gate) : [];
+        const progress = threadReadinessProgress(thread);
+        const snapshot = (thread && thread.snapshot && typeof thread.snapshot === 'object') ? thread.snapshot : {};
+        const modules = (thread && thread.modules && typeof thread.modules === 'object')
+          ? thread.modules
+          : threadModulesFromSnapshot(snapshot, {
+              outcomes: Array.isArray(thread && thread.outcomes) ? thread.outcomes : [],
+              outcomesText: String((thread && thread.outcomesText) || '').trim()
+            });
+
+        const orgRows = Array.isArray(modules.organisation) ? modules.organisation : [];
+        const discoveryRows = Array.isArray(modules.discovery) ? modules.discovery : [];
+        const coverageRows = Array.isArray(modules.coverage) ? modules.coverage : [];
+        const contextRows = Array.isArray(modules.context) ? modules.context : [];
+
+        const profileSignals = [
+          `Role: ${moduleValueByLabel(orgRows, 'Role')}`,
+          `Company size: ${moduleValueByLabel(orgRows, 'Company size')}`,
+          `Operating country: ${moduleValueByLabel(orgRows, 'Operating country')}`,
+          `Pressure sources: ${moduleValueByLabel(discoveryRows, 'Pressure sources')}`,
+          `Urgent win: ${moduleValueByLabel(discoveryRows, 'Urgent win')}`,
+          `Risk environment: ${moduleValueByLabel(discoveryRows, 'Risk environment')}`,
+          `Cadence: ${moduleValueByLabel(coverageRows, 'Cadence')}`,
+          `Measurement: ${moduleValueByLabel(coverageRows, 'Measurement')}`,
+          `Industry: ${moduleValueByLabel(contextRows, 'Industry')}`,
+          `Region: ${moduleValueByLabel(contextRows, 'Region')}`,
+          `Regulatory references: ${moduleValueByLabel(contextRows, 'Regulatory references')}`
+        ].filter((line)=>{
+          const value = line.split(':').slice(1).join(':').trim();
+          return !!value && value !== '—' && value !== 'No open gaps';
+        });
+
+        const topOutcomes = (gate.topOutcomes || [])
+          .map((row)=> String((row && (row.short || row.label)) || '').trim())
+          .filter(Boolean);
+        const topOutcomeText = topOutcomes.length
+          ? naturalList(topOutcomes, { conjunction:'and' })
+          : 'your selected priorities';
+        const gapTitles = (progress.gaps || [])
+          .map((gap)=> String((gap && gap.title) || '').trim())
+          .filter(Boolean)
+          .slice(0, 5);
+
+        const subject = `Immersive content recommendations for ${gate.company} (${gate.tier})`;
+        const lines = [];
+        lines.push('Hi {{First Name}},');
+        lines.push('');
+        lines.push(`Based on your current ${gate.company} profile (${gate.completion}, ${gate.tier} package), here are the recommended content blocks for ${topOutcomeText}.`);
+        lines.push('');
+        lines.push('Profile summary');
+        lines.push(`- Package: ${gate.tier}`);
+        lines.push(`- Completion: ${gate.completion}`);
+        lines.push(`- Priority outcomes: ${topOutcomes.length ? topOutcomes.join(' · ') : 'Outcome signals still forming'}`);
+        lines.push(`- Open gaps: ${gapTitles.length ? gapTitles.join(' · ') : 'No open gaps'}`);
+        if(profileSignals.length){
+          lines.push('');
+          lines.push('Signals captured');
+          profileSignals.forEach((line)=> lines.push(`- ${line}`));
+        }
+        lines.push('');
+        lines.push('Recommended content blocks');
+        if(cards.length){
+          cards.forEach((card, idx)=>{
+            lines.push(`${idx + 1}) ${card.title}`);
+            lines.push(`   Format: ${card.format}`);
+            lines.push(`   Outcome: ${card.outcomeLabel}`);
+            lines.push(`   Why this match: ${card.why}`);
+            if(card.url) lines.push(`   Link: ${card.url}`);
+          });
+        }else{
+          lines.push('- No mapped content available from the current Webflow export for this profile yet.');
+        }
+        lines.push('');
+        lines.push('If useful, reply with your target audience and I can tailor this into a send-ready version.');
+
+        return {
+          threadId: gate.threadId,
+          company: gate.company,
+          tier: gate.tier,
+          completion: gate.completion,
+          outcomes: topOutcomes,
+          subject,
+          body: lines.join('\n'),
+          fullText: [`Subject: ${subject}`, '', lines.join('\n')].join('\n'),
+          cards
+        };
+      }
+
+      function renderRecommendationEmailBuilder(threadId){
+        const model = recommendationEmailModelForThread(threadId);
+        state.emailBuilderThreadId = model.threadId;
+
+        const setText = (sel, value)=>{
+          const el = $(sel);
+          if(el) el.textContent = String(value || '');
+        };
+
+        setText('#emailBuilderCompany', model.company);
+        setText('#emailBuilderSub', `Structured email draft assembled from package, profile selections, and mapped content for ${model.company}.`);
+        setText('#emailBuilderTierPill', `Tier: ${model.tier}`);
+        setText('#emailBuilderCompletionPill', `Completion: ${model.completion}`);
+        setText('#emailBuilderOutcomePill', `Outcomes: ${model.outcomes.length ? model.outcomes.join(' · ') : '—'}`);
+        setText('#emailBuilderSubject', model.subject);
+        setText('#emailBuilderDraft', model.body);
+
+        const resourcesEl = $('#emailBuilderResources');
+        if(resourcesEl){
+          if(model.cards.length){
+            resourcesEl.innerHTML = model.cards.map((card, idx)=> `
+              <li>
+                <strong>${idx + 1}. ${escapeHtml(card.title)}</strong>
+                ${card.url
+                  ? ` <a href="${escapeHtml(card.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Open content')}</a>`
+                  : ''
+                }
+                <div class="emailBuilderResourceMeta">${escapeHtml(`${card.format} · ${card.outcomeLabel}`)}</div>
+              </li>
+            `).join('');
+          }else{
+            resourcesEl.innerHTML = '<li>No mapped content blocks available for this profile yet.</li>';
+          }
+        }
+
+        return model;
+      }
+
+      function openRecommendationsForThread(threadId, opts){
+        const cfg = opts || {};
+        const resolvedThreadId = String(threadId || '').trim();
+        const thread = resolveRecommendationThread(resolvedThreadId || 'current');
+        const gate = recommendationsGateFromThread(thread);
+        state.recommendationsThreadId = gate.threadId;
+        state.recommendationsReturnView = String(cfg.returnView || ((state.currentView === 'interstitial') ? 'interstitial' : 'configurator'));
+        renderContentRecommendationsView(gate);
+        setView('recommendations');
+        if(!gate.eligible){
+          toast(`Recommendations are locked until 90% completion (current: ${gate.completion}).`);
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return gate.eligible;
+      }
+
+      function openRecommendationEmailBuilder(threadId){
+        const resolvedThreadId = String(threadId || '').trim();
+        const thread = resolveRecommendationThread(resolvedThreadId || state.recommendationsThreadId || state.activeThread || 'current');
+        const gate = recommendationsGateFromThread(thread);
+        if(!gate.eligible){
+          toast(`Recommendations are locked until 90% completion (current: ${gate.completion}).`);
+          return false;
+        }
+        state.recommendationsThreadId = gate.threadId;
+        toggleEmailBuilder(true, { threadId: gate.threadId });
+        return true;
+      }
+
       function reasons(best){
         const bullets = [];
 
@@ -5452,10 +6917,13 @@ const evidenceOpts = [
         setView(state.currentView, { render:false });
         renderDashboardRows();
         renderArchivedRows();
+        updateDashboardSortControls();
+        updateDashboardDateControls();
         renderWorkspaceCompanies();
         renderArchiveNavMeta();
         renderInterstitialView();
         syncGlobalActionBar();
+        renderWorkspaceBreadcrumb();
         const jumpBtns = $$('[data-jump-next-incomplete]');
         const jumpLabels = $$('.jumpNextIncompleteBtnLabel');
         if(jumpBtns.length){
@@ -5494,7 +6962,18 @@ const evidenceOpts = [
         };
 
         const regionLabels = { NA:'North America', UKI:'UK & Ireland', EU:'Europe (EU)', APAC:'APAC', Other:'Other / Global' };
-        const liveGaps = dashboardCurrentGaps();
+        const hasUnsavedEditsOnSavedThread = activeSavedThreadHasUnsavedState();
+        const savedProgressForConfigurator = (
+          state.currentView === 'configurator'
+          && state.activeThread
+          && state.activeThread !== 'current'
+          && !hasUnsavedEditsOnSavedThread
+        )
+          ? threadReadinessProgress(findSavedThread(state.activeThread))
+          : null;
+        const liveGaps = (savedProgressForConfigurator && Array.isArray(savedProgressForConfigurator.gaps))
+          ? savedProgressForConfigurator.gaps
+          : dashboardCurrentGaps();
         const liveRequirements = readinessRequirements(state);
         const missingRequirementKeys = new Set(
           liveRequirements
@@ -5970,6 +7449,13 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         const resources = buildRecommendedResources(topOutcomes);
         setHTML('#sumResources', resources.length ? `<ul>${resources.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>` : '—');
 
+        const recommendationGate = recommendationsGateFromState();
+        syncRecommendationAccessCta(recommendationGate);
+        const recThread = (state.currentView === 'recommendations')
+          ? resolveRecommendationThread(state.recommendationsThreadId || 'current')
+          : currentThreadModel();
+        renderContentRecommendationsView(recommendationsGateFromThread(recThread));
+
         // Coverage
         setHTML('#sumCoverage', [
           line('Groups', groupsTxt),
@@ -6004,6 +7490,9 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         }
         if(state.consultationOpen){
           renderConsultationPanel(state.consultationThreadId || state.activeThread || 'current');
+        }
+        if(state.emailBuilderOpen){
+          renderRecommendationEmailBuilder(state.emailBuilderThreadId || state.recommendationsThreadId || state.activeThread || 'current');
         }
 
         snapshotMotionReady = true;
@@ -6169,17 +7658,18 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         return `mailto:?subject=${subject}&body=${body}`;
       }
 
-      function copyToClipboard(text){
+      function copyToClipboard(text, successMsg){
+        const okMessage = String(successMsg || 'Copied summary to clipboard.');
         if(navigator.clipboard && navigator.clipboard.writeText){
           navigator.clipboard.writeText(text)
-            .then(()=> toast('Copied summary to clipboard.'))
-            .catch(()=> fallbackCopy(text));
+            .then(()=> toast(okMessage))
+            .catch(()=> fallbackCopy(text, okMessage));
         }else{
-          fallbackCopy(text);
+          fallbackCopy(text, okMessage);
         }
       }
 
-      function fallbackCopy(text){
+      function fallbackCopy(text, successMsg){
         try{
           const ta = document.createElement('textarea');
           ta.value = text;
@@ -6189,7 +7679,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           ta.select();
           document.execCommand('copy');
           document.body.removeChild(ta);
-          toast('Copied summary (fallback).');
+          toast(String(successMsg || 'Copied summary (fallback).'));
         }catch(e){
           toast('Clipboard copy blocked in this browser.');
         }
@@ -6704,14 +8194,21 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const globalCreateRecord = $('#globalCreateRecord');
       const globalDeleteRecord = $('#globalDeleteRecord');
       const globalEditConfigurator = $('#globalEditConfigurator');
+      const globalViewRecommendations = $('#globalViewRecommendations');
       const globalBookConsultation = $('#globalBookConsultation');
       const consultationPanel = $('#consultationPanel');
       const closeConsultationBtn = $('#closeConsultation');
+      const emailBuilderPanel = $('#emailBuilderPanel');
+      const closeEmailBuilderBtn = $('#closeEmailBuilder');
+      const workspaceBreadcrumb = $('#workspaceBreadcrumb');
       const accountOpenSettings = $('#accountOpenSettings');
       const jumpNextIncompleteBtns = $$('[data-jump-next-incomplete]');
       const saveRecordBtn = $('#saveRecordBtn');
       const workspaceCompaniesList = $('#workspaceCompaniesList');
       const dashboardRowsBody = $('#dashboardRows');
+      const dashSortButtons = $$('[data-dash-sort]');
+      const dashDateToggles = $$('[data-dashboard-date-toggle]');
+      const dashDateSortButtons = $$('[data-dashboard-date-sort]');
       const dashSelectAll = $('#dashSelectAll');
       const dashArchiveSelected = $('#dashArchiveSelected');
       const archivedRowsBody = $('#archivedRows');
@@ -6740,6 +8237,37 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       if(recordOverviewBtn){
         recordOverviewBtn.addEventListener('click', ()=>{
           openThreadOverview(state.activeThread || 'current');
+        });
+      }
+      if(workspaceBreadcrumb){
+        workspaceBreadcrumb.addEventListener('click', (e)=>{
+          const btn = e.target.closest('[data-workspace-crumb]');
+          if(!btn) return;
+          const action = btn.getAttribute('data-workspace-crumb') || '';
+          const threadId = btn.getAttribute('data-thread-id') || '';
+          if(action === 'dashboard'){
+            setView('dashboard');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+          if(action === 'archived'){
+            setView('archived');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+          if(action === 'account'){
+            setView('account');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+          if(action === 'interstitial-thread'){
+            openThreadOverview(threadId || state.activeThread || 'current');
+            return;
+          }
+          if(action === 'recommendations'){
+            setView('recommendations');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
         });
       }
       if(workspaceCreateRecord){
@@ -6775,6 +8303,12 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           openThreadBooking((thread && thread.id) ? thread.id : (state.activeThread || 'current'));
         });
       }
+      if(globalViewRecommendations){
+        globalViewRecommendations.addEventListener('click', ()=>{
+          const thread = activeThreadModel();
+          openRecommendationsForThread((thread && thread.id) ? thread.id : 'current', { returnView:'interstitial' });
+        });
+      }
       if(closeConsultationBtn){
         closeConsultationBtn.addEventListener('click', ()=>{
           toggleConsultation(false);
@@ -6784,6 +8318,18 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         consultationPanel.addEventListener('click', (e)=>{
           if(e.target === consultationPanel){
             toggleConsultation(false);
+          }
+        });
+      }
+      if(closeEmailBuilderBtn){
+        closeEmailBuilderBtn.addEventListener('click', ()=>{
+          toggleEmailBuilder(false);
+        });
+      }
+      if(emailBuilderPanel){
+        emailBuilderPanel.addEventListener('click', (e)=>{
+          if(e.target === emailBuilderPanel){
+            toggleEmailBuilder(false);
           }
         });
       }
@@ -6826,6 +8372,50 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           if(id) openThreadOverview(id);
         });
       }
+      dashSortButtons.forEach((btn)=>{
+        btn.addEventListener('click', ()=>{
+          const column = btn.getAttribute('data-dash-sort') || '';
+          const nextMode = dashboardSortNextModeForColumn(column);
+          state.dashboardSort = sanitizeDashboardSortMode(nextMode);
+          persistDashboardSortMode();
+          state.dashboardSelectedIds = new Set();
+          state.archivedSelectedIds = new Set();
+          update();
+        });
+      });
+      dashDateToggles.forEach((btn)=>{
+        btn.addEventListener('click', ()=>{
+          const currentMode = sanitizeDashboardDateMode(state.dashboardDateMode);
+          const nextMode = currentMode === 'modified' ? 'created' : 'modified';
+          const currentSort = sanitizeDashboardSortMode(state.dashboardSort);
+          let nextDir = 'desc';
+          if(currentSort === `${currentMode}-asc`) nextDir = 'asc';
+          else if(currentSort === `${currentMode}-desc`) nextDir = 'desc';
+          else if(currentSort === `${nextMode}-asc`) nextDir = 'asc';
+          else if(currentSort === `${nextMode}-desc`) nextDir = 'desc';
+          state.dashboardDateMode = nextMode;
+          state.dashboardSort = sanitizeDashboardSortMode(`${nextMode}-${nextDir}`);
+          persistDashboardSortMode();
+          persistDashboardDateMode();
+          state.dashboardSelectedIds = new Set();
+          state.archivedSelectedIds = new Set();
+          update();
+        });
+      });
+      dashDateSortButtons.forEach((btn)=>{
+        btn.addEventListener('click', ()=>{
+          const mode = sanitizeDashboardDateMode(state.dashboardDateMode);
+          const currentSort = sanitizeDashboardSortMode(state.dashboardSort);
+          let nextSort = `${mode}-desc`;
+          if(currentSort === `${mode}-desc`) nextSort = `${mode}-asc`;
+          else if(currentSort === `${mode}-asc`) nextSort = `${mode}-desc`;
+          state.dashboardSort = sanitizeDashboardSortMode(nextSort);
+          persistDashboardSortMode();
+          state.dashboardSelectedIds = new Set();
+          state.archivedSelectedIds = new Set();
+          update();
+        });
+      });
       if(dashSelectAll){
         dashSelectAll.addEventListener('change', ()=>{
           if(!dashSelectAll.checked){
@@ -8035,6 +9625,32 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           const paybackTxt = fmtPayback(computePaybackMonths(roi));
           copyToClipboard(buildSummaryText(tier, rs, roi, paybackTxt));
         }
+        if(action === 'openRecommendations'){
+          const targetThread = (state.currentView === 'interstitial')
+            ? activeThreadModel()
+            : ((state.activeThread && state.activeThread !== 'current')
+                ? (findSavedThread(state.activeThread) || currentThreadModel())
+                : currentThreadModel());
+          openRecommendationsForThread(
+            (targetThread && targetThread.id) ? targetThread.id : 'current',
+            { returnView: state.currentView === 'interstitial' ? 'interstitial' : 'configurator' }
+          );
+        }
+        if(action === 'openRecommendationEmail'){
+          const targetThread = (state.currentView === 'recommendations')
+            ? resolveRecommendationThread(state.recommendationsThreadId || state.activeThread || 'current')
+            : ((state.currentView === 'interstitial')
+                ? activeThreadModel()
+                : currentThreadModel());
+          openRecommendationEmailBuilder((targetThread && targetThread.id) ? targetThread.id : 'current');
+        }
+        if(action === 'backToReview'){
+          if(state.recommendationsReturnView === 'interstitial'){
+            openThreadOverview(state.recommendationsThreadId || state.activeThread || 'current');
+          }else{
+            setActiveStep(6);
+          }
+        }
         if(action === 'downloadCSV'){
           const report = buildReportModelV1();
           const csv = reportToCSV(report);
@@ -8052,6 +9668,14 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         if(action === 'copyConsultationBrief'){
           const model = consultationModelForThread(state.consultationThreadId || state.activeThread || 'current');
           copyToClipboard(consultationBriefText(model));
+        }
+        if(action === 'copyRecommendationEmail'){
+          const model = recommendationEmailModelForThread(state.emailBuilderThreadId || state.recommendationsThreadId || state.activeThread || 'current');
+          copyToClipboard(model.fullText, 'Copied recommendation email.');
+        }
+        if(action === 'copyRecommendationSubject'){
+          const model = recommendationEmailModelForThread(state.emailBuilderThreadId || state.recommendationsThreadId || state.activeThread || 'current');
+          copyToClipboard(model.subject, 'Copied email subject.');
         }
         if(action === 'downloadConsultationBrief'){
           const model = consultationModelForThread(state.consultationThreadId || state.activeThread || 'current');

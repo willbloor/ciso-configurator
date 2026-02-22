@@ -1,47 +1,155 @@
-# CISO Configurator (Launchpad Dashboard Shell)
+# CISO Configurator
 
-Static HTML app for the Launchpad dashboard + configurator flow.
+Last updated: 2026-02-22
 
-## Project Structure
+This repository contains the static configurator app used to generate customer dashboard pages.
 
-- `index.html` - app markup
-- `assets/css/app.css` - styles extracted from inline CSS
-- `assets/js/app.js` - app logic extracted from inline JS
-- `CISO Configurator Launchpad Edition - Dashboard Shell.html` - legacy filename redirect to `index.html`
+## What This Repo Does
 
-## Run Locally
+- Runs a browser-based configurator (`index.html` + JS/CSS).
+- Builds a dynamic customer dashboard HTML from thread/profile data.
+- Curates "Recommended for you" cards from reconciled Webflow CSV data.
+- Curates "What's new" from RSS (with fallback data).
+- Exports a downloadable customer dashboard HTML file.
 
-Open `index.html` directly in a browser, or serve with any static server.
+## Source Of Truth
 
-Example:
+- App shell: `/Users/will.bloor/Documents/Configurator/index.html`
+- Main logic: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+- Styles: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+The generated customer dashboard is created in code (not from a static HTML file) by:
+
+- `customerTemplateModelFromCandidate(candidate)`
+- `customerTemplateHtmlFromModel(modelInput)`
+
+Both functions live in `/Users/will.bloor/Documents/Configurator/assets/js/app.js`.
+
+## Current Template Snapshot Files
+
+Reference snapshots are stored in:
+
+- `/Users/will.bloor/Documents/Configurator/landing-pages/customer-dashboard-template-Pioneer-Cloud-2026-02-22.html`
+- `/Users/will.bloor/Documents/Configurator/landing-pages/CISO Configurator Launchpad Edition - Dashboard Shell.html`
+
+These are review snapshots only. The generator in `assets/js/app.js` is canonical.
+
+## Current Dashboard Behavior (Implemented)
+
+### Hero
+
+- Full-bleed image fills the entire hero card.
+- Hero text is white for readability.
+- Hero primary CTA points to `#recommended-for-you`.
+- Hero secondary CTA points to `#contact-your-team`.
+
+### Structure
+
+Current section order in generated output:
+
+1. Hero
+2. Top outcomes
+3. Meeting context details
+4. Centered "Our understanding of your needs"
+5. Overlapping Prove / Improve / Report cards
+6. Product tour card
+7. Recommended next actions
+8. Recommended for you
+9. What's new
+10. Contact your team
+
+### Removed / Changed
+
+- "Recommended resources" section was removed from output and preview.
+- Any `site:immersivelabs.com` Google-search fallback links were removed.
+- Content links are now first-party/direct where possible.
+
+## Content And RSS System
+
+### Runtime Content Sources
+
+The app merges:
+
+- `window.immersiveContentCatalog` from `/Users/will.bloor/Documents/Configurator/assets/js/content-catalog.js`
+- Runtime RSS rows from configured feed URLs
+- RSS fallback from `/Users/will.bloor/Documents/Configurator/assets/js/official-blog-rss-fallback.js`
+
+### Freshness Rules
+
+Defined in `/Users/will.bloor/Documents/Configurator/assets/js/app.js`:
+
+- `CONTENT_MAX_AGE_DAYS = 365 * 3` (exclude content older than 3 years)
+- `CONTENT_FRESH_PRIORITY_DAYS = 365`
+- `CONTENT_RECENT_PRIORITY_DAYS = 365 * 2`
+
+### URL Rules
+
+`canonicalizeContentUrlByFormat` + `inferredContentUrl` enforce direct Immersive paths by format:
+
+- `blog-post` -> `/resources/blog/<slug>/`
+- `c7-blog` -> `/resources/c7-blog/<slug>/`
+- `case-study` -> `/resources/case-study/<slug>/`
+- `ebook` -> `/resources/ebook/<slug>/`
+- `webinar` -> `/resources/webinars/<slug>/`
+
+If slug is missing, `inferredContentSlug(row)` derives it from title.
+
+### Image Rules
+
+Card image resolution order:
+
+1. Direct image fields on the row (`imageUrl`, `thumbnail`, `heroImage`, etc.)
+2. Matched image via lookup by slug/title/url tail
+3. Final fallback image:
+   - `IMMERSIVE_DEFAULT_IMAGE_URL`
+
+No `picsum` placeholders are used in runtime generator logic.
+
+## Build Theatre (Preview UX)
+
+The preview "build theatre" (loader/sequence) is controlled in:
+
+- `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+  - `ensureCustomerPreviewBuildOverlay`
+  - `runCustomerPreviewBuildTheatre`
+  - `clearCustomerPreviewBuildTheatre`
+- `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+It is designed to play during explicit customer preview generation.
+
+## Data Pipelines
+
+### 1) Reconcile master content catalog
+
+Script:
+
+- `/Users/will.bloor/Documents/Configurator/scripts/reconcile_content_csvs.mjs`
+
+Default output:
+
+- `/Users/will.bloor/Documents/Configurator/assets/data/immersive-content-master.csv`
+- `/Users/will.bloor/Documents/Configurator/assets/js/content-catalog.js`
+
+Run:
 
 ```bash
 cd "/Users/will.bloor/Documents/Configurator"
-python3 -m http.server 8080
+node scripts/reconcile_content_csvs.mjs
 ```
 
-Then open `http://localhost:8080`.
+Notes:
 
-## Workspace Profile Import / Export
+- Uses default desktop CSV input paths unless `--inputs` is provided.
+- Applies 3-year age filtering.
+- Reconciles canonical URLs and images.
 
-- Open **My account** in the left nav.
-- In **Workspace profiles**:
-  - `Load AE demo profile` or `Load CS demo profile` swaps in demo records.
-  - `Upload profile CSV` imports records from a CSV (client-side in browser).
-  - `Export high-fidelity CSV` downloads all records including `record_json`.
-- A ready sample file is included at:
-  - `workspace-profile-sample.csv`
+### 2) Sync official blog RSS fallback
 
-## RSS / Content Freshness
+Script:
 
-- `What's new` now pulls from the official Immersive blog RSS feed.
-- Recency rules in the app:
-  - hard cutoff: older than 3 years is excluded
-  - prioritization: content newer than 1 year is ranked first
-- If live RSS fetch fails, the app falls back to:
-  - `assets/js/official-blog-rss-fallback.js`
+- `/Users/will.bloor/Documents/Configurator/scripts/sync_official_blog_rss_curated.mjs`
 
-### Refresh Curated RSS CSV + Fallback JS
+Run:
 
 ```bash
 cd "/Users/will.bloor/Documents/Configurator"
@@ -49,166 +157,62 @@ curl -L -s 'https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.immersivelabs.c
   | node scripts/sync_official_blog_rss_curated.mjs
 ```
 
-This regenerates:
-
-- `assets/data/official-blog-rss-curated.csv`
-- `assets/js/official-blog-rss-fallback.js`
-
-### Clean Any Content CSV by Recency
-
-```bash
-cd "/Users/will.bloor/Documents/Configurator"
-node scripts/clean_content_csv_by_recency.mjs <input.csv> <output.csv>
-```
-
-- Keeps only rows with parseable publish dates.
-- Drops rows older than 3 years by default (`MAX_AGE_DAYS=1095`).
-- Adds `freshnessBucket` (`<1y`, `1-2y`, `2-3y`) and sorts newest-first.
-
-### Reconcile Webflow Content CSVs (Master Catalog)
-
-Build one canonical content catalog from the Webflow exports (blogs, C7 blogs, case studies, ebooks, media coverage, webinars), reconcile URLs/images, and regenerate the JS catalog used by the app.
-
-```bash
-cd "/Users/will.bloor/Documents/Configurator"
-node scripts/reconcile_content_csvs.mjs
-```
-
 Outputs:
 
-- `assets/data/immersive-content-master.csv`
-- `assets/js/content-catalog.js`
-- Template: `assets/data/templates/immersive-content-master-template.csv`
-- Prompt for fresh chats: `docs/content-master-update-prompt.md`
+- `/Users/will.bloor/Documents/Configurator/assets/data/official-blog-rss-curated.csv`
+- `/Users/will.bloor/Documents/Configurator/assets/js/official-blog-rss-fallback.js`
 
-Behavior:
+### 3) Reconcile operations records
 
-- Drops content older than 3 years (`MAX_AGE_DAYS=1095` by default).
-- Keeps newest content first and prioritizes `<1y`.
-- Reconciles canonical + external URLs.
-- Ensures every row has an image URL (CDN match or Immersive fallback image).
+Script:
 
-#### Incremental update flow (new posts only)
-
-1. In a fresh chat, use:
-   - `docs/content-master-update-prompt.md`
-2. Save the returned CSV (new rows) anywhere, e.g. `/Users/will.bloor/Desktop/CSV/new-content-batch.csv`
-3. Reconcile master + new batch:
-
-```bash
-cd "/Users/will.bloor/Documents/Configurator"
-node scripts/reconcile_content_csvs.mjs --inputs \
-  "/Users/will.bloor/Documents/Configurator/assets/data/immersive-content-master.csv" \
-  "/Users/will.bloor/Desktop/CSV/new-content-batch.csv"
-```
-
-This regenerates:
-
-- `assets/data/immersive-content-master.csv`
-- `assets/js/content-catalog.js`
-
-### Reconcile High-Fidelity Operations CSVs (Master Records)
-
-Build one canonical operations dataset from configurator high-fidelity exports.
-
-```bash
-cd "/Users/will.bloor/Documents/Configurator"
-node scripts/reconcile_operations_csvs.mjs
-```
+- `/Users/will.bloor/Documents/Configurator/scripts/reconcile_operations_csvs.mjs`
 
 Output:
 
-- `assets/data/operations-records-master.csv`
-- Template: `assets/data/templates/operations-records-master-template.csv`
+- `/Users/will.bloor/Documents/Configurator/assets/data/operations-records-master.csv`
 
-Behavior:
+## Local Run
 
-- Preserves operational fields used by the configurator (including JSON snapshot/module/viz payloads).
-- Normalizes key fields (`record_id`, `completion_pct`, `created_at`, `updated_at`).
-- Dedupe strategy keeps the latest row per record id.
-- Default recency cutoff is 10 years (`OPS_MAX_AGE_DAYS=3650`) and can be tightened via env var.
+No build step required.
+
+Open directly:
+
+- `/Users/will.bloor/Documents/Configurator/index.html`
+
+Or run a static server:
+
+```bash
+cd "/Users/will.bloor/Documents/Configurator"
+python3 -m http.server 8080
+```
 
 ## Deploy (Vercel)
 
 - Framework preset: `Other`
-- Build command: _(empty)_
-- Output directory: _(empty)_
-- Entry page: `index.html`
+- Build command: empty
+- Output directory: empty
+- Entry: `index.html`
 
-## Git Workflow
+## Handoff Checklist (Use After Each Push)
+
+1. Update this README with any structural/template logic changes.
+2. If content logic changed, regenerate:
+   - `assets/js/content-catalog.js`
+   - `assets/js/official-blog-rss-fallback.js` (if RSS-related)
+3. Keep a fresh visual snapshot in `landing-pages/` when output structure changes.
+4. Ensure hero anchors still resolve to real section IDs.
+5. Confirm no Google search fallback URLs and no placeholder image URLs in generated output.
+
+## Quick Validation Commands
 
 ```bash
-git add .
-git commit -m "Describe change"
-git push
+# no Google fallback links
+rg -n "google\.com/search\?q=site%3Aimmersivelabs\.com" assets/js/app.js landing-pages/customer-dashboard-template-Pioneer-Cloud-2026-02-22.html
+
+# no placeholder picsum links
+rg -n "picsum\.photos" assets/js/app.js landing-pages/customer-dashboard-template-Pioneer-Cloud-2026-02-22.html
+
+# JS syntax check
+node --check assets/js/app.js
 ```
-
-## Customer Dashboard Template (Dynamic)
-
-The customer dashboard page is generated dynamically in:
-
-- `assets/js/app.js`
-  - `customerTemplateModelFromCandidate(candidate)`
-  - `customerTemplateHtmlFromModel(modelInput)`
-
-The file below is a rendered snapshot for review/demo, not the source of truth:
-
-- `customer-dashboard-template-Pioneer-Cloud-2026-02-22.html`
-
-### Current baseline behavior (template output)
-
-- Hero uses Labs image:
-  - `https://cdn.prod.website-files.com/6735fba9a631272fb4513263/678646ce52898299cc1134be_HERO%20IMAGE%20LABS.webp`
-- Hero CTAs are in-page anchors:
-  - `#recommended-resources`
-  - `#contact-your-team`
-- Recommendation card titles are linkable with hover affordance.
-- Recommendation link label is standardized to `Read more`.
-- `Our understanding of your needs` is centered text-only:
-  - subheading: `Measuring cyber readiness with Immersive`
-  - short paragraph: `For <Company>, this means defensible evidence...`
-- The old readiness narrative/image block has been removed.
-- The overlapping prove/improve/report cards start immediately after the centered understanding text.
-- A contact section is included at the bottom:
-  - section id: `contact-your-team`
-  - team cards + simple mailto form submission.
-
-### Anchor IDs in generated template
-
-- `recommended-resources`
-- `recommended-for-you`
-- `whats-new`
-- `contact-your-team`
-
-## New Chat Handoff (Configurator)
-
-When starting a new chat, tell it to treat `assets/js/app.js` as canonical for template behavior.
-If a static template HTML is present, it should be used only as a visual snapshot/reference.
-
-Recommended bootstrap prompt:
-
-```text
-Project path: /Users/will.bloor/Documents/Configurator
-Source of truth for customer dashboard template: assets/js/app.js
-Key functions: customerTemplateModelFromCandidate + customerTemplateHtmlFromModel
-Rendered snapshot reference: customer-dashboard-template-Pioneer-Cloud-2026-02-22.html
-Please read README.md first, then continue from the latest template baseline and requested changes.
-```
-
-## Post-Push Handoff Routine (Do After Every Deployment)
-
-Run this after every `git push` to keep future chats aligned.
-
-1. Update `README.md` with:
-   - latest template behavior changes
-   - changed source-of-truth files
-   - any new anchors, IDs, or schema fields.
-2. Update `SESSION_HANDOFF.md` if architecture, branch flow, or startup prompt changed.
-3. If RSS/content data changed, regenerate artifacts and note it in README:
-   - `assets/data/official-blog-rss-curated.csv`
-   - `assets/js/official-blog-rss-fallback.js`
-   - `assets/js/content-catalog.js`
-4. Ensure a rendered HTML snapshot exists for QA/reference when template output changed.
-5. In commit message, include a short scope marker, e.g.:
-   - `template: hero + links + understanding section`
-   - `content: rss reconciliation + catalog refresh`

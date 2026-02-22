@@ -288,6 +288,7 @@
         customerTemplateDraft: null,
         customerTemplateEditorOpen: false,
         customerTemplateEditorTarget: null,
+        customerTemplateBuildTheatrePending: false,
         recommendationsThreadId: 'current',
         recommendationsReturnView: 'configurator',
 
@@ -6196,11 +6197,7 @@ const evidenceOpts = [
         if(!host.endsWith('immersivelabs.com')) return value;
         const currentPath = String(parsed.pathname || '');
         if(currentPath === '/blog' || currentPath.startsWith('/blog/')){
-          parsed.pathname = currentPath.replace(/^\/blog(\/|$)/, '/resources/c7-blog$1');
-          return parsed.toString();
-        }
-        if(currentPath === '/resources/blog' || currentPath.startsWith('/resources/blog/')){
-          parsed.pathname = currentPath.replace(/^\/resources\/blog(\/|$)/, '/resources/c7-blog$1');
+          parsed.pathname = currentPath.replace(/^\/blog(\/|$)/, '/resources/blog$1');
           return parsed.toString();
         }
         return value;
@@ -6297,13 +6294,6 @@ const evidenceOpts = [
       function safeSlugForContent(value){
         const token = normalizeContentToken(value).replace(/\s+/g, '-').slice(0, 80);
         return token || `item-${Date.now()}`;
-      }
-
-      function picsumContentImage(seed, width=640, height=360){
-        const safeSeed = encodeURIComponent(safeSlugForContent(seed || 'immersive-content'));
-        const w = Math.max(120, Number(width) || 640);
-        const h = Math.max(120, Number(height) || 360);
-        return `https://picsum.photos/seed/${safeSeed}/${w}/${h}`;
       }
 
       let cachedContentImageLookup = null;
@@ -6594,7 +6584,10 @@ const evidenceOpts = [
         const cleanSlug = String(slug || '').trim();
         if(!cleanSlug) return '';
         const fmt = String(format || '').trim().toLowerCase();
-        if(fmt === 'blog-post' || fmt === 'c7-blog' || fmt === 'media-coverage'){
+        if(fmt === 'blog-post'){
+          return `https://www.immersivelabs.com/resources/blog/${encodeURIComponent(cleanSlug)}/`;
+        }
+        if(fmt === 'c7-blog'){
           return `https://www.immersivelabs.com/resources/c7-blog/${encodeURIComponent(cleanSlug)}/`;
         }
         if(fmt === 'case-study'){
@@ -6609,10 +6602,44 @@ const evidenceOpts = [
         return '';
       }
 
-      function fallbackContentSearchUrl(title){
-        const query = String(title || '').trim();
-        if(!query) return '';
-        return `https://www.google.com/search?q=${encodeURIComponent(`site:immersivelabs.com ${query}`)}`;
+      function inferredContentSlug(row){
+        const directSlug = String(row && row.slug || '').trim();
+        if(directSlug) return directSlug;
+        const fromTitle = safeSlugForContent(row && row.title || '');
+        return String(fromTitle || '').trim();
+      }
+
+      function canonicalizeContentUrlByFormat(url, format, slug){
+        const direct = normalizedHttpUrl(url);
+        if(!direct) return '';
+        const formatKey = String(format || '').trim().toLowerCase();
+        if(formatKey !== 'blog-post') return direct;
+        let parsed = null;
+        try{
+          parsed = new URL(direct);
+        }catch(err){
+          return direct;
+        }
+        const host = String(parsed.hostname || '').toLowerCase();
+        if(!host.endsWith('immersivelabs.com')) return direct;
+        const currentPath = String(parsed.pathname || '');
+        if(currentPath === '/resources/c7-blog' || currentPath.startsWith('/resources/c7-blog/')){
+          parsed.pathname = currentPath.replace(/^\/resources\/c7-blog(\/|$)/, '/resources/blog$1');
+          return parsed.toString();
+        }
+        if(currentPath === '/c7-blog' || currentPath.startsWith('/c7-blog/')){
+          parsed.pathname = currentPath.replace(/^\/c7-blog(\/|$)/, '/resources/blog$1');
+          return parsed.toString();
+        }
+        if(currentPath === '/blog' || currentPath.startsWith('/blog/')){
+          parsed.pathname = currentPath.replace(/^\/blog(\/|$)/, '/resources/blog$1');
+          return parsed.toString();
+        }
+        if((currentPath === '/' || !currentPath) && String(slug || '').trim()){
+          parsed.pathname = `/resources/blog/${encodeURIComponent(String(slug).trim())}/`;
+          return parsed.toString();
+        }
+        return direct;
       }
 
       function catalogItems(){
@@ -6631,32 +6658,24 @@ const evidenceOpts = [
             const publishedOn = String(row.publishedOn || '').trim();
             const publishedTs = publishedTimestamp(publishedOn);
             const ageDays = ageDaysFromPublished(publishedOn);
+            const formatKey = String(row.format || '').trim().toLowerCase();
+            const contentSlug = inferredContentSlug(row);
             return {
               id,
               title: String(row.title || '').trim(),
-              slug: String(row.slug || '').trim(),
-              format: String(row.format || '').trim().toLowerCase(),
+              slug: contentSlug,
+              format: formatKey,
               category: String(row.category || '').trim(),
               topicTags: Array.isArray(row.topicTags) ? row.topicTags.map((tag)=> String(tag || '').trim()).filter(Boolean) : [],
               contributors: Array.isArray(row.contributors) ? row.contributors.map((name)=> String(name || '').trim()).filter(Boolean) : [],
               url: (() => {
-                const direct = normalizedHttpUrl(row.url);
+                const direct = canonicalizeContentUrlByFormat(row.url, formatKey, contentSlug);
                 if(direct) return direct;
-                const formatKey = String(row.format || '').trim().toLowerCase();
-                if(formatKey === 'blog-post' || formatKey === 'c7-blog'){
-                  return fallbackContentSearchUrl(row.title);
-                }
-                const inferred = inferredContentUrl(row.format, row.slug);
+                const inferred = inferredContentUrl(formatKey, contentSlug);
                 if(inferred) return inferred;
-                return fallbackContentSearchUrl(row.title);
+                return '';
               })(),
-              linkLabel: (() => {
-                if(normalizedHttpUrl(row.url)) return 'Read more';
-                const formatKey = String(row.format || '').trim().toLowerCase();
-                if(formatKey === 'blog-post' || formatKey === 'c7-blog') return 'Read more';
-                if(inferredContentUrl(row.format, row.slug)) return 'Read more';
-                return 'Read more';
-              })(),
+              linkLabel: 'Read more',
               imageUrl: normalizedHttpUrl(
                 row.imageUrl
                 || row.image
@@ -7161,7 +7180,7 @@ const evidenceOpts = [
             subtitle: `Built from what ${profileName} shared, with recommendations focused on your top priorities and delivery outcomes.`,
             imageUrl: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/678646ce52898299cc1134be_HERO%20IMAGE%20LABS.webp',
             primaryCtaLabel: 'Recommended resources',
-            primaryCtaHref: '#recommended-resources',
+            primaryCtaHref: '#recommended-for-you',
             secondaryCtaLabel: 'Contact your team',
             secondaryCtaHref: '#contact-your-team',
             stats: [
@@ -7192,6 +7211,11 @@ const evidenceOpts = [
           },
           contentCards: (curatedContentCards.length ? curatedContentCards : cards).length
               ? (curatedContentCards.length ? curatedContentCards : cards).map((card)=> Object.assign({}, card, {
+                  url: canonicalizeContentUrlByFormat(
+                    card && card.url,
+                    (card && (card.formatKey || card.format)) || '',
+                    (card && card.slug) || ''
+                  ) || (card && card.url) || '',
                   imageUrl: cardImageUrlForItem(card)
                 }))
               : [{
@@ -7201,7 +7225,7 @@ const evidenceOpts = [
                   title:'No mapped content found',
                   summary:'No curated recommendations are available yet for this profile.',
                   why:'We could not find a strong content match for your selected priorities yet.',
-                  url:'https://www.immersivelabs.com/resources/c7-blog',
+                  url:'https://www.immersivelabs.com/resources/blog',
                   linkLabel:'Read more',
                   imageUrl:IMMERSIVE_DEFAULT_IMAGE_URL
                 }],
@@ -7225,7 +7249,6 @@ const evidenceOpts = [
         const hero = (model.hero && typeof model.hero === 'object') ? model.hero : {};
         const outcomeBlocks = Array.isArray(model.outcomeBlocks) ? model.outcomeBlocks.filter(Boolean).slice(0, 3) : [];
         const actions = Array.isArray(model.actions) ? model.actions.filter(Boolean).slice(0, 6) : [];
-        const resources = Array.isArray(model.resources) ? model.resources.filter(Boolean).slice(0, 8) : [];
         const cards = Array.isArray(model.contentCards) ? model.contentCards.filter(Boolean).slice(0, 9) : [];
         const whatsNewCardsInput = Array.isArray(model.whatsNewCards) ? model.whatsNewCards.filter(Boolean).slice(0, 3) : [];
         const details = Array.isArray(model.detailSections) ? model.detailSections.filter(Boolean).slice(0, 6) : [];
@@ -7248,7 +7271,7 @@ const evidenceOpts = [
         const heroImageDefault = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/678646ce52898299cc1134be_HERO%20IMAGE%20LABS.webp';
         const heroImageUrl = String(hero.imageUrl || '').trim() || heroImageDefault;
         const heroPrimaryCtaLabel = String(hero.primaryCtaLabel || '').trim() || 'Recommended resources';
-        const heroPrimaryCtaHref = String(hero.primaryCtaHref || '').trim() || '#recommended-resources';
+        const heroPrimaryCtaHref = String(hero.primaryCtaHref || '').trim() || '#recommended-for-you';
         const heroSecondaryCtaLabel = String(hero.secondaryCtaLabel || '').trim() || 'Contact your team';
         const heroSecondaryCtaHref = String(hero.secondaryCtaHref || '').trim() || '#contact-your-team';
         const initialsFromName = (value)=> {
@@ -7443,22 +7466,23 @@ const evidenceOpts = [
     .container-large { max-width: 100%; margin: 0px auto; }
     .padding-section-24.platform-hero { padding: 0px; }
     .header90_component { width: 100%; }
-    .header90_card.platform { position: relative; display: grid; grid-template-columns: minmax(0px, 1fr) minmax(0px, 620px); min-height: 430px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; isolation: isolate; }
+    .header90_card.platform { position: relative; display: block; min-height: 430px; background: #07122d; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; isolation: isolate; }
+    .header90_card.platform::before { content: ""; position: absolute; inset: 0px; z-index: 2; background: linear-gradient(90deg, rgba(4, 10, 26, 0.82) 0%, rgba(4, 10, 26, 0.64) 40%, rgba(4, 10, 26, 0.3) 66%, rgba(4, 10, 26, 0.18) 100%); pointer-events: none; }
     .header90_background-image-wrapper.platform-2.improve-2 { display: none; }
-    .header90_card-content { position: relative; z-index: 2; padding: 44px 44px 42px; display: flex; flex-direction: column; justify-content: center; background: transparent; }
+    .header90_card-content { position: relative; z-index: 3; padding: 44px 44px 42px; display: flex; flex-direction: column; justify-content: center; max-width: min(780px, 62%); background: transparent; }
     .max-width-medium--lp { max-width: 62ch; }
     .margin-bottom.margin-small { margin-bottom: 14px; }
     .margin-bottom-16.margin-small { margin-bottom: 16px; }
-    .tag-17.is-text { display: inline-flex; align-items: center; min-height: 26px; padding: 6px 10px; border: 1px solid rgba(23, 24, 28, 0.14); border-radius: 999px; background: rgb(255, 255, 255); color: rgb(48, 71, 111); font-size: 12px; line-height: 1; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 400; }
-    .heading-style-h1.landing-page { margin: 0px; font-size: clamp(40px, 4.8vw, 62px); line-height: 1.03; max-width: 14ch; letter-spacing: -0.02em; color: var(--text-color--primary); font-weight: 500; }
-    .text-size-regular.text-color-secondary.max-width-prove { margin: 0px; max-width: 54ch; color: rgb(68, 85, 113); font-size: 18px; line-height: 1.35; }
+    .tag-17.is-text { display: inline-flex; align-items: center; min-height: 26px; padding: 6px 10px; border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 999px; background: rgba(9, 17, 40, 0.26); color: rgba(236, 244, 255, 0.94); font-size: 12px; line-height: 1; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 400; }
+    .heading-style-h1.landing-page { margin: 0px; font-size: clamp(40px, 4.8vw, 62px); line-height: 1.03; max-width: 14ch; letter-spacing: -0.02em; color: rgb(255, 255, 255); font-weight: 500; text-shadow: rgba(0, 0, 0, 0.22) 0px 2px 10px; }
+    .text-size-regular.text-color-secondary.max-width-prove { margin: 0px; max-width: 54ch; color: rgba(236, 244, 255, 0.92); font-size: 18px; line-height: 1.35; text-shadow: rgba(0, 0, 0, 0.2) 0px 1px 6px; }
     .margin-top.margin-medium { margin-top: 22px; }
     .button-group { display: flex; flex-wrap: wrap; gap: 10px; }
     .button.w-button { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 12px 22px; border-radius: var(--radius-btn); border: 1px solid var(--primary-colours--azure); background: var(--primary-colours--azure); color: rgb(255, 255, 255); font-size: 16px; line-height: 20px; font-weight: 400; text-decoration: none; }
     .button.w-button:hover { background: rgb(86, 119, 248); border-color: rgb(86, 119, 248); }
     .button.is-secondary.is-lightmode.w-button { background: rgb(255, 255, 255); border-color: rgba(23, 24, 28, 0.18); color: rgb(31, 47, 82); }
     .button.is-secondary.is-lightmode.w-button:hover { background: rgb(245, 247, 252); }
-    .header90_background-image-wrapper-platform.improve { position: relative; z-index: 1; min-height: 100%; overflow: hidden; background: transparent; }
+    .header90_background-image-wrapper-platform.improve { position: absolute; inset: 0px; z-index: 1; overflow: hidden; background: transparent; pointer-events: none; }
     .improve-lp-hero-image { position: absolute; inset: 0px; width: 100%; height: 100%; object-fit: cover; object-position: center center; transform: none; z-index: 1; filter: none; }
     .improve-ui-popup.prove { display: none; }
     .layout { margin: 20px 0px 42px; display: grid; gap: 16px; }
@@ -7534,8 +7558,6 @@ const evidenceOpts = [
     .outcomeCard h3 { margin: 0px; font-size: 24px; line-height: 1.15; color: rgb(26, 44, 79); }
     .outcomeCard p { margin: 0px; color: rgb(75, 95, 131); font-size: 16px; line-height: 1.3; }
     .actionsList { margin: 12px 0px 0px; padding-left: 1.2rem; display: grid; gap: 8px; font-size: 18px; line-height: 1.25; }
-    .resourceRow { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
-    .resourcePill { border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: rgb(255, 255, 255); font-size: 14px; line-height: 18px; color: rgb(42, 58, 87); }
     .contentGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
     .contentCard { border: 1px solid var(--line); border-radius: var(--radius-card); background: rgb(255, 255, 255); padding: 16px; display: grid; gap: 8px; }
     .contentImageWrap { margin: -16px -16px 8px; border-radius: var(--radius-card) var(--radius-card) 0 0; overflow: hidden; aspect-ratio: 16 / 9; background: rgb(220, 231, 255); }
@@ -7578,15 +7600,14 @@ const evidenceOpts = [
     @media (max-width: 1280px) {
       .wrap { padding: 0px 40px; }
       .topbarInner { padding: 0px 40px; }
-      .header90_card.platform { grid-template-columns: minmax(0px, 1fr) minmax(0px, 500px); }
-      .header90_card-content { padding: 38px 36px; }
+      .header90_card-content { padding: 38px 36px; max-width: min(700px, 68%); }
     }
     @media (max-width: 1080px) {
       .wrap { padding: 0px 24px; }
       .topbarInner { padding: 0px 24px; height: 68px; }
-      .header90_card.platform { grid-template-columns: minmax(0px, 1fr); min-height: 0px; }
-      .header90_card-content { padding: 32px 26px; }
-      .header90_background-image-wrapper-platform.improve { min-height: 320px; }
+      .header90_card.platform { min-height: 0px; }
+      .header90_card.platform::before { background: linear-gradient(180deg, rgba(4, 10, 26, 0.82) 0%, rgba(4, 10, 26, 0.56) 72%, rgba(4, 10, 26, 0.34) 100%); }
+      .header90_card-content { padding: 32px 26px; max-width: none; }
       .storyStack { --story-top: 0; --story-gap: 20px; padding-bottom: 48px; }
       .storyStack .storyCard { position: relative; top: auto; transition: none; opacity: 1; will-change: auto; transform: none !important; }
       .storyStack .storyCard:not(:first-child) { margin-top: 20px; }
@@ -7625,7 +7646,6 @@ const evidenceOpts = [
       .text-size-regular.text-color-secondary.max-width-prove { font-size: 17px; }
       .button-group { gap: 8px; }
       .button.w-button { width: 100%; }
-      .header90_background-image-wrapper-platform.improve { min-height: 240px; }
       .sectionHead h2 { font-size: 24px; }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -7758,11 +7778,6 @@ const evidenceOpts = [
         <h2>Recommended next actions</h2>
         <p class="panelSub">Suggested next steps for your team over the next 30 days.</p>
         <ol class="actionsList">${actions.map((line)=> `<li>${esc(line)}</li>`).join('')}</ol>
-      </article>
-      <article class="panel" id="recommended-resources">
-        <h2>Recommended resources</h2>
-        <p class="panelSub">Resources and content packs aligned to your priorities.</p>
-        <div class="resourceRow">${resources.map((item)=> `<span class="resourcePill">${esc(item)}</span>`).join('')}</div>
       </article>
       <article class="panel" id="recommended-for-you">
         <h2>Recommended for you</h2>
@@ -7984,6 +7999,7 @@ const evidenceOpts = [
       }
 
       function clearCustomerTemplatePreview(){
+        clearCustomerPreviewBuildTheatre();
         teardownCustomerPreviewStoryLayout();
         state.customerTemplateDraft = null;
         state.customerTemplateEditorTarget = null;
@@ -7998,6 +8014,119 @@ const evidenceOpts = [
       }
 
       let customerPreviewStoryRuntime = null;
+      let customerPreviewBuildTimers = [];
+      let customerPreviewBuildSession = 0;
+
+      function clearCustomerPreviewBuildTheatre(scope){
+        customerPreviewBuildSession += 1;
+        customerPreviewBuildTimers.forEach((timer)=> window.clearTimeout(timer));
+        customerPreviewBuildTimers = [];
+        const host = scope || $('#customerTemplatePreviewCanvas');
+        if(!host) return;
+        host.classList.remove('is-build-loading');
+        const overlay = host.querySelector('.customerPreviewBuildOverlay');
+        if(overlay){
+          overlay.classList.remove('is-active');
+          overlay.hidden = true;
+          overlay.style.opacity = '';
+          overlay.style.pointerEvents = '';
+        }
+      }
+
+      function ensureCustomerPreviewBuildOverlay(scope){
+        if(!scope) return null;
+        let overlay = scope.querySelector('.customerPreviewBuildOverlay');
+        if(overlay) return overlay;
+        overlay = document.createElement('div');
+        overlay.className = 'customerPreviewBuildOverlay';
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.hidden = true;
+        overlay.innerHTML = `
+          <div class="customerPreviewBuildSpinner"></div>
+          <p class="customerPreviewBuildLabel">Building your customer page</p>
+          <div class="customerPreviewBuildTrack"><span></span></div>
+        `;
+        scope.prepend(overlay);
+        return overlay;
+      }
+
+      function stageCustomerPreviewBuildBlocks(scope){
+        if(!scope) return [];
+        const blocks = Array.prototype.slice.call(scope.children).filter((node)=>
+          !!node
+          && node.nodeType === 1
+          && !node.classList.contains('customerPreviewBuildOverlay')
+        );
+        blocks.forEach((block, idx)=>{
+          block.classList.add('customerPreviewBuildBlock');
+          block.style.setProperty('--build-order', String(idx));
+        });
+        return blocks;
+      }
+
+      function runCustomerPreviewBuildTheatre(scope, opts){
+        const host = scope || $('#customerTemplatePreviewCanvas');
+        if(!host) return;
+        const options = (opts && typeof opts === 'object') ? opts : {};
+        const play = !!options.play;
+        const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        clearCustomerPreviewBuildTheatre(host);
+        const overlay = ensureCustomerPreviewBuildOverlay(host);
+        const blocks = stageCustomerPreviewBuildBlocks(host);
+        if(!overlay || !blocks.length){
+          return;
+        }
+        if(!play || reduceMotion){
+          host.classList.remove('is-build-loading');
+          overlay.classList.remove('is-active');
+          overlay.hidden = true;
+          overlay.style.opacity = '';
+          overlay.style.pointerEvents = '';
+          blocks.forEach((block)=>{
+            block.classList.remove('is-pending');
+            block.classList.add('is-visible');
+          });
+          return;
+        }
+        const session = customerPreviewBuildSession;
+        const totalMs = 5600;
+        const loaderMs = 2200;
+        const revealWindowMs = Math.max(2600, totalMs - loaderMs);
+        const stepMs = Math.max(150, Math.floor(revealWindowMs / Math.max(1, blocks.length)));
+
+        host.classList.add('is-build-loading');
+        overlay.hidden = false;
+        overlay.classList.add('is-active');
+        overlay.style.opacity = '1';
+        overlay.style.pointerEvents = 'auto';
+        blocks.forEach((block)=>{
+          block.classList.remove('is-visible');
+          block.classList.add('is-pending');
+        });
+
+        customerPreviewBuildTimers.push(window.setTimeout(()=>{
+          if(session !== customerPreviewBuildSession) return;
+          host.classList.remove('is-build-loading');
+        }, loaderMs));
+
+        blocks.forEach((block, idx)=>{
+          const delayMs = loaderMs + (idx * stepMs);
+          customerPreviewBuildTimers.push(window.setTimeout(()=>{
+            if(session !== customerPreviewBuildSession) return;
+            block.classList.remove('is-pending');
+            block.classList.add('is-visible');
+          }, delayMs));
+        });
+
+        customerPreviewBuildTimers.push(window.setTimeout(()=>{
+          if(session !== customerPreviewBuildSession) return;
+          overlay.classList.remove('is-active');
+          overlay.hidden = true;
+          overlay.style.opacity = '';
+          overlay.style.pointerEvents = '';
+          host.classList.remove('is-build-loading');
+        }, loaderMs + (stepMs * blocks.length) + 280));
+      }
 
       function clampPreviewNumber(value, min, max){
         return Math.min(max, Math.max(min, value));
@@ -8151,7 +8280,8 @@ const evidenceOpts = [
         });
       }
 
-      function renderCustomerTemplatePreview(){
+      function renderCustomerTemplatePreview(opts){
+        const options = (opts && typeof opts === 'object') ? opts : {};
         const wrap = $('#customerTemplatePreviewWrap');
         const meta = $('#customerTemplatePreviewMeta');
         const canvas = $('#customerTemplatePreviewCanvas');
@@ -8160,6 +8290,7 @@ const evidenceOpts = [
           ? state.customerTemplateDraft
           : null;
         if(!draft){
+          clearCustomerPreviewBuildTheatre(canvas);
           teardownCustomerPreviewStoryLayout();
           wrap.hidden = true;
           meta.textContent = 'Preview not generated yet.';
@@ -8179,6 +8310,8 @@ const evidenceOpts = [
         const whatsNewCards = Array.isArray(draft.whatsNewCards) ? draft.whatsNewCards.filter(Boolean).slice(0, 3) : [];
         const actions = Array.isArray(draft.actions) ? draft.actions.filter(Boolean).slice(0, 5) : [];
         const details = Array.isArray(draft.detailSections) ? draft.detailSections.filter(Boolean).slice(0, 6) : [];
+        const playBuildTheatre = !!(options.playBuildTheatre || state.customerTemplateBuildTheatrePending);
+        state.customerTemplateBuildTheatrePending = false;
         const pitch = (draft.elevatorPitch && typeof draft.elevatorPitch === 'object') ? draft.elevatorPitch : null;
         const understandingLead = `For ${String(draft.company || 'your organisation').trim() || 'your organisation'}, this means defensible evidence you can use with leadership and external stakeholders: clear baselines, visible movement over time, and proof aligned to board and regulatory expectations.`;
         const esc = (value)=> escapeHtml(String(value == null ? '' : value));
@@ -8294,13 +8427,6 @@ const evidenceOpts = [
             </ol>
           </article>
           <article class="customerPreviewSection">
-            <h5>Recommended resources</h5>
-            <p>Resources and content packs aligned to your priorities.</p>
-            <div class="customerPreviewCommercial">
-              ${(Array.isArray(draft.resources) ? draft.resources : []).slice(0, 8).map((item)=> `<span>${esc(item)}</span>`).join('')}
-            </div>
-          </article>
-          <article class="customerPreviewSection">
             <h5>Recommended for you</h5>
             <p>A short list of articles, webinars, and case studies selected for your team.</p>
             <div class="customerPreviewContentGrid">
@@ -8336,6 +8462,7 @@ const evidenceOpts = [
           ` : ''}
         `;
         initCustomerPreviewStoryLayout(canvas);
+        runCustomerPreviewBuildTheatre(canvas, { play: playBuildTheatre });
       }
 
       function openCustomerTemplatePreview(preferredThreadId){
@@ -8354,10 +8481,11 @@ const evidenceOpts = [
         }
         state.customerTemplateDraft = model;
         state.customerTemplateEditorTarget = null;
+        state.customerTemplateBuildTheatrePending = true;
         if(state.currentView === 'recommendations'){
           renderContentRecommendationsView(recommendationsGateFromThread(resolveRecommendationThread(state.recommendationsThreadId || 'current')));
         }else{
-          renderCustomerTemplatePreview();
+          renderCustomerTemplatePreview({ playBuildTheatre: true });
         }
         const wrap = $('#customerTemplatePreviewWrap');
         if(wrap){

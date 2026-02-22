@@ -225,7 +225,10 @@ function normalizeFormat(raw, fallback) {
 function inferredCanonicalUrl(format, slug) {
   const safeSlug = String(slug || '').trim();
   if (!safeSlug) return '';
-  if (format === 'blog-post' || format === 'c7-blog' || format === 'media-coverage') {
+  if (format === 'blog-post') {
+    return `https://www.immersivelabs.com/resources/blog/${encodeURIComponent(safeSlug)}/`;
+  }
+  if (format === 'c7-blog') {
     return `https://www.immersivelabs.com/resources/c7-blog/${encodeURIComponent(safeSlug)}/`;
   }
   if (format === 'case-study') {
@@ -238,6 +241,38 @@ function inferredCanonicalUrl(format, slug) {
     return `https://www.immersivelabs.com/resources/webinars/${encodeURIComponent(safeSlug)}/`;
   }
   return '';
+}
+
+function canonicalizeUrlByFormat(url, format, slug) {
+  const direct = normalizeHttpUrl(url);
+  if (!direct) return '';
+  const formatKey = String(format || '').trim().toLowerCase();
+  if (formatKey !== 'blog-post') return direct;
+  try {
+    const parsed = new URL(direct);
+    const host = String(parsed.hostname || '').toLowerCase();
+    if (!host.endsWith('immersivelabs.com')) return direct;
+    const currentPath = String(parsed.pathname || '');
+    if (currentPath === '/resources/c7-blog' || currentPath.startsWith('/resources/c7-blog/')) {
+      parsed.pathname = currentPath.replace(/^\/resources\/c7-blog(\/|$)/, '/resources/blog$1');
+      return parsed.toString();
+    }
+    if (currentPath === '/c7-blog' || currentPath.startsWith('/c7-blog/')) {
+      parsed.pathname = currentPath.replace(/^\/c7-blog(\/|$)/, '/resources/blog$1');
+      return parsed.toString();
+    }
+    if (currentPath === '/blog' || currentPath.startsWith('/blog/')) {
+      parsed.pathname = currentPath.replace(/^\/blog(\/|$)/, '/resources/blog$1');
+      return parsed.toString();
+    }
+    if ((currentPath === '/' || !currentPath) && String(slug || '').trim()) {
+      parsed.pathname = `/resources/blog/${encodeURIComponent(String(slug).trim())}/`;
+      return parsed.toString();
+    }
+  } catch (err) {
+    return direct;
+  }
+  return direct;
 }
 
 function pickValue(row, aliases) {
@@ -291,9 +326,10 @@ function buildRecord(row, sourcePath) {
   );
   const resolvedImageUrl = imageUrl || thumbnailUrl || headerImageUrl;
 
-  const canonicalUrl = normalizeHttpUrl(
+  const canonicalSeedUrl = normalizeHttpUrl(
     pickValue(row, ['URL', 'Canonical URL', 'url', 'canonicalUrl', 'canonical_url'])
   ) || inferredCanonicalUrl(format, slug);
+  const canonicalUrl = canonicalizeUrlByFormat(canonicalSeedUrl, format, slug);
 
   const externalUrl = normalizeHttpUrl(
     pickValue(row, [

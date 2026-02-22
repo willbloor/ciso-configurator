@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pioneer Cloud | Immersive customer dashboard template</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --primary-colours--black: #17181c; --primary-colours--azure: #3c64ff; --primary-colours--white: #ffffff; --background-color--alternate-25: #f5f5f9; --background-color--alternate-60: #d7d7e7; --text-color--primary: var(--primary-colours--black); --text-color--secondary: rgba(23,24,28,.80); --text-color--subtle: rgba(23,24,28,.40); --bg: var(--background-color--alternate-25); --surface: #fff; --ink: var(--text-color--primary); --muted: var(--text-color--secondary); --line: rgba(23,24,28,.14); --surface-dark: #0f1116; --surface-dark-2: #111d34; --ink-inverse: #eef4ff; --container: 1680px; --radius-card: 8px; --radius-btn: 4px; --font: "Geologica","Segoe UI",Roboto,Arial,sans-serif; --focus: 0 0 0 3px rgba(60,100,255,.22); --shadow-soft: 0 10px 28px rgba(7,18,44,.08); }
+    * { box-sizing: border-box; }
+    body { margin: 0px; background: var(--bg); color: var(--ink); font-family: var(--font); font-weight: 300; font-size: 18px; line-height: 1.2; }
+    h1, h2, h3 { margin: 0px; color: var(--text-color--primary); font-weight: 500; letter-spacing: -0.02em; }
+    .wrap { max-width: var(--container); width: 100%; margin: 0px auto; padding: 0px 64px; }
+    .topbar { position: sticky; top: 0px; z-index: 10; background: rgba(255, 255, 255, 0.96); border-bottom: 1px solid var(--background-color--alternate-60); }
+    .topbarInner { max-width: var(--container); width: 100%; margin: 0px auto; padding: 0px 64px; height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 0.9rem; }
+    .brand { display: inline-flex; align-items: center; }
+    .brand img { display: block; height: 28px; width: auto; }
+    .topPackagePill { border: 1px solid var(--line); border-radius: var(--radius-btn); background: rgb(255, 255, 255); padding: 10px 16px; font-size: 16px; line-height: 20.8px; color: rgb(43, 63, 105); font-weight: 400; }
+    .hero { margin-top: 20px; }
+    .padding-global.padding-24 { padding: 0px; }
+    .container-large { max-width: 100%; margin: 0px auto; }
+    .padding-section-24.platform-hero { padding: 0px; }
+    .header90_component { width: 100%; }
+    .header90_card.platform { position: relative; display: grid; grid-template-columns: minmax(0px, 1fr) minmax(0px, 580px); min-height: 430px; background: rgb(243, 244, 247); border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; isolation: isolate; }
+    .header90_background-image-wrapper.platform-2.improve-2 { position: absolute; inset: 0px; z-index: 0; pointer-events: none; overflow: hidden; }
+    .header90_background-image-wrapper.platform-2.improve-2::before { content: ""; position: absolute; right: 10%; top: 0px; bottom: 0px; width: 46%; height: auto; background: linear-gradient(rgb(132, 240, 240) 0%, rgb(77, 119, 255) 58%, rgb(53, 95, 255) 100%); opacity: 0.96; }
+    .header90_background-image-wrapper.platform-2.improve-2::after { content: ""; position: absolute; right: 5%; top: 0px; bottom: 0px; width: 54%; height: auto; background: radial-gradient(60% 70% at 20% 70%, rgba(81, 223, 186, 0.54), transparent 68%); filter: blur(16px); }
+    .header90_card-content { position: relative; z-index: 2; padding: 44px 44px 42px; display: flex; flex-direction: column; justify-content: center; background: transparent; }
+    .max-width-medium--lp { max-width: 62ch; }
+    .margin-bottom.margin-small { margin-bottom: 14px; }
+    .margin-bottom-16.margin-small { margin-bottom: 16px; }
+    .tag-17.is-text { display: inline-flex; align-items: center; min-height: 26px; padding: 6px 10px; border: 1px solid rgba(23, 24, 28, 0.14); border-radius: 999px; background: rgb(255, 255, 255); color: rgb(48, 71, 111); font-size: 12px; line-height: 1; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 400; }
+    .heading-style-h1.landing-page { margin: 0px; font-size: clamp(40px, 4.8vw, 62px); line-height: 1.03; max-width: 14ch; letter-spacing: -0.02em; color: var(--text-color--primary); font-weight: 500; }
+    .text-size-regular.text-color-secondary.max-width-prove { margin: 0px; max-width: 54ch; color: rgb(68, 85, 113); font-size: 18px; line-height: 1.35; }
+    .margin-top.margin-medium { margin-top: 22px; }
+    .button-group { display: flex; flex-wrap: wrap; gap: 10px; }
+    .button.w-button { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 12px 22px; border-radius: var(--radius-btn); border: 1px solid var(--primary-colours--azure); background: var(--primary-colours--azure); color: rgb(255, 255, 255); font-size: 16px; line-height: 20px; font-weight: 400; text-decoration: none; }
+    .button.w-button:hover { background: rgb(86, 119, 248); border-color: rgb(86, 119, 248); }
+    .button.is-secondary.is-lightmode.w-button { background: rgb(255, 255, 255); border-color: rgba(23, 24, 28, 0.18); color: rgb(31, 47, 82); }
+    .button.is-secondary.is-lightmode.w-button:hover { background: rgb(245, 247, 252); }
+    .header90_background-image-wrapper-platform.improve { position: relative; z-index: 1; min-height: 100%; overflow: hidden; background: transparent; }
+    .improve-lp-hero-image { position: absolute; inset: 0px; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; transform: none; z-index: 1; filter: drop-shadow(rgba(7, 18, 44, 0.22) 0px 24px 40px); }
+    .improve-ui-popup.prove { position: absolute; left: 8%; top: 18%; width: min(272px, 44%); height: auto; z-index: 2; filter: drop-shadow(rgba(7, 18, 44, 0.2) 0px 14px 26px); }
+    .layout { margin: 20px 0px 42px; display: grid; gap: 16px; }
+    .panel { border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-soft); padding: 24px; }
+    .panel h2 { font-size: 34px; line-height: 1.05; }
+    .panelSub { margin: 10px 0px 0px; color: var(--muted); font-size: 18px; line-height: 1.25; }
+    .sectionHead { display: flex; justify-content: space-between; gap: 22px; align-items: flex-end; margin-bottom: 32px; }
+    .sectionHead h2 { margin: 0px; font-size: clamp(1.7rem, 2.3vw, 2.2rem); line-height: 1.18; letter-spacing: -0.01em; }
+    .sectionHead p { margin: 0px; color: var(--muted); font-size: 18px; line-height: 1.5; }
+    .sectionHead--center { justify-content: center; align-items: center; text-align: center; padding: 50px 0px; }
+    .sectionHead--center > div { margin: 0px auto; }
+    .sectionHead--center h2 { font-size: clamp(2.55rem, 3.45vw, 3.3rem); }
+    .sectionHead--center p { font-size: 27px; }
+    .panel--understanding { border: none; border-radius: 0px; box-shadow: none; background: transparent; padding: 0px; }
+    .panel--understanding .understandingFeature { margin: 0px auto 56px; }
+    .panel--support { border: none; background: transparent; box-shadow: none; padding: 0px; }
+    .panel--outcomes h2 { font-size: 34px; }
+    .storyStack { --story-top: 96px; --story-gap: 20px; max-width: 1360px; margin: 20px auto 56px; padding-bottom: 120px; }
+    .storyCard { position: relative; z-index: 1; border: 1px solid var(--line); border-radius: var(--radius-card); background: rgb(255, 255, 255); box-shadow: rgba(7, 18, 44, 0.12) 0px 16px 52px, rgba(7, 18, 44, 0.06) 0px 2px 10px; overflow: hidden; }
+    .storyStack .storyCard { --story-i: 0; --story-scale: 1; position: sticky; top: calc(var(--story-top) + (var(--story-i) * var(--story-gap))); transform: scale(var(--story-scale)); transform-origin: center top; will-change: transform; opacity: 0; transition: opacity 0.5s; }
+    .storyStack .storyCard.is-in { opacity: 1; }
+    .storyStack .storyCard:not(:first-child) { margin-top: var(--story-gap); }
+    .storyStack .storyCard:nth-child(1) { z-index: 1; --story-i: 0; }
+    .storyStack .storyCard:nth-child(2) { z-index: 2; --story-i: 1; }
+    .storyStack .storyCard:nth-child(3) { z-index: 3; --story-i: 2; }
+    .storyInner { --story-min-h: 0; display: grid; grid-template-columns: minmax(0px, 1fr) minmax(0px, 1fr); min-height: var(--story-min-h); height: auto; transform: translateY(18px); transition: transform 0.5s; }
+    .storyCard.is-in .storyInner { transform: translateY(0px); }
+    .storyInner > .storyMedia, .storyInner > .storyContent { min-height: var(--story-min-h); }
+    .storyCard.reverse .storyMedia { order: 2; }
+    .storyCard.reverse .storyContent { order: 1; }
+    .storyMedia { position: relative; isolation: isolate; aspect-ratio: 1 / 1; background: var(--background-color--alternate-25); overflow: hidden; }
+    .storyMedia:not(.storyMedia--layered)::after { content: ""; position: absolute; inset: 0px; background: radial-gradient(80% 120% at 88% 86%, rgba(95, 163, 255, 0.28), transparent 68%); }
+    .storyMedia > img, .storyMedia > video { position: relative; z-index: 1; display: block; width: 100%; height: 100%; object-fit: cover; }
+    .storyMedia--layered { background: var(--story-media-bg,var(--background-color--alternate-25)); overflow: hidden; border-radius: 0px; isolation: isolate; }
+    .storyMedia--layered .layout408_image-wrapper { position: absolute; inset: 0px; overflow: hidden; }
+    .storyMedia--layered .layout408_image { position: absolute; inset: 0px; width: 100%; height: 100%; display: block; object-fit: cover; object-position: var(--story-bg-pos,center); z-index: 0; pointer-events: none; }
+    .storyMedia--layered .layout408_ui_screen, .storyMedia--layered .layout408_ui_popup { position: absolute; height: auto; max-width: none; width: auto; display: block; object-fit: contain; pointer-events: none; }
+    .storyMedia--layered .layout408_ui_screen { z-index: var(--story-screen-z,1); left: var(--story-screen-left,auto); right: var(--story-screen-right,auto); top: var(--story-screen-top,auto); bottom: var(--story-screen-bottom,auto); width: var(--story-screen-width,100%); height: var(--story-screen-height,auto); transform: var(--story-screen-transform,none); border-radius: var(--story-screen-radius,0); overflow: var(--story-screen-overflow,visible); background: var(--story-screen-bg,transparent); box-shadow: var(--story-screen-shadow,none); filter: var(--story-screen-filter,none); }
+    .storyMedia--layered .layout408_ui_popup { z-index: var(--story-popup-z,2); left: var(--story-popup-left,auto); right: var(--story-popup-right,auto); top: var(--story-popup-top,auto); bottom: var(--story-popup-bottom,auto); width: var(--story-popup-width,28%); opacity: var(--story-popup-opacity,1); mix-blend-mode: var(--story-popup-blend,normal); background: var(--story-popup-bg,transparent); border-radius: var(--story-popup-radius,0); filter: var(--story-popup-filter,none); }
+    .storyMedia--mitre { --story-media-bg: #05080f; --story-bg-pos: right center; --story-screen-z: 2; --story-screen-right: 0; --story-screen-top: 12%; --story-screen-width: 88%; --story-screen-height: 72%; --story-screen-radius: 10px 0 0 10px; --story-screen-overflow: hidden; --story-screen-shadow: 0 14px 34px rgba(7,18,44,.18); }
+    .storyMedia--mitre .layout408_ui_screen { mask-image: -webkit-radial-gradient(center, white, black); }
+    .storyMedia--mitre .layout408_ui_screen video { position: absolute; object-fit: cover; object-position: left top; display: block; border-radius: 0px; background: transparent; inset: 0px auto auto -2.5% !important; width: 202.5% !important; height: 100% !important; min-width: 0px !important; min-height: 0px !important; max-width: none !important; max-height: none !important; margin: 0px !important; transform: none !important; }
+    .storyMedia--prove { --story-media-bg: #f5f6fb; --story-bg-pos: center; --story-screen-z: 1; --story-screen-right: -47%; --story-screen-top: 50%; --story-screen-bottom: auto; --story-screen-width: 132%; --story-screen-transform: translateY(-50%); --story-screen-filter: drop-shadow(0 18px 36px rgba(7,18,44,.22)); --story-popup-z: 2; --story-popup-top: calc(11% - 20px); --story-popup-left: calc(8% + 130px); --story-popup-width: 45.36%; --story-popup-filter: drop-shadow(0 12px 24px rgba(7,18,44,.18)); }
+    .storyMedia--report { --story-media-bg: #f7eee3; --story-bg-pos: center; --story-screen-z: 1; --story-screen-right: -55.68%; --story-screen-top: 50%; --story-screen-bottom: auto; --story-screen-width: 142.68%; --story-screen-transform: translateY(-50%); --story-screen-filter: drop-shadow(0 18px 36px rgba(7,18,44,.22)); --story-popup-z: 3; --story-popup-left: 16%; --story-popup-bottom: 6%; --story-popup-width: 21.6%; --story-popup-opacity: 1; --story-popup-blend: normal; --story-popup-bg: #fff; --story-popup-radius: 14px; --story-popup-filter: drop-shadow(0 12px 24px rgba(7,18,44,.18)); }
+    .storyMedia--report .layout408_ui_popup.reporting { opacity: 1 !important; }
+    .storyCard--tour { position: relative; top: auto; will-change: auto; z-index: 1; transform: none !important; }
+    .storyCard--tour .storyInner { display: block; position: relative; aspect-ratio: 2 / 1; min-height: 0px; height: auto; background: rgb(3, 7, 18); }
+    .storyCard--tour .storyInner::before { content: ""; position: absolute; inset: 0px; z-index: 1; background: linear-gradient(rgba(5, 10, 24, 0.6) 0%, rgba(5, 10, 24, 0.72) 100%); pointer-events: none; }
+    .storyCard--tour .storyMedia--tour { position: absolute; inset: 0px; min-height: 100%; height: 100%; aspect-ratio: auto; background: rgb(3, 7, 18); z-index: 0; }
+    .storyCard--tour .storyMedia--tour video { position: absolute; inset: 0px; width: 100%; height: 100%; object-fit: cover; object-position: center center; display: block; }
+    .storyCard--tour .storyMedia--tour::after { display: none; }
+    .storyContent--tour { position: absolute; inset: 0px; z-index: 2; max-width: 760px; margin: 0px auto; padding: 44px 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
+    .storyContent { padding: 52px 50px; display: flex; flex-direction: column; justify-content: center; gap: 14px; background: rgb(255, 255, 255); }
+    .storyCard--tour .storyContent--tour { background: transparent; }
+    .storyKicker { margin: 0px 0px 4px; font-size: 14px; line-height: 18px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text-color--primary); font-weight: 300; opacity: 0.78; }
+    .storyCard--tour .storyKicker { color: rgba(255, 255, 255, 0.84); opacity: 1; }
+    .storyContent h3 { margin: 0px; font-size: 34px; line-height: 1.05; letter-spacing: -0.02em; color: rgb(18, 27, 47); font-weight: 500; }
+    .storyCard--tour .storyContent h3 { color: rgb(255, 255, 255); font-size: 34px; line-height: 1.08; }
+    .storyContent p { margin: 0px; color: rgb(63, 78, 105); font-size: 18px; line-height: 1.25; }
+    .storyCard--tour .storyContent p { color: rgba(255, 255, 255, 0.88); max-width: 64ch; font-size: 16px; line-height: 1.35; }
+    .storyBullets, .storyList { margin: 14px 0px 0px; padding: 0px; list-style: none; display: grid; gap: 10px; }
+    .storyBullets li, .storyList li { position: relative; padding-left: 18px; color: rgb(47, 63, 92); font-size: 18px; line-height: 1.25; }
+    .storyBullets li::before, .storyList li::before { content: ""; position: absolute; left: 0px; top: 0.62em; width: 6px; height: 6px; border-radius: 999px; background: var(--primary-colours--azure); }
+    .storyTourCta { margin-top: 8px; }
+    .storyTourBtn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 12px 24px; border-radius: var(--radius-btn); border: 1px solid rgba(60, 100, 255, 0.35); background: var(--primary-colours--azure); color: rgb(255, 255, 255); font-size: 16px; line-height: 20.8px; font-weight: 400; text-decoration: none; }
+    .storyTourBtn:hover { background: rgb(86, 119, 248); color: rgb(255, 255, 255); }
+    .outcomeGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
+    .outcomeCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 15%, var(--line)); border-radius: var(--radius-card); background: rgb(255, 255, 255); padding: 16px; display: grid; gap: 10px; }
+    .outcomeHead { display: grid; grid-template-columns: 54px minmax(0px, 1fr); gap: 12px; align-items: center; }
+    .outcomeRing { --pct: 0; position: relative; width: 54px; height: 54px; border-radius: 50%; background: conic-gradient(var(--primary-colours--azure) calc(var(--pct)*1%), #dfe4ef 0); display: grid; place-items: center; }
+    .outcomeRing::before { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: rgb(255, 255, 255); border: 1px solid rgba(23, 24, 28, 0.08); }
+    .outcomeRing span { position: relative; z-index: 1; font-size: 12px; line-height: 1; font-weight: 600; color: rgb(37, 58, 100); }
+    .outcomeCard h3 { margin: 0px; font-size: 24px; line-height: 1.15; color: rgb(26, 44, 79); }
+    .outcomeCard p { margin: 0px; color: rgb(75, 95, 131); font-size: 16px; line-height: 1.3; }
+    .actionsList { margin: 12px 0px 0px; padding-left: 1.2rem; display: grid; gap: 8px; font-size: 18px; line-height: 1.25; }
+    .resourceRow { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .resourcePill { border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: rgb(255, 255, 255); font-size: 14px; line-height: 18px; color: rgb(42, 58, 87); }
+    .understandingFeature { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0px, 1fr)); gap: 12px; align-items: stretch; }
+    .understandingFeatureCopy { border: none; border-radius: 0px; background: transparent; padding: 20px 22px; }
+    .understandingFeatureKicker { margin: 0px 0px 10px; font-size: 13px; line-height: 16px; text-transform: uppercase; letter-spacing: 0.14em; color: rgb(106, 120, 160); }
+    .understandingFeatureCopy h3 { margin: 0px; font-size: 36px; line-height: 1.05; color: rgb(27, 46, 86); }
+    .understandingFeatureCopy p { margin: 12px 0px 0px; color: rgb(62, 79, 111); font-size: 18px; line-height: 1.3; }
+    .understandingFeatureMedia { margin: 0px; min-height: 220px; border: none; border-radius: 0px; overflow: hidden; background: transparent; }
+    .understandingFeatureMedia img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .contentGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
+    .contentCard { border: 1px solid var(--line); border-radius: var(--radius-card); background: rgb(255, 255, 255); padding: 16px; display: grid; gap: 8px; }
+    .contentImageWrap { margin: -16px -16px 8px; border-radius: var(--radius-card) var(--radius-card) 0 0; overflow: hidden; aspect-ratio: 16 / 9; background: rgb(220, 231, 255); }
+    .contentImage { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .contentEyebrow { margin: 0px; font-size: 13px; line-height: 16px; letter-spacing: 0.1em; text-transform: uppercase; color: rgb(101, 119, 155); }
+    .contentCard h3 { margin: 0px; font-size: 24px; line-height: 1.15; }
+    .contentText { margin: 0px; color: rgb(76, 93, 124); font-size: 16px; line-height: 1.3; }
+    .contentLink { display: inline-flex; width: max-content; color: rgb(18, 56, 213); font-size: 16px; line-height: 20px; font-weight: 400; text-decoration: none; border-bottom: 1px solid rgba(18, 56, 213, 0.22); padding-bottom: 1px; }
+    .detailsGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
+    .detailCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 12%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(rgb(255, 255, 255), rgb(248, 250, 255)); padding: 16px; box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; }
+    .detailCard h3 { margin: 0px 0px 10px; font-size: 24px; line-height: 1.1; color: rgb(36, 60, 104); }
+    .kvRow { display: grid; grid-template-columns: 140px minmax(0px, 1fr); gap: 8px; font-size: 14px; line-height: 18px; padding: 6px 0px; border-bottom: 1px dashed rgba(15, 23, 42, 0.08); }
+    .kvRow:last-child { border-bottom: none; }
+    .kvLabel { color: rgb(96, 113, 143); }
+    .kvValue { color: rgb(23, 39, 66); }
+    footer { margin: 10px 0px 40px; color: rgb(107, 118, 144); font-size: 14px; line-height: 18px; text-align: right; }
+    @media (max-width: 1280px) {
+      .wrap { padding: 0px 40px; }
+      .topbarInner { padding: 0px 40px; }
+      .header90_card.platform { grid-template-columns: minmax(0px, 1fr) minmax(0px, 500px); }
+      .header90_card-content { padding: 38px 36px; }
+      .improve-ui-popup.prove { left: 8%; top: 16%; width: min(250px, 44%); }
+      .header90_background-image-wrapper.platform-2.improve-2::before { right: 8%; width: 50%; }
+    }
+    @media (max-width: 1080px) {
+      .wrap { padding: 0px 24px; }
+      .topbarInner { padding: 0px 24px; height: 68px; }
+      .header90_card.platform { grid-template-columns: minmax(0px, 1fr); min-height: 0px; }
+      .header90_card-content { padding: 32px 26px; }
+      .header90_background-image-wrapper-platform.improve { min-height: 280px; }
+      .header90_background-image-wrapper.platform-2.improve-2::before { right: 20%; width: 52%; }
+      .header90_background-image-wrapper.platform-2.improve-2::after { right: 16%; width: 56%; }
+      .improve-ui-popup.prove { left: 8%; top: 14%; width: min(220px, 40%); }
+      .storyStack { --story-top: 0; --story-gap: 20px; padding-bottom: 48px; }
+      .storyStack .storyCard { position: relative; top: auto; transition: none; opacity: 1; will-change: auto; transform: none !important; }
+      .storyStack .storyCard:not(:first-child) { margin-top: 20px; }
+      .storyInner { grid-template-columns: 1fr; min-height: 0px; height: auto; transform: none; transition: none; }
+      .storyInner > .storyMedia, .storyInner > .storyContent { min-height: 0px; }
+      .storyCard.reverse .storyMedia, .storyCard.reverse .storyContent { order: initial; }
+      .storyMedia { aspect-ratio: 16 / 11; }
+      .storyMedia--mitre { --story-screen-top: 14%; --story-screen-height: 68%; }
+      .storyMedia--prove { --story-screen-width: 137.5%; --story-screen-right: -47.5%; --story-popup-width: 48.72%; --story-popup-left: calc(6% + 130px); }
+      .storyMedia--report { --story-screen-width: 152.52%; --story-screen-right: -59.52%; --story-popup-width: 24.6%; --story-popup-left: 10%; --story-popup-bottom: 8%; }
+      .storyCard--tour .storyInner { aspect-ratio: 16 / 10; min-height: 420px; }
+      .storyContent--tour { max-width: none; padding: 30px 26px; }
+      .storyCard--tour .storyContent h3 { font-size: 30px; }
+      .storyCard--tour .storyInner::before { background: linear-gradient(rgba(5, 10, 24, 0.66) 0%, rgba(5, 10, 24, 0.8) 100%); }
+      .storyContent { padding: 30px 26px; }
+      .understandingFeature { grid-template-columns: 1fr; }
+      .outcomeGrid, .contentGrid, .detailsGrid { grid-template-columns: repeat(2, minmax(0px, 1fr)); }
+      .kvRow { grid-template-columns: 1fr; gap: 0.2rem; }
+    }
+    @media (max-width: 760px) {
+      .outcomeGrid, .contentGrid, .detailsGrid { grid-template-columns: 1fr; }
+      .header90_card-content { padding: 26px 20px; }
+      .panel { padding: 16px; }
+      .panel h2 { font-size: 28px; }
+      .sectionHead h2 { font-size: 28px; }
+      .storyContent h3 { font-size: 30px; }
+      .storyContent p, .storyBullets li, .storyList li, .actionsList, .understandingFeatureCopy p { font-size: 16px; }
+      .topPackagePill { font-size: 14px; line-height: 18px; padding: 8px 12px; }
+    }
+    @media (max-width: 479px) {
+      .wrap { padding: 0px 16px; }
+      .topbarInner { padding: 0px 16px; }
+      .tag-17.is-text { font-size: 11px; }
+      .heading-style-h1.landing-page { font-size: 34px; }
+      .text-size-regular.text-color-secondary.max-width-prove { font-size: 17px; }
+      .button-group { gap: 8px; }
+      .button.w-button { width: 100%; }
+      .header90_background-image-wrapper-platform.improve { min-height: 240px; }
+      .header90_background-image-wrapper.platform-2.improve-2::before { right: 18%; width: 54%; }
+      .improve-ui-popup.prove { width: min(170px, 40%); }
+      .sectionHead h2 { font-size: 24px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .storyCard, .storyInner { transition: none !important; transform: none !important; opacity: 1 !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbarInner">
+      <a class="brand" href="https://www.immersivelabs.com/" target="_blank" rel="noopener noreferrer" aria-label="Immersive">
+        <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg" alt="Immersive" />
+      </a>
+      <span class="topPackagePill">Recommended package: Advanced package</span>
+    </div>
+  </header>
+  <main class="wrap">
+    <section class="hero">
+      <div class="padding-global padding-24">
+        <div class="container-large">
+          <div class="padding-section-24 platform-hero">
+            <div class="header90_component">
+              <div class="header90_card platform">
+                <div class="header90_background-image-wrapper platform-2 improve-2"></div>
+                <div class="header90_card-content">
+                  <div class="max-width-medium--lp">
+                    <div class="margin-bottom margin-small">
+                      <div class="max-width-large-4">
+                        <div class="tag-17 is-text">Customer dashboard</div>
+                      </div>
+                    </div>
+                    <div class="margin-bottom-16 margin-small">
+                      <h1 class="heading-style-h1 landing-page">Pioneer Cloud readiness dashboard</h1>
+                    </div>
+                    <p class="text-size-regular text-color-secondary max-width-prove">Built from what Will Bloor shared. Recommendations focus on your top priorities and delivery outcomes.</p>
+                  </div>
+                  <div class="margin-top margin-medium">
+                    <div class="button-group">
+                      <a href="https://info.immersivelabs.com/whitepaper-improving-cyber-readiness" target="_blank" rel="noopener noreferrer" class="button w-button">Get the White Paper</a>
+                      <a href="https://www.immersivelabs.com/demo" target="_blank" rel="noopener noreferrer" class="button is-secondary is-lightmode w-button">Request a Demo</a>
+                    </div>
+                  </div>
+                </div>
+                <div class="header90_background-image-wrapper-platform improve" aria-hidden="true">
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/690dd160fa41a6ef7268b02d_584dc5dbb5fc30e2827548aabd2b706f_improve-lp-hero-image.webp" loading="eager" alt="" class="improve-lp-hero-image" />
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6902225b2a4bb3e47190b10a_28d69c85968eeef4480b03c088187cd2_home-ui-pop-up-2.webp" loading="lazy" alt="" class="improve-ui-popup prove" width="255" height="95" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="layout">
+      <article class="panel panel--outcomes"><h2>Your top outcomes</h2><p class="panelSub">The three priorities we recommend focusing on first.</p><div class="outcomeGrid"><article class="outcomeCard"><div class="outcomeHead"><div class="outcomeRing" style="--pct:61"><span>61%</span></div><h3>Compliance translated into evidence &amp; benchmarks</h3></div><p>Move from checkbox compliance to evidence-based capability mapped to NIST, MITRE, and DORA.</p></article><article class="outcomeCard"><div class="outcomeHead"><div class="outcomeRing" style="--pct:27"><span>27%</span></div><h3>Secure the next-gen modern enterprise</h3></div><p>Shrink attack surface and cut remediation time across code, cloud, identity, and network.</p></article><article class="outcomeCard"><div class="outcomeHead"><div class="outcomeRing" style="--pct:12"><span>12%</span></div><h3>Faster detection, response &amp; decision-making</h3></div><p>Cut MTTD/MTTR and make better business decisions under pressure.</p></article></div></article>
+      <article class="panel"><h2>What you told us in the meeting</h2><p class="panelSub">Your context, constraints, and operating priorities as we captured them.</p><div class="detailsGrid"><article class="detailCard"><h3>Your team</h3><div class="kvRow"><span class="kvLabel">Name</span><span class="kvValue">Will Bloor</span></div><div class="kvRow"><span class="kvLabel">Company</span><span class="kvValue">Pioneer Cloud</span></div><div class="kvRow"><span class="kvLabel">Role</span><span class="kvValue">CISO</span></div><div class="kvRow"><span class="kvLabel">Company size</span><span class="kvValue">10,000–50,000 employees</span></div><div class="kvRow"><span class="kvLabel">Operating country</span><span class="kvValue">United States</span></div></article><article class="detailCard"><h3>What we heard</h3><div class="kvRow"><span class="kvLabel">Pressure sources</span><span class="kvValue">Board · Regulator · Customers</span></div><div class="kvRow"><span class="kvLabel">Urgent win</span><span class="kvValue">Board-ready evidence &amp; benchmarks</span></div><div class="kvRow"><span class="kvLabel">Risk environment</span><span class="kvValue">Cloud · Identity</span></div><div class="kvRow"><span class="kvLabel">Measured on today</span><span class="kvValue">Vulnerability backlog</span></div><div class="kvRow"><span class="kvLabel">Organisation challenge</span><span class="kvValue">Proving to external stakeholders</span></div></article><article class="detailCard"><h3>Who we need to support</h3><div class="kvRow"><span class="kvLabel">Coverage groups</span><span class="kvValue">SOC / Incident Response · Cloud security · Executive Crisis Team (CMT)</span></div><div class="kvRow"><span class="kvLabel">Cadence</span><span class="kvValue">Programmatic</span></div><div class="kvRow"><span class="kvLabel">Measurement</span><span class="kvValue">Performance-centric</span></div></article><article class="detailCard"><h3>Preferred delivery model</h3><div class="kvRow"><span class="kvLabel">Realism</span><span class="kvValue">Must mirror our environment and threat landscape</span></div><div class="kvRow"><span class="kvLabel">Scope</span><span class="kvValue">Enterprise / multi-region / exec plus technical</span></div><div class="kvRow"><span class="kvLabel">Current state</span><span class="kvValue">Already under scrutiny (audits, board, regulators)</span></div><div class="kvRow"><span class="kvLabel">Delivery model</span><span class="kvValue">Dedicated program team + evidence packaging + bespoke realism</span></div><div class="kvRow"><span class="kvLabel">Risk frame</span><span class="kvValue">We need proof for governance</span></div></article><article class="detailCard"><h3>Operating context</h3><div class="kvRow"><span class="kvLabel">Industry</span><span class="kvValue">Technology / SaaS</span></div><div class="kvRow"><span class="kvLabel">Region</span><span class="kvValue">North America</span></div><div class="kvRow"><span class="kvLabel">Regulatory references</span><span class="kvValue">NIST CSF · ISO/IEC 27001 · SOC 2</span></div></article></div></article>
+      <div class="sectionHead sectionHead--center"><div><h2>Our understanding of your needs</h2><p>Measured readiness, not assumptions.</p></div></div>
+      <article class="panel panel--understanding"><div class="understandingFeature"><div class="understandingFeatureCopy"><p class="understandingFeatureKicker">Readiness narrative</p><h3>Measuring cyber readiness with Immersive</h3><p>Immersive does not just train teams. It measures real-world capability through hands-on labs and realistic exercises, so you can see where readiness is strong, where gaps remain, and how quickly those gaps are closing.</p><p>For Pioneer Cloud, this means defensible evidence you can use with leadership and external stakeholders: clear baselines, visible movement over time, and proof aligned to board and regulatory expectations.</p></div><figure class="understandingFeatureMedia"><img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/679228e2e5f16602a4b0c480_Why%20Immersive-cta-image.webp" alt="Immersive readiness visual" loading="lazy" width="770" height="645" /></figure></div></article>
+      <article class="panel panel--support">
+        <div class="storyStack">
+          <article class="storyCard reverse">
+            <div class="storyInner">
+              <div class="storyMedia storyMedia--layered storyMedia--mitre" data-story-media="mitre" aria-hidden="true">
+                <img class="layout408_image align-right" src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6914a13624dc6e2c54be0c0a_platform-hero-bg.webp" alt="" loading="lazy" width="679" height="679" />
+                <div class="layout408_ui_screen" aria-hidden="true">
+                  <video autoplay loop muted playsinline preload="metadata" style="background-image:url('https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69032ce5fea96c334f5e5f2d_Mitre-Attack-video-1_poster.0000000.jpg')">
+                    <source src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69032ce5fea96c334f5e5f2d_Mitre-Attack-video-1_mp4.mp4" type="video/mp4" />
+                    <source src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69032ce5fea96c334f5e5f2d_Mitre-Attack-video-1_webm.webm" type="video/webm" />
+                  </video>
+                </div>
+              </div>
+              <div class="storyContent">
+                <div class="storyKicker">PROVE</div>
+                <h3>Produce evidence of readiness under pressure</h3>
+                <p>Run realistic simulations that mirror scenarios that can matter in investment firms and portfolio operations (ransomware, business email compromise, data exfiltration, third-party compromise). Capture performance signals across security, IT, leadership, and communications, and export an after-action report.</p>
+                <ul class="storyList"><li>Pressure-test incident response, crisis leadership, and cross-team coordination</li><li>Validate playbooks across corporate teams and repeatable portfolio patterns</li><li>Generate post-exercise evidence that stands up to investor, auditor, and regulator scrutiny</li></ul>
+              </div>
+            </div>
+          </article>
+          <article class="storyCard">
+            <div class="storyInner">
+              <div class="storyMedia storyMedia--layered storyMedia--prove" data-story-media="prove" aria-hidden="true">
+                <div class="layout408_image-wrapper">
+                  <img alt="" src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6914a136dbf76d35c55ba7f5_platform-prove-square-bg.webp" loading="lazy" class="layout408_image" width="679" height="679" />
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6914a1365ac7c6f3dab67864_platform-prove-square-ui_screen.webp" loading="lazy" alt="" class="layout408_ui_screen" />
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6914a13604a36b3c5d7a73c1_platform-prove-square-ui_pop_up.webp" loading="lazy" alt="" class="layout408_ui_popup" />
+                </div>
+              </div>
+              <div class="storyContent">
+                <div class="storyKicker">IMPROVE</div>
+                <h3>Improve skills where risk concentrates</h3>
+                <p>Where gaps surface in exercises, use hands-on, role-specific labs for security teams, IT, developers, and high-impact business roles. Build repeatable practice for selected teams and, where relevant, portfolio environments.</p>
+                <ul class="storyList"><li>Target upskilling for cloud, identity, phishing/BEC, AppSec, and IR workflows</li><li>Support secure engineering for fintech and data platforms</li><li>Track improvement trends by role, team, and programme over time</li></ul>
+              </div>
+            </div>
+          </article>
+          <article class="storyCard reverse">
+            <div class="storyInner">
+              <div class="storyMedia storyMedia--layered storyMedia--report" data-story-media="report" aria-hidden="true">
+                <div class="layout408_image-wrapper">
+                  <img alt="" src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6914a1360925ed60f5365dd5_platform-report-square-bg.webp" loading="lazy" class="layout408_image" width="679" height="679" />
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6914a136bdbaadae3861c5a8_platform-report-square-ui_screen.webp" loading="lazy" alt="" class="layout408_ui_screen" />
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/690e14b11097d2dc702df512_report-ui-pop.webp" loading="lazy" alt="" class="layout408_ui_popup reporting" />
+                </div>
+              </div>
+              <div class="storyContent">
+                <div class="storyKicker">REPORT</div>
+                <h3>Produce defensible evidence and reporting</h3>
+                <p>If completion metrics are useful but insufficient for stakeholders, add scenario-based performance evidence (accuracy, speed, and decision quality) and export it in an executive-, investor-, and audit-ready format.</p>
+                <ul class="storyList"><li>Stakeholder-ready dashboards and after-action reporting</li><li>Evidence that supports privacy, safeguarding, and operational resilience expectations</li><li>Clear prioritisation: what to fix, who needs support, and what improved</li></ul>
+              </div>
+            </div>
+          </article>
+        </div>
+      </article>
+      <article class="storyCard storyCard--tour">
+        <div class="storyInner">
+          <div class="storyMedia storyMedia--tour" aria-hidden="true">
+            <video autoplay loop muted playsinline preload="metadata" poster="https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_poster.0000000.jpg">
+              <source src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_mp4.mp4" type="video/mp4" />
+              <source src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_webm.webm" type="video/webm" />
+            </video>
+          </div>
+          <div class="storyContent storyContent--tour">
+            <div class="storyKicker">PRODUCT TOUR</div>
+            <h3>Take a guided tour of the platform</h3>
+            <p>See how you can run scenario-based exercises, capture after-action evidence, and export summaries for stakeholders.</p>
+            <div class="storyTourCta"><a class="storyTourBtn" href="https://www.immersivelabs.com/demo" target="_blank" rel="noopener noreferrer">Take a Product Tour</a></div>
+          </div>
+        </div>
+      </article>
+      <article class="panel">
+        <h2>Recommended next actions</h2>
+        <p class="panelSub">Suggested next steps for your team over the next 30 days.</p>
+        <ol class="actionsList"><li>Lock framework mapping and define the evidence pack for board/regulator/insurer.</li><li>Prioritize code/cloud/identity/OT backlog and define remediation SLA targets.</li><li>Agree scenario scope, response KPIs (MTTD/MTTR/decision latency), and reporting cadence.</li></ol>
+      </article>
+      <article class="panel">
+        <h2>Recommended resources</h2>
+        <p class="panelSub">Resources and content packs aligned to your priorities.</p>
+        <div class="resourceRow"><span class="resourcePill">Framework-to-evidence mapping template (NIST / MITRE / DORA)</span><span class="resourcePill">Code/cloud/identity remediation benchmark pack</span><span class="resourcePill">Crisis decision and IR benchmarking examples</span></div>
+      </article>
+      <article class="panel">
+        <h2>Recommended for you</h2>
+        <p class="panelSub">A short list of articles, webinars, and case studies selected for your team.</p>
+        <div class="contentGrid">
+          <article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/blog-post-the-imperative-for-australian-boards-and-senior-executives-to-champion/720/420" alt="The Imperative for Australian Boards and Senior Executives to Champion Cyber Security Culture: Key Updates in the ISM Framework" loading="lazy" /></div><p class="contentEyebrow">Recommendation 1 | Blog post</p><h3>The Imperative for Australian Boards and Senior Executives to Champion Cyber Security Culture: Key Updates in the ISM Framework</h3><p class="contentText"><strong>Focus area:</strong> Compliance translated into evidence &amp; benchmarks</p><p class="contentText">Topics: cybersecurity-training · cybersecurity-exercising · compliance</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your compliance translated into evidence &amp; benchmarks priority.</p><a class="contentLink" href="https://www.google.com/search?q=site%3Aimmersivelabs.com%20The%20Imperative%20for%20Australian%20Boards%20and%20Senior%20Executives%20to%20Champion%20Cyber%20Security%20Culture%3A%20Key%20Updates%20in%20the%20ISM%20Framework" target="_blank" rel="noopener noreferrer">Find content</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/webinar-measuring-cyber-resilience-how-to-prove-to-the-board-your-team-is-ready-/720/420" alt="Measuring Cyber Resilience: How to Prove to the Board Your Team is Ready for the Next Attack" loading="lazy" /></div><p class="contentEyebrow">Recommendation 2 | Webinar</p><h3>Measuring Cyber Resilience: How to Prove to the Board Your Team is Ready for the Next Attack</h3><p class="contentText"><strong>Focus area:</strong> Compliance translated into evidence &amp; benchmarks</p><p class="contentText">Topics: cyber-resilience-framework</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your compliance translated into evidence &amp; benchmarks priority.</p><a class="contentLink" href="https://www.immersivelabs.com/resources/webinars/measuring-cyber-resilience-how-to-prove-to-the-board-your-team-is-ready-for-the-next-attack/" target="_blank" rel="noopener noreferrer">Open content</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/blog-post-secure-and-driving-roi-by-design-reframing-appsec-as-a-code-quality-im/720/420" alt="Secure and Driving ROI by Design: Reframing AppSec as a Code Quality Imperative" loading="lazy" /></div><p class="contentEyebrow">Recommendation 3 | Blog post</p><h3>Secure and Driving ROI by Design: Reframing AppSec as a Code Quality Imperative</h3><p class="contentText"><strong>Focus area:</strong> Secure the next-gen modern enterprise</p><p class="contentText">Topics: application-security-challenges · secure-coding</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your secure the next-gen modern enterprise priority.</p><a class="contentLink" href="https://www.google.com/search?q=site%3Aimmersivelabs.com%20Secure%20and%20Driving%20ROI%20by%20Design%3A%20Reframing%20AppSec%20as%20a%20Code%20Quality%20Imperative" target="_blank" rel="noopener noreferrer">Find content</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/blog-post-achieving-devsecops-maturity-turning-secure-code-into-roi/720/420" alt="Achieving DevSecOps Maturity: Turning Secure Code into ROI" loading="lazy" /></div><p class="contentEyebrow">Recommendation 4 | Blog post</p><h3>Achieving DevSecOps Maturity: Turning Secure Code into ROI</h3><p class="contentText"><strong>Focus area:</strong> Secure the next-gen modern enterprise</p><p class="contentText">Topics: application-security-challenges · secure-coding</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your secure the next-gen modern enterprise priority.</p><a class="contentLink" href="https://www.google.com/search?q=site%3Aimmersivelabs.com%20Achieving%20DevSecOps%20Maturity%3A%20Turning%20Secure%20Code%20into%20ROI" target="_blank" rel="noopener noreferrer">Find content</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/webinar-staffing-and-training-a-cyber-incident-response-team/720/420" alt="Staffing and Training a Cyber Incident Response Team" loading="lazy" /></div><p class="contentEyebrow">Recommendation 5 | Webinar</p><h3>Staffing and Training a Cyber Incident Response Team</h3><p class="contentText"><strong>Focus area:</strong> Faster detection, response &amp; decision-making</p><p class="contentText">Category: threat-intelligence</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your faster detection, response &amp; decision-making priority.</p><a class="contentLink" href="https://youtu.be/BJ1aN0xXWf0" target="_blank" rel="noopener noreferrer">Open content</a></article>
+        </div>
+      </article>
+      <article class="panel">
+        <h2>What's new</h2>
+        <div class="contentGrid" id="whatsNewGrid">
+          <article class="contentCard"><div class="contentImageWrap"><img class="contentImage" loading="lazy" src="https://cdn.prod.website-files.com/678a13476d0a697e355dec29/69789a8dedfc30dfad573b6e_Header%20Image.png" alt="Maximize CrowdStrike ROI with Immersive One Cyber Simulations" /></div><p class="contentEyebrow">Jan 27, 2026 | RSS post</p><h3>Maximize CrowdStrike ROI with Immersive One Cyber Simulations</h3><p class="contentText">Learn how Immersive One’s new CrowdStrike Falcon simulations help SOC teams close the readiness gap, reduce MTTR, and prove cyber resilience.</p><a class="contentLink" href="https://www.immersivelabs.com/resources/blog/maximizing-crowdstrike-roi-is-seamless-with-immersive-ones-new-capability" target="_blank" rel="noopener noreferrer">Read post</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" loading="lazy" src="https://cdn.prod.website-files.com/678a13476d0a697e355dec29/69787d5b0b5e5c18a0dd536d_Immersive%20-%20Blog%20Post%20-%202026%20Forecast%20Webinar%20Recap%20-%20Header%201920x1080.png" alt="2026 Cyber Readiness: Moving from Compliance to Capability" /></div><p class="contentEyebrow">Jan 27, 2026 | RSS post</p><h3>2026 Cyber Readiness: Moving from Compliance to Capability</h3><p class="contentText">Bridge the gap between perceived readiness and actual capability. Discover the 2026 cyber threat forecast, from quantum risks to AI prompt injection labs.</p><a class="contentLink" href="https://www.immersivelabs.com/resources/blog/the-cyber-readiness-outlook-2025-threat-reflections-and-2026-forecast" target="_blank" rel="noopener noreferrer">Read post</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" loading="lazy" src="https://cdn.prod.website-files.com/678a13476d0a697e355dec29/697240ba97401e17e76ab0cd_Header.png" alt="From Check-Box Training to Continuous Cyber Readiness" /></div><p class="contentEyebrow">Jan 22, 2026 | RSS post</p><h3>From Check-Box Training to Continuous Cyber Readiness</h3><p class="contentText">Learn how Swisscom is preparing for 2026 by moving beyond passive training to continuous, measurable readiness.</p><a class="contentLink" href="https://www.immersivelabs.com/resources/blog/from-check-box-training-to-continuous-readiness-how-one-immersive-customer-is-preparing-for-2026" target="_blank" rel="noopener noreferrer">Read post</a></article>
+        </div>
+      </article>
+    </section>
+    <footer>Prepared for Pioneer Cloud by Immersive Labs.</footer>
+  </main>
+  <script>
+    (function(){
+      var desktopQuery = window.matchMedia ? window.matchMedia('(min-width: 1081px)') : { matches:true };
+      var reduceMotionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches:false };
+      var maxShrink = 0.15;
+      var rafSync = 0;
+      var rafScale = 0;
+      var inViewObserver = null;
+      var contentObserver = null;
+
+      function clamp(value, min, max){
+        return Math.min(max, Math.max(min, value));
+      }
+
+      function allStoryCards(){
+        return Array.prototype.slice.call(document.querySelectorAll('.storyStack .storyCard'));
+      }
+
+      function storyGapPx(cards){
+        var first = (cards && cards.length) ? cards[0] : null;
+        if(!first) return 20;
+        var raw = window.getComputedStyle(first).getPropertyValue('--story-gap');
+        var parsed = parseFloat(raw);
+        return Number.isFinite(parsed) ? parsed : 20;
+      }
+
+      function syncStoryBlockHeights(){
+        var cards = allStoryCards();
+        if(!cards.length) return;
+        var isDesktop = !!desktopQuery.matches;
+        cards.forEach(function(card){
+          var row = card.querySelector('.storyInner');
+          var media = card.querySelector('.storyMedia');
+          var content = card.querySelector('.storyContent');
+          if(!row || !media || !content) return;
+          row.style.removeProperty('--story-min-h');
+          media.style.minHeight = '';
+          content.style.minHeight = '';
+          if(!isDesktop) return;
+          var mediaHeight = media.offsetHeight || 0;
+          var contentHeight = Math.max(content.offsetHeight || 0, content.scrollHeight || 0);
+          var nextHeight = Math.max(360, mediaHeight, contentHeight);
+          row.style.setProperty('--story-min-h', String(nextHeight) + 'px');
+          media.style.minHeight = String(nextHeight) + 'px';
+          content.style.minHeight = String(nextHeight) + 'px';
+        });
+      }
+
+      function updateStoryScales(){
+        var cards = allStoryCards();
+        if(!cards.length) return;
+        var disableTransitions = reduceMotionQuery.matches || !desktopQuery.matches;
+        if(disableTransitions){
+          cards.forEach(function(card){
+            card.style.setProperty('--story-scale', '1');
+          });
+          return;
+        }
+        var gap = storyGapPx(cards);
+        cards.forEach(function(card, idx){
+          var next = cards[idx + 1];
+          if(!next){
+            card.style.setProperty('--story-scale', '1');
+            return;
+          }
+          var rect = card.getBoundingClientRect();
+          var nextRect = next.getBoundingClientRect();
+          var full = card.offsetHeight || rect.height || 1;
+          var denom = Math.max(1, full - gap);
+          var overlap = (rect.top + full) - nextRect.top;
+          var progress = clamp(overlap / denom, 0, 1);
+          var scale = 1 - (maxShrink * progress);
+          card.style.setProperty('--story-scale', scale.toFixed(3));
+        });
+      }
+
+      function queueSync(){
+        window.cancelAnimationFrame(rafSync);
+        rafSync = window.requestAnimationFrame(syncStoryBlockHeights);
+      }
+
+      function queueScale(){
+        window.cancelAnimationFrame(rafScale);
+        rafScale = window.requestAnimationFrame(updateStoryScales);
+      }
+
+      function refreshStoryLayout(){
+        queueSync();
+        queueScale();
+      }
+
+      function markCardsInView(){
+        var cards = allStoryCards();
+        if(!cards.length) return;
+        var disable = reduceMotionQuery.matches || !desktopQuery.matches || !('IntersectionObserver' in window);
+        if(disable){
+          cards.forEach(function(card){
+            card.classList.add('is-in');
+          });
+          return;
+        }
+        if(inViewObserver){
+          inViewObserver.disconnect();
+        }
+        inViewObserver = new IntersectionObserver(function(entries){
+          entries.forEach(function(entry){
+            if(entry.isIntersecting) entry.target.classList.add('is-in');
+          });
+        }, { threshold:0.15 });
+        cards.forEach(function(card){
+          inViewObserver.observe(card);
+        });
+      }
+
+      window.addEventListener('resize', function(){
+        markCardsInView();
+        refreshStoryLayout();
+      }, { passive:true });
+      window.addEventListener('orientationchange', refreshStoryLayout, { passive:true });
+      window.addEventListener('scroll', queueScale, { passive:true });
+      window.addEventListener('load', function(){
+        markCardsInView();
+        refreshStoryLayout();
+      });
+      document.addEventListener('DOMContentLoaded', function(){
+        markCardsInView();
+        refreshStoryLayout();
+        if('ResizeObserver' in window){
+          contentObserver = new ResizeObserver(refreshStoryLayout);
+          document.querySelectorAll('.storyCard .storyContent').forEach(function(el){
+            contentObserver.observe(el);
+          });
+        }
+        document.querySelectorAll('.storyCard img, .storyCard video').forEach(function(asset){
+          asset.addEventListener('load', refreshStoryLayout, { once:true });
+          asset.addEventListener('loadedmetadata', refreshStoryLayout, { once:true });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

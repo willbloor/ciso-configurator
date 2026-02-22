@@ -6293,6 +6293,48 @@ const evidenceOpts = [
         return normalizedHttpUrl(match[1]);
       }
 
+      function plainTextFromHtml(raw){
+        const source = String(raw || '');
+        if(!source) return '';
+        if(window && window.DOMParser){
+          try{
+            const doc = new window.DOMParser().parseFromString(source, 'text/html');
+            const text = doc && doc.body ? String(doc.body.textContent || '').trim() : '';
+            if(text) return text;
+          }catch(err){
+            // fall through to regex fallback
+          }
+        }
+        return source.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      }
+
+      function cleanFeedMetadataLabel(raw){
+        return String(raw || '')
+          .replace(/![^!\s]{1,80}!/g, ' ')
+          .replace(/^[\s:;\-|]+/, '')
+          .replace(/[\s:;\-|]+$/, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+
+      function rssSummaryFromRaw(rawText, maxLen){
+        const limit = Math.max(80, Number(maxLen) || 180);
+        let text = plainTextFromHtml(rawText);
+        if(!text) return '';
+        text = text
+          .replace(/\s*:[^:]{2,80}:\s*![^!]{2,120}!/gi, ' ')
+          .replace(/![^!\s]{1,80}!/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if(!text) return '';
+        if(text.length <= limit) return text;
+        const cutoff = text.lastIndexOf(' ', limit - 1);
+        if(cutoff > 80){
+          return `${text.slice(0, cutoff).trim()}…`;
+        }
+        return `${text.slice(0, limit - 1).trim()}…`;
+      }
+
       function parseRssRows(feed, xmlText){
         if(!(window && window.DOMParser) || !feed || !xmlText) return [];
         let doc = null;
@@ -6319,13 +6361,15 @@ const evidenceOpts = [
           const link = normalizedHttpUrl(textBySelectors(['link']));
           if(!title || !link) return null;
           const pubDate = textBySelectors(['pubDate', 'dc\\:date']);
-          const category = textBySelectors(['category']) || feed.label;
+          const category = cleanFeedMetadataLabel(textBySelectors(['category']) || feed.label);
+          const rawDescription = textBySelectors(['content\\:encoded', 'description']) || textBySelectors(['description', 'content\\:encoded']);
+          const summary = rssSummaryFromRaw(rawDescription, 190);
           const slug = safeSlugForContent(title);
           const id = `${feed.key}:rss:${slug}:${idx}`;
           const nodeXml = (window && window.XMLSerializer) ? new window.XMLSerializer().serializeToString(node) : '';
           const mediaNode = node.querySelector('enclosure[url], media\\:content[url], media\\:thumbnail[url]');
           const imageUrl = normalizedHttpUrl(mediaNode ? mediaNode.getAttribute('url') : '')
-            || firstImageFromHtmlString(textBySelectors(['content\\:encoded', 'description']))
+            || firstImageFromHtmlString(rawDescription || textBySelectors(['content\\:encoded', 'description']))
             || firstImageFromHtmlString(nodeXml);
           return {
             id,
@@ -6339,6 +6383,7 @@ const evidenceOpts = [
             linkLabel: 'Open content',
             publishedOn: pubDate,
             sourceCsv: `RSS: ${feed.label}`,
+            summary,
             imageUrl
           };
         }).filter(Boolean);
@@ -6602,10 +6647,16 @@ const evidenceOpts = [
         const meta = outcomeById(outcome && outcome.id) || outcome || {};
         if(!matched) return null;
         const opts = (options && typeof options === 'object') ? options : {};
-        const topicLine = (matched.topicTags || []).slice(0, 3).join(' · ');
-        const summary = topicLine
-          ? `Topics: ${topicLine}`
-          : (matched.category ? `Category: ${matched.category}` : 'Catalog item from current Webflow export.');
+        const topicLine = (matched.topicTags || [])
+          .map((tag)=> cleanFeedMetadataLabel(tag))
+          .filter(Boolean)
+          .slice(0, 3)
+          .join(' · ');
+        const itemSummary = rssSummaryFromRaw(matched.summary || '', 180);
+        const categoryLabel = cleanFeedMetadataLabel(matched.category || '');
+        const summary = itemSummary
+          || (topicLine ? `Topics: ${topicLine}` : '')
+          || (categoryLabel ? `Category: ${categoryLabel}` : 'Catalog item from current Webflow export.');
         const outcomeLabel = String(opts.outcomeLabel || meta.short || meta.label || 'Priority outcome');
         const formatKey = String(matched.format || '').trim().toLowerCase();
         const whyOverride = String(opts.why || '').trim();
@@ -6834,25 +6885,11 @@ const evidenceOpts = [
           : 'You are focused on improving measurable cyber readiness across your priority teams.';
         const improveTarget = outcomeTitles[0] || 'your highest-priority outcome';
         const proveTarget = outcomeTitles[1] || improveTarget;
-        const benchmarkTarget = outcomeTitles[2] || outcomeTitles[0] || 'readiness performance';
+        const reportTarget = outcomeTitles[2] || outcomeTitles[0] || 'readiness performance';
         const coverageLabel = coverageFocus.length ? naturalList(coverageFocus) : 'security, IT, and engineering teams';
         const pressureLabel = pressureFocus.length ? naturalList(pressureFocus) : 'board, investor, and regulator scrutiny';
+        const companyLabel = String(record.company || 'your organisation').trim() || 'your organisation';
         const valueCards = [
-          {
-            id: 'improve',
-            kicker: 'IMPROVE',
-            title: 'Improve skills where risk concentrates',
-            text: `Where gaps surface around ${String(improveTarget).toLowerCase()}, use hands-on, role-specific labs to build repeatable capability in ${coverageLabel}.`,
-            bullets: [
-              `Target upskilling for the workflows behind ${String(improveTarget).toLowerCase()}.`,
-              `Focus enablement across ${coverageLabel}.`,
-              'Track improvement trends by role, team, and programme over time.'
-            ],
-            mediaType: 'image',
-            mediaUrl: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/68e77550b8f89efeb6bfb3a6_cyber-drill-product.png',
-            mediaAlt: 'Improve card visual',
-            reverse: true
-          },
           {
             id: 'prove',
             kicker: 'PROVE',
@@ -6863,24 +6900,30 @@ const evidenceOpts = [
               'Validate playbooks across core teams and repeatable operating patterns.',
               'Generate post-exercise evidence for investor, auditor, and regulator review.'
             ],
-            mediaType: 'image',
-            mediaUrl: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/69848bd313059d7ecc7021f9_immersive-home-hero_poster.0000000.jpg',
-            mediaAlt: 'Prove card visual',
+            reverse: true
+          },
+          {
+            id: 'improve',
+            kicker: 'IMPROVE',
+            title: 'Improve skills where risk concentrates',
+            text: `Where gaps surface around ${String(improveTarget).toLowerCase()}, use hands-on, role-specific labs to build repeatable capability in ${coverageLabel}.`,
+            bullets: [
+              `Target upskilling for the workflows behind ${String(improveTarget).toLowerCase()}.`,
+              `Focus enablement across ${coverageLabel}.`,
+              'Track improvement trends by role, team, and programme over time.'
+            ],
             reverse: false
           },
           {
-            id: 'benchmark-report',
-            kicker: 'BENCHMARK & REPORT',
-            title: 'Benchmark progress and report with confidence',
-            text: `Benchmark performance around ${String(benchmarkTarget).toLowerCase()} so leadership can compare teams, track movement, and prioritize faster.`,
+            id: 'report',
+            kicker: 'REPORT',
+            title: 'Produce defensible evidence and reporting',
+            text: `Turn exercise and lab performance around ${String(reportTarget).toLowerCase()} into stakeholder-ready outputs ${companyLabel} can use with leadership and external reviewers.`,
             bullets: [
-              'Compare readiness by role, function, and business unit.',
-              'Turn progress into concise reporting for executive stakeholders.',
-              'Use evidence-led follow-up plans to improve decision quality each cycle.'
+              'Stakeholder-ready dashboards and after-action reporting.',
+              'Evidence that supports privacy, safeguarding, and operational resilience expectations.',
+              'Clear prioritisation: what to fix, who needs support, and what improved.'
             ],
-            mediaType: 'image',
-            mediaUrl: 'https://cdn.prod.website-files.com/678a13476d0a697e355dec29/69724f5f954bd062b7a25aaf_Blog%20Post%20-%20Header%20Image.png',
-            mediaAlt: 'Benchmark and report card visual',
             reverse: true
           }
         ];
@@ -6899,11 +6942,39 @@ const evidenceOpts = [
           Number.isFinite(npv) ? { label:'NPV (3yr)', value:fmtMoneyUSD(npv) } : null,
           Number.isFinite(paybackMonths) ? { label:'Payback', value:fmtPayback(paybackMonths) } : null
         ].filter(Boolean);
-        const outcomesLabel = topOutcomes.length
-          ? topOutcomes.map((outcome)=> String((outcome && (outcome.short || outcome.label)) || '').trim()).filter(Boolean).join(' | ')
-          : 'Outcome priorities not captured';
         const agenda = buildNextMeetingAgenda(topOutcomes).slice(0, 4);
         const resources = buildRecommendedResources(topOutcomes).slice(0, 5);
+        const curatedContentCards = cards.length
+          ? cards
+            .filter((card)=> !isRssCatalogSource(card && card.source))
+            .slice(0, 9)
+          : [];
+        const newsItems = pickLatestCatalogItemsByFormats(['c7-blog', 'blog-post'], new Set(), 3);
+        const whatsNewCards = (newsItems.length
+          ? newsItems.map((item)=> ({
+              format: 'RSS post',
+              formatKey: String(item.format || '').trim().toLowerCase() || 'rss-post',
+              title: String(item.title || '').trim() || 'Latest update',
+              summary: rssSummaryFromRaw(item.summary || '', 190) || 'Latest update from the Immersive Labs blog.',
+              url: String(item.url || '').trim(),
+              linkLabel: 'Read post',
+              publishedOn: String(item.publishedOn || '').trim(),
+              imageUrl: cardImageUrlForItem(item)
+            }))
+          : cards
+            .filter((card)=> isRssCatalogSource(card && card.source) || /(?:c7-blog|blog-post)/i.test(String(card && card.formatKey || '')))
+            .slice(0, 3)
+            .map((card)=> ({
+              format: 'RSS post',
+              formatKey: String(card && card.formatKey || '').trim().toLowerCase() || 'rss-post',
+              title: String(card && card.title || '').trim() || 'Latest update',
+              summary: rssSummaryFromRaw(card && card.summary || '', 190) || 'Latest update from the Immersive Labs blog.',
+              url: String(card && card.url || '').trim(),
+              linkLabel: 'Read post',
+              publishedOn: String(card && card.publishedOn || '').trim(),
+              imageUrl: cardImageUrlForItem(card)
+            }))
+        ).slice(0, 3);
         const detailSections = [
           { title:'Your team', rows: organizationRows.slice(0, 5) },
           { title:'What we heard', rows: discoveryRows.slice(0, 5) },
@@ -6949,8 +7020,8 @@ const evidenceOpts = [
             pitch30: String(pitch.pitch30 || ''),
             pitch60: String(pitch.pitch60 || '')
           },
-          contentCards: cards.length
-              ? cards.map((card)=> Object.assign({}, card, {
+          contentCards: (curatedContentCards.length ? curatedContentCards : cards).length
+              ? (curatedContentCards.length ? curatedContentCards : cards).map((card)=> Object.assign({}, card, {
                   imageUrl: cardImageUrlForItem(card)
                 }))
               : [{
@@ -6964,6 +7035,7 @@ const evidenceOpts = [
                   linkLabel:'Explore resources',
                   imageUrl:picsumContentImage('no-mapped-content', 720, 420)
                 }],
+          whatsNewCards,
           detailSections
         };
       }
@@ -6971,50 +7043,175 @@ const evidenceOpts = [
       function customerTemplateHtmlFromModel(modelInput){
         const model = (modelInput && typeof modelInput === 'object') ? modelInput : null;
         if(!model) return '';
+
         const esc = (value)=> String(value == null ? '' : value)
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#39;');
+
         const hero = (model.hero && typeof model.hero === 'object') ? model.hero : {};
-        const heroStats = Array.isArray(hero.stats) ? hero.stats.filter((row)=> row && (row.label || row.value)).slice(0, 4) : [];
         const outcomeBlocks = Array.isArray(model.outcomeBlocks) ? model.outcomeBlocks.filter(Boolean).slice(0, 3) : [];
-        const commercialSignals = Array.isArray(model.commercialSignals) ? model.commercialSignals.filter((row)=> row && (row.label || row.value)).slice(0, 3) : [];
-        const valueCards = Array.isArray(model.valueCards) ? model.valueCards.filter(Boolean).slice(0, 3) : [];
         const actions = Array.isArray(model.actions) ? model.actions.filter(Boolean).slice(0, 6) : [];
         const resources = Array.isArray(model.resources) ? model.resources.filter(Boolean).slice(0, 8) : [];
         const cards = Array.isArray(model.contentCards) ? model.contentCards.filter(Boolean).slice(0, 9) : [];
+        const whatsNewCardsInput = Array.isArray(model.whatsNewCards) ? model.whatsNewCards.filter(Boolean).slice(0, 3) : [];
         const details = Array.isArray(model.detailSections) ? model.detailSections.filter(Boolean).slice(0, 6) : [];
-        const pitch = (model.elevatorPitch && typeof model.elevatorPitch === 'object') ? model.elevatorPitch : null;
         const packageRecommendation = (model.packageRecommendation && typeof model.packageRecommendation === 'object')
           ? model.packageRecommendation
           : { tier: String(model.tier || 'Core'), title: `${String(model.tier || 'Core')} package`, rationale: '' };
-        const understandingText = String(model.needsSummary || (pitch ? pitch.pitch30 : '') || '').trim();
-        const understandingImageUrl = picsumContentImage(`${String(model.company || 'customer').trim()}-understanding`, 960, 640);
-        const logoSrc = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg';
-        const demoCard = (model.demoCard && typeof model.demoCard === 'object') ? model.demoCard : null;
-        const safeToken = (value)=> String(value || '')
+        const valueCardsRaw = Array.isArray(model.valueCards) ? model.valueCards.filter(Boolean).slice(0, 6) : [];
+        const demoCard = (model.demoCard && typeof model.demoCard === 'object')
+          ? model.demoCard
+          : {
+              kicker: 'PRODUCT TOUR',
+              title: 'Take a guided tour of the platform',
+              text: 'See how you can run scenario-based exercises, capture after-action evidence, and export summaries for stakeholders.',
+              ctaLabel: 'Take a Product Tour',
+              ctaUrl: 'https://www.immersivelabs.com/demo',
+              videoPoster: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_poster.0000000.jpg',
+              videoMp4: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_mp4.mp4',
+              videoWebm: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_webm.webm'
+            };
+
+        const normalizedId = (value)=> String(value || '')
           .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '');
-        const renderStoryCard = (card, idx)=>{
-          const entry = (card && typeof card === 'object') ? card : {};
-          const token = safeToken(entry.id || entry.kicker || entry.title || `focus-${idx + 1}`) || `focus-${idx + 1}`;
-          const reverseClass = entry.reverse ? ' reverse' : '';
-          const bullets = Array.isArray(entry.bullets) ? entry.bullets.map((item)=> String(item || '').trim()).filter(Boolean).slice(0, 4) : [];
-          const mediaType = String(entry.mediaType || 'image').toLowerCase();
-          const mediaUrl = String(entry.mediaUrl || '').trim();
-          const mediaAlt = String(entry.mediaAlt || entry.title || 'Story media').trim() || 'Story media';
-          const media = mediaType === 'video'
-            ? `<video autoplay loop muted playsinline preload="metadata"${entry.videoPoster ? ` poster="${esc(entry.videoPoster)}"` : ''}>${entry.videoMp4 ? `<source src="${esc(entry.videoMp4)}" type="video/mp4" />` : ''}${entry.videoWebm ? `<source src="${esc(entry.videoWebm)}" type="video/webm" />` : ''}</video>`
-            : (mediaUrl ? `<img src="${esc(mediaUrl)}" alt="${esc(mediaAlt)}" loading="lazy" />` : '');
-          return `<article class="storyCard${reverseClass}"><div class="storyInner"><div class="storyMedia storyMedia--${esc(token)}" aria-hidden="true">${media}</div><div class="storyContent"><div class="storyKicker">${esc(entry.kicker || 'FOCUS')}</div><h3>${esc(entry.title || 'Customer value focus')}</h3><p>${esc(entry.text || '')}</p>${bullets.length ? `<ul class="storyBullets">${bullets.map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}</div></div></article>`;
+          .replace(/[^a-z0-9]+/g, '');
+
+        const metricPercent = (metric, fallbackIdx)=>{
+          const match = String(metric || '').match(/(\d{1,3})/);
+          if(match){
+            return clamp(Number(match[1]) || 0, 0, 100);
+          }
+          const fallback = [61, 27, 12][Number(fallbackIdx) || 0];
+          return clamp(Number(fallback) || 0, 0, 100);
         };
-        const storyCardsHtml = valueCards.map((card, idx)=> renderStoryCard(card, idx)).join('');
-        const demoCardHtml = demoCard
-          ? `<article class="storyCard storyCard--tour"><div class="storyInner"><div class="storyMedia storyMedia--tour" aria-hidden="true"><video autoplay loop muted playsinline preload="metadata"${demoCard.videoPoster ? ` poster="${esc(demoCard.videoPoster)}"` : ''}>${demoCard.videoMp4 ? `<source src="${esc(demoCard.videoMp4)}" type="video/mp4" />` : ''}${demoCard.videoWebm ? `<source src="${esc(demoCard.videoWebm)}" type="video/webm" />` : ''}</video></div><div class="storyContent storyContent--tour"><h3>${esc(demoCard.title || 'Take a guided tour')}</h3><p>${esc(demoCard.text || '')}</p><div class="storyTourCta">${demoCard.ctaUrl ? `<a class="storyTourBtn" href="${esc(demoCard.ctaUrl)}" target="_blank" rel="noopener noreferrer">${esc(demoCard.ctaLabel || 'Take a Product Tour')}</a>` : ''}</div></div></div></article>`
-          : '';
+
+        const formatPublishedLabel = (value)=>{
+          const text = String(value || '').trim();
+          if(!text) return '';
+          const ts = Date.parse(text);
+          if(!Number.isFinite(ts)) return '';
+          try{
+            return new Intl.DateTimeFormat(undefined, { year:'numeric', month:'short', day:'numeric' }).format(new Date(ts));
+          }catch(err){
+            return '';
+          }
+        };
+
+        const defaultStoryCards = {
+          prove: {
+            id: 'prove',
+            kicker: 'PROVE',
+            title: 'Produce evidence of readiness under pressure',
+            text: 'Run realistic simulations that mirror scenarios that matter in your environment, capture performance signals across technical and leadership teams, and export an after-action report.',
+            bullets: [
+              'Pressure-test incident response, crisis leadership, and cross-team coordination',
+              'Validate playbooks across corporate teams and repeatable operating patterns',
+              'Generate post-exercise evidence that stands up to investor, auditor, and regulator scrutiny'
+            ],
+            reverse: true
+          },
+          improve: {
+            id: 'improve',
+            kicker: 'IMPROVE',
+            title: 'Improve skills where risk concentrates',
+            text: 'Where gaps surface in exercises, use hands-on, role-specific labs for security teams, IT, developers, and high-impact business roles.',
+            bullets: [
+              'Target upskilling for cloud, identity, phishing/BEC, AppSec, and IR workflows',
+              'Support secure engineering for modern enterprise and data platforms',
+              'Track improvement trends by role, team, and programme over time'
+            ],
+            reverse: false
+          },
+          report: {
+            id: 'report',
+            kicker: 'REPORT',
+            title: 'Produce defensible evidence and reporting',
+            text: 'Turn scenario performance into evidence showing accuracy, speed, and decision quality, and export it in an executive-, investor-, and audit-ready format.',
+            bullets: [
+              'Stakeholder-ready dashboards and after-action reporting',
+              'Evidence that supports privacy, safeguarding, and operational resilience expectations',
+              'Clear prioritisation: what to fix, who needs support, and what improved'
+            ],
+            reverse: true
+          }
+        };
+
+        const storyCardMap = new Map();
+        valueCardsRaw.forEach((card)=>{
+          const id = normalizedId((card && card.id) || (card && card.kicker) || (card && card.title));
+          if(!id) return;
+          storyCardMap.set(id, card);
+        });
+
+        const pickStoryCard = (token, fallback)=>{
+          const key = normalizedId(token);
+          const aliases = {
+            prove: ['prove'],
+            improve: ['improve'],
+            report: ['report', 'benchmarkreport']
+          };
+          const keys = aliases[key] || [key];
+          for(let i = 0; i < keys.length; i += 1){
+            if(storyCardMap.has(keys[i])){
+              return Object.assign({}, fallback, storyCardMap.get(keys[i]));
+            }
+          }
+          return Object.assign({}, fallback);
+        };
+
+        const proveCard = pickStoryCard('prove', defaultStoryCards.prove);
+        const improveCard = pickStoryCard('improve', defaultStoryCards.improve);
+        const reportCard = pickStoryCard('report', defaultStoryCards.report);
+
+        const renderStoryList = (items)=>{
+          const rows = Array.isArray(items)
+            ? items.map((item)=> String(item || '').trim()).filter(Boolean).slice(0, 4)
+            : [];
+          if(!rows.length) return '';
+          return `<ul class="storyList">${rows.map((row)=> `<li>${esc(row)}</li>`).join('')}</ul>`;
+        };
+
+        const renderRecommendedCard = (card, idx)=>{
+          const item = (card && typeof card === 'object') ? card : {};
+          const formatLabel = String(item.format || 'Content').trim() || 'Content';
+          const focusArea = String(item.outcomeLabel || 'Priority outcome').trim() || 'Priority outcome';
+          const summary = String(item.summary || '').trim();
+          const why = String(item.why || '').trim();
+          return `<article class="contentCard">${item.imageUrl ? `<div class="contentImageWrap"><img class="contentImage" src="${esc(item.imageUrl)}" alt="${esc(item.title || 'Recommended content image')}" loading="lazy" /></div>` : ''}<p class="contentEyebrow">Recommendation ${idx + 1} | ${esc(formatLabel)}</p><h3>${esc(item.title || 'Content block')}</h3><p class="contentText"><strong>Focus area:</strong> ${esc(focusArea)}</p>${summary ? `<p class="contentText">${esc(summary)}</p>` : ''}${why ? `<p class="contentText"><strong>Why this is relevant:</strong> ${esc(why)}</p>` : ''}${item.url ? `<a class="contentLink" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.linkLabel || 'Open content')}</a>` : ''}</article>`;
+        };
+
+        const newsCards = (whatsNewCardsInput.length
+          ? whatsNewCardsInput
+          : cards.filter((card)=> /(?:c7-blog|blog-post|rss)/i.test(String(card && (card.formatKey || card.format || '') || ''))).slice(0, 3)
+        ).slice(0, 3);
+        const finalNewsCards = newsCards.length
+          ? newsCards
+          : cards.slice(0, 3).map((card)=> ({
+              title: String(card && card.title || '').trim() || 'Latest update',
+              summary: String(card && card.summary || '').trim() || 'Latest update from Immersive Labs.',
+              url: String(card && card.url || '').trim(),
+              linkLabel: String(card && card.linkLabel || '').trim() || 'Read post',
+              publishedOn: String(card && card.publishedOn || '').trim(),
+              imageUrl: String(card && card.imageUrl || '').trim()
+            }));
+
+        const renderNewsCard = (card)=>{
+          const item = (card && typeof card === 'object') ? card : {};
+          const publishedLabel = formatPublishedLabel(item.publishedOn);
+          const eyebrow = publishedLabel ? `${publishedLabel} | RSS post` : 'RSS post';
+          const summary = String(item.summary || '').trim() || 'Latest update from the Immersive Labs blog.';
+          const linkLabel = String(item.linkLabel || '').trim() || 'Read post';
+          return `<article class="contentCard">${item.imageUrl ? `<div class="contentImageWrap"><img class="contentImage" loading="lazy" src="${esc(item.imageUrl)}" alt="${esc(item.title || 'Latest post image')}" /></div>` : ''}<p class="contentEyebrow">${esc(eyebrow)}</p><h3>${esc(item.title || 'Latest post')}</h3><p class="contentText">${esc(summary)}</p>${item.url ? `<a class="contentLink" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(linkLabel)}</a>` : ''}</article>`;
+        };
+
+        const logoSrc = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg';
+        const companyLabel = String(model.company || 'your organisation').trim() || 'your organisation';
+        const readinessParagraphOne = 'Immersive does not just train teams. It measures real-world capability through hands-on labs and realistic exercises, so you can see where readiness is strong, where gaps remain, and how quickly those gaps are closing.';
+        const readinessParagraphTwo = `For ${companyLabel}, this means defensible evidence you can use with leadership and external stakeholders: clear baselines, visible movement over time, and proof aligned to board and regulatory expectations.`;
+
         return `<!doctype html>
 <html lang="en">
 <head>
@@ -7025,110 +7222,201 @@ const evidenceOpts = [
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    :root{
-      --primary-colours--black:#17181c;--primary-colours--azure:#3c64ff;--primary-colours--white:#ffffff;
-      --background-color--alternate-25:#f5f5f9;--background-color--alternate-60:#d7d7e7;
-      --text-color--primary:var(--primary-colours--black);--text-color--secondary:rgba(23,24,28,.80);--text-color--subtle:rgba(23,24,28,.40);
-      --bg:var(--background-color--alternate-25);--surface:#fff;--ink:var(--text-color--primary);--muted:var(--text-color--secondary);--line:rgba(23,24,28,.14);
-      --surface-dark:#0f1116;--surface-dark-2:#111d34;--ink-inverse:#eef4ff;
-      --container:1680px;--radius-card:8px;--radius-btn:4px;--font:"Geologica","Segoe UI",Roboto,Arial,sans-serif;
-      --focus:0 0 0 3px rgba(60,100,255,.22);--shadow-soft:0 10px 28px rgba(7,18,44,.08);
+    :root { --primary-colours--black: #17181c; --primary-colours--azure: #3c64ff; --primary-colours--white: #ffffff; --background-color--alternate-25: #f5f5f9; --background-color--alternate-60: #d7d7e7; --text-color--primary: var(--primary-colours--black); --text-color--secondary: rgba(23,24,28,.80); --text-color--subtle: rgba(23,24,28,.40); --bg: var(--background-color--alternate-25); --surface: #fff; --ink: var(--text-color--primary); --muted: var(--text-color--secondary); --line: rgba(23,24,28,.14); --surface-dark: #0f1116; --surface-dark-2: #111d34; --ink-inverse: #eef4ff; --container: 1680px; --radius-card: 8px; --radius-btn: 4px; --font: "Geologica","Segoe UI",Roboto,Arial,sans-serif; --focus: 0 0 0 3px rgba(60,100,255,.22); --shadow-soft: 0 10px 28px rgba(7,18,44,.08); }
+    * { box-sizing: border-box; }
+    body { margin: 0px; background: var(--bg); color: var(--ink); font-family: var(--font); font-weight: 300; font-size: 18px; line-height: 1.2; }
+    h1, h2, h3 { margin: 0px; color: var(--text-color--primary); font-weight: 500; letter-spacing: -0.02em; }
+    .wrap { max-width: var(--container); width: 100%; margin: 0px auto; padding: 0px 64px; }
+    .topbar { position: sticky; top: 0px; z-index: 10; background: rgba(255, 255, 255, 0.96); border-bottom: 1px solid var(--background-color--alternate-60); }
+    .topbarInner { max-width: var(--container); width: 100%; margin: 0px auto; padding: 0px 64px; height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 0.9rem; }
+    .brand { display: inline-flex; align-items: center; }
+    .brand img { display: block; height: 28px; width: auto; }
+    .topPackagePill { border: 1px solid var(--line); border-radius: var(--radius-btn); background: rgb(255, 255, 255); padding: 10px 16px; font-size: 16px; line-height: 20.8px; color: rgb(43, 63, 105); font-weight: 400; }
+    .hero { margin-top: 20px; }
+    .padding-global.padding-24 { padding: 0px; }
+    .container-large { max-width: 100%; margin: 0px auto; }
+    .padding-section-24.platform-hero { padding: 0px; }
+    .header90_component { width: 100%; }
+    .header90_card.platform { position: relative; display: grid; grid-template-columns: minmax(0px, 1fr) minmax(0px, 580px); min-height: 430px; background: rgb(243, 244, 247); border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; isolation: isolate; }
+    .header90_background-image-wrapper.platform-2.improve-2 { position: absolute; inset: 0px; z-index: 0; pointer-events: none; overflow: hidden; }
+    .header90_background-image-wrapper.platform-2.improve-2::before { content: ""; position: absolute; right: 10%; top: 0px; bottom: 0px; width: 46%; height: auto; background: linear-gradient(rgb(132, 240, 240) 0%, rgb(77, 119, 255) 58%, rgb(53, 95, 255) 100%); opacity: 0.96; }
+    .header90_background-image-wrapper.platform-2.improve-2::after { content: ""; position: absolute; right: 5%; top: 0px; bottom: 0px; width: 54%; height: auto; background: radial-gradient(60% 70% at 20% 70%, rgba(81, 223, 186, 0.54), transparent 68%); filter: blur(16px); }
+    .header90_card-content { position: relative; z-index: 2; padding: 44px 44px 42px; display: flex; flex-direction: column; justify-content: center; background: transparent; }
+    .max-width-medium--lp { max-width: 62ch; }
+    .margin-bottom.margin-small { margin-bottom: 14px; }
+    .margin-bottom-16.margin-small { margin-bottom: 16px; }
+    .tag-17.is-text { display: inline-flex; align-items: center; min-height: 26px; padding: 6px 10px; border: 1px solid rgba(23, 24, 28, 0.14); border-radius: 999px; background: rgb(255, 255, 255); color: rgb(48, 71, 111); font-size: 12px; line-height: 1; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 400; }
+    .heading-style-h1.landing-page { margin: 0px; font-size: clamp(40px, 4.8vw, 62px); line-height: 1.03; max-width: 14ch; letter-spacing: -0.02em; color: var(--text-color--primary); font-weight: 500; }
+    .text-size-regular.text-color-secondary.max-width-prove { margin: 0px; max-width: 54ch; color: rgb(68, 85, 113); font-size: 18px; line-height: 1.35; }
+    .margin-top.margin-medium { margin-top: 22px; }
+    .button-group { display: flex; flex-wrap: wrap; gap: 10px; }
+    .button.w-button { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 12px 22px; border-radius: var(--radius-btn); border: 1px solid var(--primary-colours--azure); background: var(--primary-colours--azure); color: rgb(255, 255, 255); font-size: 16px; line-height: 20px; font-weight: 400; text-decoration: none; }
+    .button.w-button:hover { background: rgb(86, 119, 248); border-color: rgb(86, 119, 248); }
+    .button.is-secondary.is-lightmode.w-button { background: rgb(255, 255, 255); border-color: rgba(23, 24, 28, 0.18); color: rgb(31, 47, 82); }
+    .button.is-secondary.is-lightmode.w-button:hover { background: rgb(245, 247, 252); }
+    .header90_background-image-wrapper-platform.improve { position: relative; z-index: 1; min-height: 100%; overflow: hidden; background: transparent; }
+    .improve-lp-hero-image { position: absolute; inset: 0px; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; transform: none; z-index: 1; filter: drop-shadow(rgba(7, 18, 44, 0.22) 0px 24px 40px); }
+    .improve-ui-popup.prove { position: absolute; left: 8%; top: 18%; width: min(272px, 44%); height: auto; z-index: 2; filter: drop-shadow(rgba(7, 18, 44, 0.2) 0px 14px 26px); }
+    .layout { margin: 20px 0px 42px; display: grid; gap: 16px; }
+    .panel { border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-soft); padding: 24px; }
+    .panel h2 { font-size: 34px; line-height: 1.05; }
+    .panelSub { margin: 10px 0px 0px; color: var(--muted); font-size: 18px; line-height: 1.25; }
+    .sectionHead { display: flex; justify-content: space-between; gap: 22px; align-items: flex-end; margin-bottom: 32px; }
+    .sectionHead h2 { margin: 0px; font-size: clamp(1.7rem, 2.3vw, 2.2rem); line-height: 1.18; letter-spacing: -0.01em; }
+    .sectionHead p { margin: 0px; color: var(--muted); font-size: 18px; line-height: 1.5; }
+    .sectionHead--center { justify-content: center; align-items: center; text-align: center; padding: 50px 0px; }
+    .sectionHead--center > div { margin: 0px auto; }
+    .sectionHead--center h2 { font-size: clamp(2.55rem, 3.45vw, 3.3rem); }
+    .sectionHead--center p { font-size: 27px; }
+    .panel--understanding { border: none; border-radius: 0px; box-shadow: none; background: transparent; padding: 0px; }
+    .panel--understanding .understandingFeature { margin: 0px auto 56px; }
+    .panel--support { border: none; background: transparent; box-shadow: none; padding: 0px; }
+    .panel--outcomes h2 { font-size: 34px; }
+    .storyStack { --story-top: 96px; --story-gap: 20px; max-width: 1360px; margin: 20px auto 56px; padding-bottom: 120px; }
+    .storyCard { position: relative; z-index: 1; border: 1px solid var(--line); border-radius: var(--radius-card); background: rgb(255, 255, 255); box-shadow: rgba(7, 18, 44, 0.12) 0px 16px 52px, rgba(7, 18, 44, 0.06) 0px 2px 10px; overflow: hidden; }
+    .storyStack .storyCard { --story-i: 0; --story-scale: 1; position: sticky; top: calc(var(--story-top) + (var(--story-i) * var(--story-gap))); transform: scale(var(--story-scale)); transform-origin: center top; will-change: transform; opacity: 0; transition: opacity 0.5s; }
+    .storyStack .storyCard.is-in { opacity: 1; }
+    .storyStack .storyCard:not(:first-child) { margin-top: var(--story-gap); }
+    .storyStack .storyCard:nth-child(1) { z-index: 1; --story-i: 0; }
+    .storyStack .storyCard:nth-child(2) { z-index: 2; --story-i: 1; }
+    .storyStack .storyCard:nth-child(3) { z-index: 3; --story-i: 2; }
+    .storyInner { --story-min-h: 0; display: grid; grid-template-columns: minmax(0px, 1fr) minmax(0px, 1fr); min-height: var(--story-min-h); height: auto; transform: translateY(18px); transition: transform 0.5s; }
+    .storyCard.is-in .storyInner { transform: translateY(0px); }
+    .storyInner > .storyMedia, .storyInner > .storyContent { min-height: var(--story-min-h); }
+    .storyCard.reverse .storyMedia { order: 2; }
+    .storyCard.reverse .storyContent { order: 1; }
+    .storyMedia { position: relative; isolation: isolate; aspect-ratio: 1 / 1; background: var(--background-color--alternate-25); overflow: hidden; }
+    .storyMedia:not(.storyMedia--layered)::after { content: ""; position: absolute; inset: 0px; background: radial-gradient(80% 120% at 88% 86%, rgba(95, 163, 255, 0.28), transparent 68%); }
+    .storyMedia > img, .storyMedia > video { position: relative; z-index: 1; display: block; width: 100%; height: 100%; object-fit: cover; }
+    .storyMedia--layered { background: var(--story-media-bg,var(--background-color--alternate-25)); overflow: hidden; border-radius: 0px; isolation: isolate; }
+    .storyMedia--layered .layout408_image-wrapper { position: absolute; inset: 0px; overflow: hidden; }
+    .storyMedia--layered .layout408_image { position: absolute; inset: 0px; width: 100%; height: 100%; display: block; object-fit: cover; object-position: var(--story-bg-pos,center); z-index: 0; pointer-events: none; }
+    .storyMedia--layered .layout408_ui_screen, .storyMedia--layered .layout408_ui_popup { position: absolute; height: auto; max-width: none; width: auto; display: block; object-fit: contain; pointer-events: none; }
+    .storyMedia--layered .layout408_ui_screen { z-index: var(--story-screen-z,1); left: var(--story-screen-left,auto); right: var(--story-screen-right,auto); top: var(--story-screen-top,auto); bottom: var(--story-screen-bottom,auto); width: var(--story-screen-width,100%); height: var(--story-screen-height,auto); transform: var(--story-screen-transform,none); border-radius: var(--story-screen-radius,0); overflow: var(--story-screen-overflow,visible); background: var(--story-screen-bg,transparent); box-shadow: var(--story-screen-shadow,none); filter: var(--story-screen-filter,none); }
+    .storyMedia--layered .layout408_ui_popup { z-index: var(--story-popup-z,2); left: var(--story-popup-left,auto); right: var(--story-popup-right,auto); top: var(--story-popup-top,auto); bottom: var(--story-popup-bottom,auto); width: var(--story-popup-width,28%); opacity: var(--story-popup-opacity,1); mix-blend-mode: var(--story-popup-blend,normal); background: var(--story-popup-bg,transparent); border-radius: var(--story-popup-radius,0); filter: var(--story-popup-filter,none); }
+    .storyMedia--mitre { --story-media-bg: #05080f; --story-bg-pos: right center; --story-screen-z: 2; --story-screen-right: 0; --story-screen-top: 12%; --story-screen-width: 88%; --story-screen-height: 72%; --story-screen-radius: 10px 0 0 10px; --story-screen-overflow: hidden; --story-screen-shadow: 0 14px 34px rgba(7,18,44,.18); }
+    .storyMedia--mitre .layout408_ui_screen { mask-image: -webkit-radial-gradient(center, white, black); }
+    .storyMedia--mitre .layout408_ui_screen video { position: absolute; object-fit: cover; object-position: left top; display: block; border-radius: 0px; background: transparent; inset: 0px auto auto -2.5% !important; width: 202.5% !important; height: 100% !important; min-width: 0px !important; min-height: 0px !important; max-width: none !important; max-height: none !important; margin: 0px !important; transform: none !important; }
+    .storyMedia--prove { --story-media-bg: #f5f6fb; --story-bg-pos: center; --story-screen-z: 1; --story-screen-right: -47%; --story-screen-top: 50%; --story-screen-bottom: auto; --story-screen-width: 132%; --story-screen-transform: translateY(-50%); --story-screen-filter: drop-shadow(0 18px 36px rgba(7,18,44,.22)); --story-popup-z: 2; --story-popup-top: calc(11% - 20px); --story-popup-left: calc(8% + 130px); --story-popup-width: 45.36%; --story-popup-filter: drop-shadow(0 12px 24px rgba(7,18,44,.18)); }
+    .storyMedia--report { --story-media-bg: #f7eee3; --story-bg-pos: center; --story-screen-z: 1; --story-screen-right: -55.68%; --story-screen-top: 50%; --story-screen-bottom: auto; --story-screen-width: 142.68%; --story-screen-transform: translateY(-50%); --story-screen-filter: drop-shadow(0 18px 36px rgba(7,18,44,.22)); --story-popup-z: 3; --story-popup-left: 16%; --story-popup-bottom: 6%; --story-popup-width: 21.6%; --story-popup-opacity: 1; --story-popup-blend: normal; --story-popup-bg: #fff; --story-popup-radius: 14px; --story-popup-filter: drop-shadow(0 12px 24px rgba(7,18,44,.18)); }
+    .storyMedia--report .layout408_ui_popup.reporting { opacity: 1 !important; }
+    .storyCard--tour { position: relative; top: auto; will-change: auto; z-index: 1; transform: none !important; }
+    .storyCard--tour .storyInner { display: block; position: relative; aspect-ratio: 2 / 1; min-height: 0px; height: auto; background: rgb(3, 7, 18); }
+    .storyCard--tour .storyInner::before { content: ""; position: absolute; inset: 0px; z-index: 1; background: linear-gradient(rgba(5, 10, 24, 0.6) 0%, rgba(5, 10, 24, 0.72) 100%); pointer-events: none; }
+    .storyCard--tour .storyMedia--tour { position: absolute; inset: 0px; min-height: 100%; height: 100%; aspect-ratio: auto; background: rgb(3, 7, 18); z-index: 0; }
+    .storyCard--tour .storyMedia--tour video { position: absolute; inset: 0px; width: 100%; height: 100%; object-fit: cover; object-position: center center; display: block; }
+    .storyCard--tour .storyMedia--tour::after { display: none; }
+    .storyContent--tour { position: absolute; inset: 0px; z-index: 2; max-width: 760px; margin: 0px auto; padding: 44px 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
+    .storyContent { padding: 52px 50px; display: flex; flex-direction: column; justify-content: center; gap: 14px; background: rgb(255, 255, 255); }
+    .storyCard--tour .storyContent--tour { background: transparent; }
+    .storyKicker { margin: 0px 0px 4px; font-size: 14px; line-height: 18px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text-color--primary); font-weight: 300; opacity: 0.78; }
+    .storyCard--tour .storyKicker { color: rgba(255, 255, 255, 0.84); opacity: 1; }
+    .storyContent h3 { margin: 0px; font-size: 34px; line-height: 1.05; letter-spacing: -0.02em; color: rgb(18, 27, 47); font-weight: 500; }
+    .storyCard--tour .storyContent h3 { color: rgb(255, 255, 255); font-size: 34px; line-height: 1.08; }
+    .storyContent p { margin: 0px; color: rgb(63, 78, 105); font-size: 18px; line-height: 1.25; }
+    .storyCard--tour .storyContent p { color: rgba(255, 255, 255, 0.88); max-width: 64ch; font-size: 16px; line-height: 1.35; }
+    .storyBullets, .storyList { margin: 14px 0px 0px; padding: 0px; list-style: none; display: grid; gap: 10px; }
+    .storyBullets li, .storyList li { position: relative; padding-left: 18px; color: rgb(47, 63, 92); font-size: 18px; line-height: 1.25; }
+    .storyBullets li::before, .storyList li::before { content: ""; position: absolute; left: 0px; top: 0.62em; width: 6px; height: 6px; border-radius: 999px; background: var(--primary-colours--azure); }
+    .storyTourCta { margin-top: 8px; }
+    .storyTourBtn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 12px 24px; border-radius: var(--radius-btn); border: 1px solid rgba(60, 100, 255, 0.35); background: var(--primary-colours--azure); color: rgb(255, 255, 255); font-size: 16px; line-height: 20.8px; font-weight: 400; text-decoration: none; }
+    .storyTourBtn:hover { background: rgb(86, 119, 248); color: rgb(255, 255, 255); }
+    .outcomeGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
+    .outcomeCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 15%, var(--line)); border-radius: var(--radius-card); background: rgb(255, 255, 255); padding: 16px; display: grid; gap: 10px; }
+    .outcomeHead { display: grid; grid-template-columns: 54px minmax(0px, 1fr); gap: 12px; align-items: center; }
+    .outcomeRing { --pct: 0; position: relative; width: 54px; height: 54px; border-radius: 50%; background: conic-gradient(var(--primary-colours--azure) calc(var(--pct)*1%), #dfe4ef 0); display: grid; place-items: center; }
+    .outcomeRing::before { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: rgb(255, 255, 255); border: 1px solid rgba(23, 24, 28, 0.08); }
+    .outcomeRing span { position: relative; z-index: 1; font-size: 12px; line-height: 1; font-weight: 600; color: rgb(37, 58, 100); }
+    .outcomeCard h3 { margin: 0px; font-size: 24px; line-height: 1.15; color: rgb(26, 44, 79); }
+    .outcomeCard p { margin: 0px; color: rgb(75, 95, 131); font-size: 16px; line-height: 1.3; }
+    .actionsList { margin: 12px 0px 0px; padding-left: 1.2rem; display: grid; gap: 8px; font-size: 18px; line-height: 1.25; }
+    .resourceRow { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .resourcePill { border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: rgb(255, 255, 255); font-size: 14px; line-height: 18px; color: rgb(42, 58, 87); }
+    .understandingFeature { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0px, 1fr)); gap: 12px; align-items: stretch; }
+    .understandingFeatureCopy { border: none; border-radius: 0px; background: transparent; padding: 20px 22px; }
+    .understandingFeatureKicker { margin: 0px 0px 10px; font-size: 13px; line-height: 16px; text-transform: uppercase; letter-spacing: 0.14em; color: rgb(106, 120, 160); }
+    .understandingFeatureCopy h3 { margin: 0px; font-size: 36px; line-height: 1.05; color: rgb(27, 46, 86); }
+    .understandingFeatureCopy p { margin: 12px 0px 0px; color: rgb(62, 79, 111); font-size: 18px; line-height: 1.3; }
+    .understandingFeatureMedia { margin: 0px; min-height: 220px; border: none; border-radius: 0px; overflow: hidden; background: transparent; }
+    .understandingFeatureMedia img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .contentGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
+    .contentCard { border: 1px solid var(--line); border-radius: var(--radius-card); background: rgb(255, 255, 255); padding: 16px; display: grid; gap: 8px; }
+    .contentImageWrap { margin: -16px -16px 8px; border-radius: var(--radius-card) var(--radius-card) 0 0; overflow: hidden; aspect-ratio: 16 / 9; background: rgb(220, 231, 255); }
+    .contentImage { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .contentEyebrow { margin: 0px; font-size: 13px; line-height: 16px; letter-spacing: 0.1em; text-transform: uppercase; color: rgb(101, 119, 155); }
+    .contentCard h3 { margin: 0px; font-size: 24px; line-height: 1.15; }
+    .contentText { margin: 0px; color: rgb(76, 93, 124); font-size: 16px; line-height: 1.3; }
+    .contentLink { display: inline-flex; width: max-content; color: rgb(18, 56, 213); font-size: 16px; line-height: 20px; font-weight: 400; text-decoration: none; border-bottom: 1px solid rgba(18, 56, 213, 0.22); padding-bottom: 1px; }
+    .detailsGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
+    .detailCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 12%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(rgb(255, 255, 255), rgb(248, 250, 255)); padding: 16px; box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; }
+    .detailCard h3 { margin: 0px 0px 10px; font-size: 24px; line-height: 1.1; color: rgb(36, 60, 104); }
+    .kvRow { display: grid; grid-template-columns: 140px minmax(0px, 1fr); gap: 8px; font-size: 14px; line-height: 18px; padding: 6px 0px; border-bottom: 1px dashed rgba(15, 23, 42, 0.08); }
+    .kvRow:last-child { border-bottom: none; }
+    .kvLabel { color: rgb(96, 113, 143); }
+    .kvValue { color: rgb(23, 39, 66); }
+    footer { margin: 10px 0px 40px; color: rgb(107, 118, 144); font-size: 14px; line-height: 18px; text-align: right; }
+    @media (max-width: 1280px) {
+      .wrap { padding: 0px 40px; }
+      .topbarInner { padding: 0px 40px; }
+      .header90_card.platform { grid-template-columns: minmax(0px, 1fr) minmax(0px, 500px); }
+      .header90_card-content { padding: 38px 36px; }
+      .improve-ui-popup.prove { left: 8%; top: 16%; width: min(250px, 44%); }
+      .header90_background-image-wrapper.platform-2.improve-2::before { right: 8%; width: 50%; }
     }
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-weight:300;font-size:18px;line-height:1.2}
-    h1,h2,h3{margin:0;color:var(--text-color--primary);font-weight:500;letter-spacing:-.02em}
-    .wrap{max-width:var(--container);width:100%;margin:0 auto;padding:0 64px}
-    .topbar{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.96);border-bottom:1px solid var(--background-color--alternate-60)}
-    .topbarInner{max-width:var(--container);width:100%;margin:0 auto;padding:0 64px;height:76px;display:flex;align-items:center;justify-content:space-between;gap:.9rem}
-    .brand{display:inline-flex;align-items:center}
-    .brand img{display:block;height:28px;width:auto}
-    .topPackagePill{border:1px solid rgba(60,100,255,.35);border-radius:var(--radius-btn);background:#fff;padding:10px 16px;font-size:16px;line-height:20.8px;color:var(--primary-colours--azure);font-weight:400}
-    .hero{margin-top:20px;border-radius:var(--radius-card);background:radial-gradient(960px 420px at 88% 8%,rgba(107,134,255,.24),transparent 65%),radial-gradient(820px 360px at 14% -8%,rgba(60,100,255,.24),transparent 62%),linear-gradient(120deg,var(--surface-dark),var(--surface-dark-2));color:var(--ink-inverse);border:1px solid rgba(255,255,255,.14);padding:34px 36px;display:grid;gap:24px;grid-template-columns:minmax(0,1fr) 360px}
-    .heroEyebrow{margin:0 0 12px;font-size:14px;line-height:18px;text-transform:uppercase;letter-spacing:.18em;color:#b9cbf4}
-    h1{font-size:clamp(40px,5vw,64px);line-height:1.02;max-width:16ch}
-    .heroSub{margin:14px 0 0;color:#d2ddf7;max-width:66ch;font-size:20px;line-height:1.25}
-    .heroStats{display:grid;gap:10px}
-    .heroStat{border:1px solid rgba(191,208,246,.22);border-radius:var(--radius-card);background:rgba(8,15,29,.54);padding:14px 16px}
-    .heroStatLabel{margin:0;font-size:13px;line-height:16px;text-transform:uppercase;letter-spacing:.12em;color:#8ea4d2}
-    .heroStatValue{margin:8px 0 0;font-size:20px;line-height:1.15;color:#f2f7ff;font-weight:400}
-    .layout{margin:20px 0 42px;display:grid;gap:16px}
-    .panel{border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-soft);padding:24px}
-    .panel h2{font-size:34px;line-height:1.05}
-    .panelSub{margin:10px 0 0;color:var(--muted);font-size:18px;line-height:1.25}
-    .panel--support h2{font-size:clamp(34px,4.2vw,48px)}
-    .panel--outcomes h2{font-size:34px}
-    .storyStack{--story-top:96px;--story-gap:20px;margin-top:16px;padding-bottom:120px}
-    .storyCard{position:relative;z-index:1;border:1px solid var(--line);border-radius:var(--radius-card);background:#fff;box-shadow:0 16px 52px rgba(7,18,44,.12),0 2px 10px rgba(7,18,44,.06);overflow:hidden}
-    .storyStack .storyCard{--story-i:0;--story-scale:1;position:sticky;top:calc(var(--story-top) + (var(--story-i) * var(--story-gap)));transform:scale(var(--story-scale));transform-origin:top center;will-change:transform;opacity:0;transition:opacity .45s ease,transform .22s ease}
-    .storyStack .storyCard.is-in{opacity:1}
-    .storyStack .storyCard:not(:first-child){margin-top:var(--story-gap)}
-    .storyStack .storyCard:nth-child(1){z-index:10;--story-i:0}
-    .storyStack .storyCard:nth-child(2){z-index:20;--story-i:1}
-    .storyStack .storyCard:nth-child(3){z-index:30;--story-i:2}
-    .storyInner{--story-min-h:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);min-height:var(--story-min-h);height:auto;transform:translateY(14px);transition:transform .45s ease}
-    .storyCard.is-in .storyInner{transform:translateY(0)}
-    .storyInner>.storyMedia,.storyInner>.storyContent{min-height:var(--story-min-h)}
-    .storyCard.reverse .storyMedia{order:2}
-    .storyCard.reverse .storyContent{order:1}
-    .storyMedia{position:relative;isolation:isolate;aspect-ratio:1 / 1;background:#f5f5f9;overflow:hidden}
-    .storyMedia::after{content:"";position:absolute;inset:0;background:radial-gradient(80% 120% at 88% 86%,rgba(95,163,255,.28),transparent 68%)}
-    .storyMedia img,.storyMedia video{position:relative;z-index:1;display:block;width:100%;height:100%;object-fit:cover}
-    .storyMedia--improve{background:linear-gradient(135deg,#f87289,#8f62f8)}
-    .storyMedia--prove{background:#f5f6fb}
-    .storyMedia--benchmark-report{background:#f7eee3}
-    .storyMedia--tour{background:linear-gradient(135deg,#071127,#223fbc)}
-    .storyMedia--prove img{position:absolute;z-index:1;right:-47%;top:50%;width:132%;height:auto;max-width:none;transform:translateY(-50%);object-fit:contain}
-    .storyMedia--benchmark-report img{position:absolute;z-index:1;right:-56%;top:50%;width:143%;height:auto;max-width:none;transform:translateY(-50%);object-fit:contain}
-    .storyMedia--prove::before{content:"";position:absolute;z-index:2;top:calc(11% - 20px);left:calc(8% + 130px);width:45.36%;aspect-ratio:1.45 / 1;background:url('https://cdn.prod.website-files.com/6735fba9a631272fb4513263/690e149f5f565f5b2e0f95e6_ui-pop.webp') center/contain no-repeat;filter:drop-shadow(0 12px 24px rgba(7,18,44,.18))}
-    .storyMedia--benchmark-report::before{content:"";position:absolute;z-index:3;left:16%;bottom:6%;width:21.6%;aspect-ratio:1.2 / 1;background:url('https://cdn.prod.website-files.com/6735fba9a631272fb4513263/690e14b11097d2dc702df512_report-ui-pop.webp') center/contain no-repeat;filter:drop-shadow(0 12px 24px rgba(7,18,44,.18))}
-    .storyContent{padding:52px 50px;display:flex;flex-direction:column;justify-content:center;gap:14px;background:#fff}
-    .storyContent--tour{background:#0f172a;color:#e9f1ff}
-    .storyKicker{margin:0 0 4px;font-size:14px;line-height:18px;letter-spacing:.22em;text-transform:uppercase;color:var(--text-color--primary);font-weight:300;opacity:.78}
-    .storyContent--tour .storyKicker{color:#9cb7ea;opacity:1}
-    .storyContent h3{margin:0;font-size:34px;line-height:1.05;color:#121b2f;font-weight:500}
-    .storyContent--tour h3{color:#f1f6ff}
-    .storyContent p{margin:0;color:#3f4e69;font-size:18px;line-height:1.25}
-    .storyContent--tour p{color:#c6d6f5}
-    .storyBullets{margin:14px 0 0;padding:0;list-style:none;display:grid;gap:10px}
-    .storyBullets li{position:relative;padding-left:18px;color:#2f3f5c;font-size:18px;line-height:1.25}
-    .storyBullets li::before{content:"";position:absolute;left:0;top:.62em;width:6px;height:6px;border-radius:999px;background:var(--primary-colours--azure)}
-    .storyTourCta{margin-top:8px}
-    .storyTourBtn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:12px 24px;border-radius:var(--radius-btn);background:var(--primary-colours--azure);color:#fff;font-size:16px;line-height:20.8px;font-weight:400;text-decoration:none}
-    .storyTourBtn:hover{background:rgb(86,119,248)}
-    .outcomeGrid{margin-top:16px;display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr))}
-    .outcomeCard{border:1px solid color-mix(in srgb,#3c64ff 22%, var(--line));border-radius:var(--radius-card);background:linear-gradient(180deg,#f6f9ff,#eef4ff);padding:16px;display:grid;gap:8px}
-    .outcomeCard h3{margin:0;font-size:24px;line-height:1.15;color:#1a2c4f}
-    .outcomeCard p{margin:0;color:#4b5f83;font-size:16px;line-height:1.3}
-    .outcomeMetric{display:inline-flex;width:max-content;border:1px solid color-mix(in srgb,#3c64ff 22%, var(--line));border-radius:999px;background:#fff;padding:4px 10px;font-size:13px;line-height:16px;color:#27406f;font-weight:500}
-    .commercialRow{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
-    .commercialPill{border:1px solid var(--line);border-radius:999px;background:#fff;padding:6px 12px;font-size:14px;line-height:18px;color:#354867}
-    .actionsList{margin:12px 0 0;padding-left:1.2rem;display:grid;gap:8px;font-size:18px;line-height:1.25}
-    .resourceRow{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
-    .resourcePill{border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:#fff;font-size:14px;line-height:18px;color:#2a3a57}
-    .understandingGrid{margin-top:14px;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);gap:12px}
-    .understandingMedia{margin:0;min-height:220px;border:1px solid var(--line);border-radius:var(--radius-card);overflow:hidden;background:#dce7ff}
-    .understandingMedia img{display:block;width:100%;height:100%;object-fit:cover}
-    .understandingCard{margin:0;border:1px solid var(--line);border-radius:var(--radius-card);background:#fff;padding:18px}
-    .understandingCard p{margin:0;color:#2b3d5c;font-size:18px;line-height:1.25}
-    .contentGrid{margin-top:16px;display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr))}
-    .contentCard{border:1px solid var(--line);border-radius:var(--radius-card);background:#fff;padding:16px;display:grid;gap:8px}
-    .contentImageWrap{margin:-16px -16px 8px;border-radius:var(--radius-card) var(--radius-card) 0 0;overflow:hidden;aspect-ratio:16/9;background:#dce7ff}
-    .contentImage{display:block;width:100%;height:100%;object-fit:cover}
-    .contentEyebrow{margin:0;font-size:13px;line-height:16px;letter-spacing:.1em;text-transform:uppercase;color:#65779b}
-    .contentCard h3{margin:0;font-size:24px;line-height:1.15}
-    .contentText{margin:0;color:#4c5d7c;font-size:16px;line-height:1.3}
-    .contentLink{display:inline-flex;width:max-content;color:#1238d5;font-size:16px;line-height:20px;font-weight:400;text-decoration:none;border-bottom:1px solid rgba(18,56,213,.22);padding-bottom:1px}
-    .detailsGrid{margin-top:16px;display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr))}
-    .detailCard{border:1px solid var(--line);border-radius:var(--radius-card);background:#fff;padding:16px}
-    .detailCard h3{margin:0 0 10px;font-size:24px;line-height:1.1;color:#1b2a45}
-    .kvRow{display:grid;grid-template-columns:140px minmax(0,1fr);gap:8px;font-size:14px;line-height:18px;padding:6px 0;border-bottom:1px dashed rgba(15,23,42,.08)}
-    .kvRow:last-child{border-bottom:none}.kvLabel{color:#60718f}.kvValue{color:#172742}
-    footer{margin:10px 0 40px;color:#6b7690;font-size:14px;line-height:18px;text-align:right}
-    @media (max-width:1280px){.wrap{padding:0 40px}.topbarInner{padding:0 40px}.hero{grid-template-columns:minmax(0,1fr) 300px}}
-    @media (max-width:1080px){.wrap{padding:0 24px}.topbarInner{padding:0 24px;height:68px}.hero{grid-template-columns:minmax(0,1fr);padding:26px}.storyStack{--story-top:0;--story-gap:20px;padding-bottom:0}.storyStack .storyCard{position:relative;top:auto;transform:none !important;transition:none;opacity:1;will-change:auto}.storyStack .storyCard:not(:first-child){margin-top:20px}.storyInner{grid-template-columns:1fr;min-height:0;height:auto;transform:none;transition:none}.storyInner>.storyMedia,.storyInner>.storyContent{min-height:0}.storyCard.reverse .storyMedia,.storyCard.reverse .storyContent{order:initial}.storyMedia{aspect-ratio:16 / 11}.storyMedia--prove img,.storyMedia--benchmark-report img{position:relative;top:auto;right:auto;width:100%;height:100%;transform:none;object-fit:cover}.storyMedia--prove::before,.storyMedia--benchmark-report::before{display:none}.storyContent{padding:30px 26px}.understandingGrid{grid-template-columns:1fr}.outcomeGrid,.contentGrid,.detailsGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.kvRow{grid-template-columns:1fr;gap:.2rem}}
-    @media (max-width:760px){.outcomeGrid,.contentGrid,.detailsGrid{grid-template-columns:1fr}.hero{padding:20px}.panel{padding:16px}.panel h2{font-size:28px}.storyContent h3{font-size:30px}.storyContent p,.storyBullets li,.actionsList,.understandingCard p{font-size:16px}.topPackagePill{font-size:14px;line-height:18px;padding:8px 12px}}
-    @media (max-width:479px){.wrap{padding:0 16px}.topbarInner{padding:0 16px}.heroEyebrow{font-size:12px}.heroSub{font-size:18px}h1{font-size:34px}}
-    @media (prefers-reduced-motion: reduce){.storyCard,.storyInner{transition:none !important;transform:none !important;opacity:1 !important}}
+    @media (max-width: 1080px) {
+      .wrap { padding: 0px 24px; }
+      .topbarInner { padding: 0px 24px; height: 68px; }
+      .header90_card.platform { grid-template-columns: minmax(0px, 1fr); min-height: 0px; }
+      .header90_card-content { padding: 32px 26px; }
+      .header90_background-image-wrapper-platform.improve { min-height: 280px; }
+      .header90_background-image-wrapper.platform-2.improve-2::before { right: 20%; width: 52%; }
+      .header90_background-image-wrapper.platform-2.improve-2::after { right: 16%; width: 56%; }
+      .improve-ui-popup.prove { left: 8%; top: 14%; width: min(220px, 40%); }
+      .storyStack { --story-top: 0; --story-gap: 20px; padding-bottom: 48px; }
+      .storyStack .storyCard { position: relative; top: auto; transition: none; opacity: 1; will-change: auto; transform: none !important; }
+      .storyStack .storyCard:not(:first-child) { margin-top: 20px; }
+      .storyInner { grid-template-columns: 1fr; min-height: 0px; height: auto; transform: none; transition: none; }
+      .storyInner > .storyMedia, .storyInner > .storyContent { min-height: 0px; }
+      .storyCard.reverse .storyMedia, .storyCard.reverse .storyContent { order: initial; }
+      .storyMedia { aspect-ratio: 16 / 11; }
+      .storyMedia--mitre { --story-screen-top: 14%; --story-screen-height: 68%; }
+      .storyMedia--prove { --story-screen-width: 137.5%; --story-screen-right: -47.5%; --story-popup-width: 48.72%; --story-popup-left: calc(6% + 130px); }
+      .storyMedia--report { --story-screen-width: 152.52%; --story-screen-right: -59.52%; --story-popup-width: 24.6%; --story-popup-left: 10%; --story-popup-bottom: 8%; }
+      .storyCard--tour .storyInner { aspect-ratio: 16 / 10; min-height: 420px; }
+      .storyContent--tour { max-width: none; padding: 30px 26px; }
+      .storyCard--tour .storyContent h3 { font-size: 30px; }
+      .storyCard--tour .storyInner::before { background: linear-gradient(rgba(5, 10, 24, 0.66) 0%, rgba(5, 10, 24, 0.8) 100%); }
+      .storyContent { padding: 30px 26px; }
+      .understandingFeature { grid-template-columns: 1fr; }
+      .outcomeGrid, .contentGrid, .detailsGrid { grid-template-columns: repeat(2, minmax(0px, 1fr)); }
+      .kvRow { grid-template-columns: 1fr; gap: 0.2rem; }
+    }
+    @media (max-width: 760px) {
+      .outcomeGrid, .contentGrid, .detailsGrid { grid-template-columns: 1fr; }
+      .header90_card-content { padding: 26px 20px; }
+      .panel { padding: 16px; }
+      .panel h2 { font-size: 28px; }
+      .sectionHead h2 { font-size: 28px; }
+      .storyContent h3 { font-size: 30px; }
+      .storyContent p, .storyBullets li, .storyList li, .actionsList, .understandingFeatureCopy p { font-size: 16px; }
+      .topPackagePill { font-size: 14px; line-height: 18px; padding: 8px 12px; }
+    }
+    @media (max-width: 479px) {
+      .wrap { padding: 0px 16px; }
+      .topbarInner { padding: 0px 16px; }
+      .tag-17.is-text { font-size: 11px; }
+      .heading-style-h1.landing-page { font-size: 34px; }
+      .text-size-regular.text-color-secondary.max-width-prove { font-size: 17px; }
+      .button-group { gap: 8px; }
+      .button.w-button { width: 100%; }
+      .header90_background-image-wrapper-platform.improve { min-height: 240px; }
+      .header90_background-image-wrapper.platform-2.improve-2::before { right: 18%; width: 54%; }
+      .improve-ui-popup.prove { width: min(170px, 40%); }
+      .sectionHead h2 { font-size: 24px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .storyCard, .storyInner { transition: none !important; transform: none !important; opacity: 1 !important; }
+    }
   </style>
 </head>
 <body>
@@ -7142,21 +7430,119 @@ const evidenceOpts = [
   </header>
   <main class="wrap">
     <section class="hero">
-      <div>
-        <p class="heroEyebrow">${esc(hero.eyebrow || 'Customer dashboard')}</p>
-        <h1>${esc(hero.title || `${model.company || 'Customer'} readiness dashboard`)}</h1>
-        <p class="heroSub">${esc(hero.subtitle || '')}</p>
+      <div class="padding-global padding-24">
+        <div class="container-large">
+          <div class="padding-section-24 platform-hero">
+            <div class="header90_component">
+              <div class="header90_card platform">
+                <div class="header90_background-image-wrapper platform-2 improve-2"></div>
+                <div class="header90_card-content">
+                  <div class="max-width-medium--lp">
+                    <div class="margin-bottom margin-small">
+                      <div class="max-width-large-4">
+                        <div class="tag-17 is-text">${esc(hero.eyebrow || 'Customer dashboard')}</div>
+                      </div>
+                    </div>
+                    <div class="margin-bottom-16 margin-small">
+                      <h1 class="heading-style-h1 landing-page">${esc(hero.title || `${model.company || 'Customer'} readiness dashboard`)}</h1>
+                    </div>
+                    <p class="text-size-regular text-color-secondary max-width-prove">${esc(hero.subtitle || '')}</p>
+                  </div>
+                  <div class="margin-top margin-medium">
+                    <div class="button-group">
+                      <a href="https://info.immersivelabs.com/whitepaper-improving-cyber-readiness" target="_blank" rel="noopener noreferrer" class="button w-button">Get the White Paper</a>
+                      <a href="https://www.immersivelabs.com/demo" target="_blank" rel="noopener noreferrer" class="button is-secondary is-lightmode w-button">Request a Demo</a>
+                    </div>
+                  </div>
+                </div>
+                <div class="header90_background-image-wrapper-platform improve" aria-hidden="true">
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/690dd160fa41a6ef7268b02d_584dc5dbb5fc30e2827548aabd2b706f_improve-lp-hero-image.webp" loading="eager" alt="" class="improve-lp-hero-image" />
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6902225b2a4bb3e47190b10a_28d69c85968eeef4480b03c088187cd2_home-ui-pop-up-2.webp" loading="lazy" alt="" class="improve-ui-popup prove" width="255" height="95" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <aside class="heroStats">
-        ${heroStats.map((row)=> `<article class="heroStat"><p class="heroStatLabel">${esc(row.label || '')}</p><p class="heroStatValue">${esc(row.value || '—')}</p></article>`).join('')}
-      </aside>
     </section>
     <section class="layout">
-      ${outcomeBlocks.length ? `<article class="panel panel--outcomes"><h2>Your top outcomes</h2><p class="panelSub">The three priorities we recommend focusing on first.</p><div class="outcomeGrid">${outcomeBlocks.map((outcome)=> `<article class="outcomeCard"><span class="outcomeMetric">${esc(outcome.metric || 'Priority focus')}</span><h3>${esc(outcome.title || 'Priority outcome')}</h3><p>${esc(outcome.detail || '')}</p></article>`).join('')}</div>${commercialSignals.length ? `<div class="commercialRow">${commercialSignals.map((signal)=> `<span class="commercialPill">${esc(signal.label || 'Signal')}: ${esc(signal.value || '—')}</span>`).join('')}</div>` : ''}</article>` : ''}
+      ${outcomeBlocks.length ? `<article class="panel panel--outcomes"><h2>Your top outcomes</h2><p class="panelSub">The three priorities we recommend focusing on first.</p><div class="outcomeGrid">${outcomeBlocks.map((outcome, idx)=> `<article class="outcomeCard"><div class="outcomeHead"><div class="outcomeRing" style="--pct:${metricPercent(outcome.metric, idx)}"><span>${metricPercent(outcome.metric, idx)}%</span></div><h3>${esc(outcome.title || `Priority outcome ${idx + 1}`)}</h3></div><p>${esc(outcome.detail || '')}</p></article>`).join('')}</div></article>` : ''}
       ${details.length ? `<article class="panel"><h2>What you told us in the meeting</h2><p class="panelSub">Your context, constraints, and operating priorities as we captured them.</p><div class="detailsGrid">${details.map((section)=> `<article class="detailCard"><h3>${esc(section.title || 'Section')}</h3>${(Array.isArray(section.rows) ? section.rows : []).map((row)=> `<div class="kvRow"><span class="kvLabel">${esc((row && row.label) || 'Field')}</span><span class="kvValue">${esc((row && row.value) || '—')}</span></div>`).join('')}</article>`).join('')}</div></article>` : ''}
-      ${understandingText ? `<article class="panel"><h2>Our understanding of your needs</h2><p class="panelSub">A concise view of what matters most right now.</p><div class="understandingGrid"><div class="understandingCard"><p>${esc(understandingText)}</p></div><figure class="understandingMedia"><img src="${esc(understandingImageUrl)}" alt="Illustrative customer context image" loading="lazy" /></figure></div></article>` : ''}
-      ${storyCardsHtml ? `<article class="panel panel--support"><h2>How we will support you</h2><p class="panelSub">A focused plan across improve, prove, and benchmark/report.</p><div class="storyStack">${storyCardsHtml}</div></article>` : ''}
-      ${demoCardHtml ? `<article class="panel"><h2>Take a product tour</h2><p class="panelSub">See how your teams can run exercises and export evidence-ready summaries.</p>${demoCardHtml}</article>` : ''}
+      <div class="sectionHead sectionHead--center"><div><h2>Our understanding of your needs</h2><p>Measured readiness, not assumptions.</p></div></div>
+      <article class="panel panel--understanding"><div class="understandingFeature"><div class="understandingFeatureCopy"><p class="understandingFeatureKicker">Readiness narrative</p><h3>Measuring cyber readiness with Immersive</h3><p>${esc(readinessParagraphOne)}</p><p>${esc(readinessParagraphTwo)}</p></div><figure class="understandingFeatureMedia"><img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/679228e2e5f16602a4b0c480_Why%20Immersive-cta-image.webp" alt="Immersive readiness visual" loading="lazy" width="770" height="645" /></figure></div></article>
+      <article class="panel panel--support">
+        <div class="storyStack">
+          <article class="storyCard reverse">
+            <div class="storyInner">
+              <div class="storyMedia storyMedia--layered storyMedia--mitre" data-story-media="mitre" aria-hidden="true">
+                <img class="layout408_image align-right" src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6914a13624dc6e2c54be0c0a_platform-hero-bg.webp" alt="" loading="lazy" width="679" height="679" />
+                <div class="layout408_ui_screen" aria-hidden="true">
+                  <video autoplay loop muted playsinline preload="metadata" style="background-image:url('https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69032ce5fea96c334f5e5f2d_Mitre-Attack-video-1_poster.0000000.jpg')">
+                    <source src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69032ce5fea96c334f5e5f2d_Mitre-Attack-video-1_mp4.mp4" type="video/mp4" />
+                    <source src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69032ce5fea96c334f5e5f2d_Mitre-Attack-video-1_webm.webm" type="video/webm" />
+                  </video>
+                </div>
+              </div>
+              <div class="storyContent">
+                <div class="storyKicker">${esc(proveCard.kicker || 'PROVE')}</div>
+                <h3>${esc(proveCard.title || defaultStoryCards.prove.title)}</h3>
+                <p>${esc(proveCard.text || defaultStoryCards.prove.text)}</p>
+                ${renderStoryList(proveCard.bullets || defaultStoryCards.prove.bullets)}
+              </div>
+            </div>
+          </article>
+          <article class="storyCard">
+            <div class="storyInner">
+              <div class="storyMedia storyMedia--layered storyMedia--prove" data-story-media="prove" aria-hidden="true">
+                <div class="layout408_image-wrapper">
+                  <img alt="" src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6914a136dbf76d35c55ba7f5_platform-prove-square-bg.webp" loading="lazy" class="layout408_image" width="679" height="679" />
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6914a1365ac7c6f3dab67864_platform-prove-square-ui_screen.webp" loading="lazy" alt="" class="layout408_ui_screen" />
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6914a13604a36b3c5d7a73c1_platform-prove-square-ui_pop_up.webp" loading="lazy" alt="" class="layout408_ui_popup" />
+                </div>
+              </div>
+              <div class="storyContent">
+                <div class="storyKicker">${esc(improveCard.kicker || 'IMPROVE')}</div>
+                <h3>${esc(improveCard.title || defaultStoryCards.improve.title)}</h3>
+                <p>${esc(improveCard.text || defaultStoryCards.improve.text)}</p>
+                ${renderStoryList(improveCard.bullets || defaultStoryCards.improve.bullets)}
+              </div>
+            </div>
+          </article>
+          <article class="storyCard reverse">
+            <div class="storyInner">
+              <div class="storyMedia storyMedia--layered storyMedia--report" data-story-media="report" aria-hidden="true">
+                <div class="layout408_image-wrapper">
+                  <img alt="" src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6914a1360925ed60f5365dd5_platform-report-square-bg.webp" loading="lazy" class="layout408_image" width="679" height="679" />
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6914a136bdbaadae3861c5a8_platform-report-square-ui_screen.webp" loading="lazy" alt="" class="layout408_ui_screen" />
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/690e14b11097d2dc702df512_report-ui-pop.webp" loading="lazy" alt="" class="layout408_ui_popup reporting" />
+                </div>
+              </div>
+              <div class="storyContent">
+                <div class="storyKicker">${esc(reportCard.kicker || 'REPORT')}</div>
+                <h3>${esc(reportCard.title || defaultStoryCards.report.title)}</h3>
+                <p>${esc(reportCard.text || defaultStoryCards.report.text)}</p>
+                ${renderStoryList(reportCard.bullets || defaultStoryCards.report.bullets)}
+              </div>
+            </div>
+          </article>
+        </div>
+      </article>
+      <article class="storyCard storyCard--tour">
+        <div class="storyInner">
+          <div class="storyMedia storyMedia--tour" aria-hidden="true">
+            <video autoplay loop muted playsinline preload="metadata"${demoCard.videoPoster ? ` poster="${esc(demoCard.videoPoster)}"` : ''}>
+              ${demoCard.videoMp4 ? `<source src="${esc(demoCard.videoMp4)}" type="video/mp4" />` : ''}
+              ${demoCard.videoWebm ? `<source src="${esc(demoCard.videoWebm)}" type="video/webm" />` : ''}
+            </video>
+          </div>
+          <div class="storyContent storyContent--tour">
+            <div class="storyKicker">${esc(demoCard.kicker || 'PRODUCT TOUR')}</div>
+            <h3>${esc(demoCard.title || 'Take a guided tour of the platform')}</h3>
+            <p>${esc(demoCard.text || 'See how you can run scenario-based exercises, capture after-action evidence, and export summaries for stakeholders.')}</p>
+            ${demoCard.ctaUrl ? `<div class="storyTourCta"><a class="storyTourBtn" href="${esc(demoCard.ctaUrl)}" target="_blank" rel="noopener noreferrer">${esc(demoCard.ctaLabel || 'Take a Product Tour')}</a></div>` : ''}
+          </div>
+        </div>
+      </article>
       <article class="panel">
         <h2>Recommended next actions</h2>
         <p class="panelSub">Suggested next steps for your team over the next 30 days.</p>
@@ -7171,7 +7557,13 @@ const evidenceOpts = [
         <h2>Recommended for you</h2>
         <p class="panelSub">A short list of articles, webinars, and case studies selected for your team.</p>
         <div class="contentGrid">
-          ${cards.map((card, idx)=> `<article class="contentCard">${card.imageUrl ? `<div class="contentImageWrap"><img class="contentImage" src="${esc(card.imageUrl)}" alt="${esc(card.title || 'Recommended content image')}" loading="lazy" /></div>` : ''}<p class="contentEyebrow">Recommendation ${idx + 1} | ${esc(card.format || 'Content')}</p><h3>${esc(card.title || 'Content block')}</h3><p class="contentText"><strong>Focus area:</strong> ${esc(card.outcomeLabel || 'Priority outcome')}</p><p class="contentText">${esc(card.summary || '')}</p><p class="contentText"><strong>Why this is relevant:</strong> ${esc(card.why || '')}</p>${card.url ? `<a class="contentLink" href="${esc(card.url)}" target="_blank" rel="noopener noreferrer">${esc(card.linkLabel || 'Open content')}</a>` : ''}</article>`).join('')}
+          ${cards.map((card, idx)=> renderRecommendedCard(card, idx)).join('')}
+        </div>
+      </article>
+      <article class="panel">
+        <h2>What's new</h2>
+        <div class="contentGrid" id="whatsNewGrid">
+          ${finalNewsCards.map((card)=> renderNewsCard(card)).join('')}
         </div>
       </article>
     </section>
@@ -7320,6 +7712,7 @@ const evidenceOpts = [
 </body>
 </html>`;
       }
+
 
       function customerTemplateHtmlFromCandidate(candidate){
         const model = customerTemplateModelFromCandidate(candidate);
@@ -7520,6 +7913,7 @@ const evidenceOpts = [
         const valueCards = Array.isArray(draft.valueCards) ? draft.valueCards.filter(Boolean).slice(0, 3) : [];
         const commercialSignals = Array.isArray(draft.commercialSignals) ? draft.commercialSignals.filter((row)=> row && (row.label || row.value)).slice(0, 3) : [];
         const cards = Array.isArray(draft.contentCards) ? draft.contentCards.filter(Boolean).slice(0, 8) : [];
+        const whatsNewCards = Array.isArray(draft.whatsNewCards) ? draft.whatsNewCards.filter(Boolean).slice(0, 3) : [];
         const actions = Array.isArray(draft.actions) ? draft.actions.filter(Boolean).slice(0, 5) : [];
         const details = Array.isArray(draft.detailSections) ? draft.detailSections.filter(Boolean).slice(0, 6) : [];
         const pitch = (draft.elevatorPitch && typeof draft.elevatorPitch === 'object') ? draft.elevatorPitch : null;
@@ -7602,7 +7996,7 @@ const evidenceOpts = [
           ${understandingText ? `
             <article class="customerPreviewSection">
               <h5>Our understanding of your needs</h5>
-              <p>A concise view of what matters most right now.</p>
+              <p>Measured readiness, not assumptions.</p>
               <div class="customerPreviewUnderstandingGrid">
                 <div class="customerPreviewUnderstandingCard">
                   <p>${esc(understandingText)}</p>
@@ -7615,8 +8009,6 @@ const evidenceOpts = [
           ` : ''}
           ${valueCards.length ? `
             <article class="customerPreviewSection customerPreviewSection--support">
-              <h5>How we will support you</h5>
-              <p>A focused plan across improve, prove, and benchmark/report.</p>
               <div class="customerPreviewStoryStack">
                 ${valueCards.map((card, idx)=> renderPreviewStoryCard(card, idx)).join('')}
               </div>
@@ -7624,8 +8016,6 @@ const evidenceOpts = [
           ` : ''}
           ${demoCard ? `
             <article class="customerPreviewSection">
-              <h5>Take a product tour</h5>
-              <p>See how your teams can run exercises and export evidence-ready summaries.</p>
               <article class="customerPreviewStoryCard customerPreviewStoryCard--tour">
                 <div class="customerPreviewStoryInner">
                   <div class="customerPreviewStoryMedia customerPreviewStoryMedia--tour" aria-hidden="true">
@@ -7675,6 +8065,22 @@ const evidenceOpts = [
               `).join('')}
             </div>
           </article>
+          ${whatsNewCards.length ? `
+            <article class="customerPreviewSection">
+              <h5>What's new</h5>
+              <div class="customerPreviewContentGrid">
+                ${whatsNewCards.map((card)=> `
+                  <article class="customerPreviewContentCard">
+                    ${card.imageUrl ? `<div class="customerPreviewImageWrap"><img class="customerPreviewContentImage" src="${esc(card.imageUrl)}" alt="${esc(card.title || 'Latest post image')}" loading="lazy" /></div>` : ''}
+                    <p>${esc(card.publishedOn || 'RSS post')}</p>
+                    <h6>${esc(card.title || 'Latest post')}</h6>
+                    <p>${esc(card.summary || '')}</p>
+                    ${card.url ? `<a class="contentLink" href="${esc(card.url)}" target="_blank" rel="noopener noreferrer">${esc(card.linkLabel || 'Read post')}</a>` : ''}
+                  </article>
+                `).join('')}
+              </div>
+            </article>
+          ` : ''}
         `;
         initCustomerPreviewStoryLayout(canvas);
       }

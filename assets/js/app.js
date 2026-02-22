@@ -1743,7 +1743,7 @@ const evidenceOpts = [
           recsBtn.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
           recsBtn.dataset.locked = unlocked ? 'false' : 'true';
           recsBtn.title = unlocked
-            ? 'Open content recommendations'
+            ? 'Open recommended resources'
             : `Locked until completion reaches 90% (current: ${(interRecsGate && interRecsGate.completion) || '0/22 (0%)'})`;
         }
         let targetSlot = null;
@@ -6165,9 +6165,15 @@ const evidenceOpts = [
       let rssCatalogHydrated = false;
       let rssCatalogHydratePromise = null;
       let rssFailureToastShown = false;
+      const CONTENT_MAX_AGE_DAYS = 365 * 3;
+      const CONTENT_FRESH_PRIORITY_DAYS = 365;
+      const CONTENT_RECENT_PRIORITY_DAYS = 365 * 2;
+      const OFFICIAL_BLOG_RSS_URL = 'https://www.immersivelabs.com/resources/blog/rss.xml';
+      const OFFICIAL_BLOG_RSS_PROXY_URL = `https://api.allorigins.win/raw?url=${encodeURIComponent(OFFICIAL_BLOG_RSS_URL)}`;
+      const IMMERSIVE_DEFAULT_IMAGE_URL = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/679228e2e5f16602a4b0c480_Why%20Immersive-cta-image.webp';
       const defaultRssFeedSources = Object.freeze([
-        { key:'c7-blog', label:"What's new", url:'https://rssgenerator.mooo.com/feeds/?p=aaHR0cHM6Ly93d3cuaW1tZXJzaXZlbGFicy5jb20vcmVzb3VyY2VzL3doYXRzLW5ldw==' },
-        { key:'blog-post', label:'Blog', url:'https://rssgenerator.mooo.com/feeds/?p=aaHR0cHM6Ly93d3cuaW1tZXJzaXZlbGFicy5jb20vcmVzb3VyY2VzL2M3LWJsb2c=' }
+        { key:'blog-post', label:'Blog (official RSS via proxy)', url: OFFICIAL_BLOG_RSS_PROXY_URL },
+        { key:'blog-post', label:'Blog (official RSS direct)', url: OFFICIAL_BLOG_RSS_URL }
       ]);
       let rssCatalogFetchReport = {
         loading: false,
@@ -6224,6 +6230,30 @@ const evidenceOpts = [
         return Number.isFinite(ts) ? ts : 0;
       }
 
+      function ageDaysFromPublished(value){
+        const ts = publishedTimestamp(value);
+        if(!ts) return null;
+        const diffMs = Date.now() - ts;
+        if(!Number.isFinite(diffMs)) return null;
+        if(diffMs < 0) return 0;
+        return Math.floor(diffMs / 86400000);
+      }
+
+      function isWithinContentAgeLimit(value){
+        const ageDays = ageDaysFromPublished(value);
+        if(ageDays == null) return true;
+        return ageDays <= CONTENT_MAX_AGE_DAYS;
+      }
+
+      function recencyScoreBonus(value){
+        const ageDays = ageDaysFromPublished(value);
+        if(ageDays == null) return 0;
+        if(ageDays <= CONTENT_FRESH_PRIORITY_DAYS) return 16;
+        if(ageDays <= CONTENT_RECENT_PRIORITY_DAYS) return 8;
+        if(ageDays <= CONTENT_MAX_AGE_DAYS) return 2;
+        return -40;
+      }
+
       function isRssCatalogSource(source){
         return /^rss\s*:/i.test(String(source || '').trim());
       }
@@ -6276,13 +6306,79 @@ const evidenceOpts = [
         return `https://picsum.photos/seed/${safeSeed}/${w}/${h}`;
       }
 
+      let cachedContentImageLookup = null;
+
+      function buildContentImageLookup(){
+        if(cachedContentImageLookup) return cachedContentImageLookup;
+        const map = new Map();
+        const ingestRow = (row)=>{
+          if(!row || typeof row !== 'object') return;
+          const imageUrl = normalizedHttpUrl(
+            row.imageUrl
+            || row.image
+            || row.thumbnail
+            || row.thumbnailUrl
+            || row.heroImage
+            || row.coverImage
+          );
+          if(!imageUrl) return;
+          const slugKey = safeSlugForContent(row.slug || '');
+          const titleKey = normalizeContentToken(row.title || '');
+          const urlKey = safeSlugForContent((()=>{
+            const directUrl = normalizedHttpUrl(row.url || '');
+            if(!directUrl) return '';
+            try{
+              const parsed = new URL(directUrl);
+              const bits = String(parsed.pathname || '').split('/').filter(Boolean);
+              return bits.length ? bits[bits.length - 1] : '';
+            }catch(err){
+              return '';
+            }
+          })());
+          if(slugKey && !map.has(`slug:${slugKey}`)) map.set(`slug:${slugKey}`, imageUrl);
+          if(titleKey && !map.has(`title:${titleKey}`)) map.set(`title:${titleKey}`, imageUrl);
+          if(urlKey && !map.has(`url:${urlKey}`)) map.set(`url:${urlKey}`, imageUrl);
+        };
+        (Array.isArray(window && window.immersiveContentCatalog) ? window.immersiveContentCatalog : []).forEach(ingestRow);
+        (Array.isArray(cachedRssCatalogRows) ? cachedRssCatalogRows : []).forEach(ingestRow);
+        cachedContentImageLookup = map;
+        return cachedContentImageLookup;
+      }
+
+      function matchedContentImageForItem(item){
+        const row = (item && typeof item === 'object') ? item : {};
+        const map = buildContentImageLookup();
+        const candidates = [];
+        const slug = safeSlugForContent(row.slug || '');
+        const title = normalizeContentToken(row.title || '');
+        if(slug) candidates.push(`slug:${slug}`);
+        if(title) candidates.push(`title:${title}`);
+        const directUrl = normalizedHttpUrl(row.url || '');
+        if(directUrl){
+          try{
+            const parsed = new URL(directUrl);
+            const parts = String(parsed.pathname || '').split('/').filter(Boolean);
+            const tail = parts.length ? safeSlugForContent(parts[parts.length - 1]) : '';
+            if(tail) candidates.push(`url:${tail}`);
+          }catch(err){
+            // ignore parse issues
+          }
+        }
+        for(let i = 0; i < candidates.length; i += 1){
+          const imageUrl = map.get(candidates[i]);
+          if(imageUrl) return imageUrl;
+        }
+        return '';
+      }
+
       function cardImageUrlForItem(item){
         const direct = normalizedHttpUrl(
           (item && (item.imageUrl || item.image || item.thumbnail || item.thumbnailUrl || item.heroImage || item.coverImage)) || ''
         );
         if(direct) return direct;
-        const seed = (item && (item.id || item.slug || item.title || item.url)) || 'immersive-content';
-        return picsumContentImage(seed, 720, 420);
+        const matched = matchedContentImageForItem(item);
+        if(matched) return matched;
+        return IMMERSIVE_DEFAULT_IMAGE_URL;
       }
 
       function firstImageFromHtmlString(html){
@@ -6335,6 +6431,17 @@ const evidenceOpts = [
         return `${text.slice(0, limit - 1).trim()}…`;
       }
 
+      function imageUrlFromRssNodeXml(nodeXml){
+        const xml = String(nodeXml || '');
+        if(!xml) return '';
+        const mediaMatch = xml.match(/<(?:media:content|media:thumbnail|enclosure)\b[^>]*\burl=["']([^"']+)["']/i);
+        if(mediaMatch && mediaMatch[1]){
+          const direct = normalizedHttpUrl(mediaMatch[1]);
+          if(direct) return direct;
+        }
+        return firstImageFromHtmlString(xml);
+      }
+
       function parseRssRows(feed, xmlText){
         if(!(window && window.DOMParser) || !feed || !xmlText) return [];
         let doc = null;
@@ -6361,6 +6468,7 @@ const evidenceOpts = [
           const link = normalizedHttpUrl(textBySelectors(['link']));
           if(!title || !link) return null;
           const pubDate = textBySelectors(['pubDate', 'dc\\:date']);
+          if(!isWithinContentAgeLimit(pubDate)) return null;
           const category = cleanFeedMetadataLabel(textBySelectors(['category']) || feed.label);
           const rawDescription = textBySelectors(['content\\:encoded', 'description']) || textBySelectors(['description', 'content\\:encoded']);
           const summary = rssSummaryFromRaw(rawDescription, 190);
@@ -6369,6 +6477,7 @@ const evidenceOpts = [
           const nodeXml = (window && window.XMLSerializer) ? new window.XMLSerializer().serializeToString(node) : '';
           const mediaNode = node.querySelector('enclosure[url], media\\:content[url], media\\:thumbnail[url]');
           const imageUrl = normalizedHttpUrl(mediaNode ? mediaNode.getAttribute('url') : '')
+            || imageUrlFromRssNodeXml(nodeXml)
             || firstImageFromHtmlString(rawDescription || textBySelectors(['content\\:encoded', 'description']))
             || firstImageFromHtmlString(nodeXml);
           return {
@@ -6380,7 +6489,7 @@ const evidenceOpts = [
             topicTags: [],
             contributors: [],
             url: link,
-            linkLabel: 'Open content',
+            linkLabel: 'Read more',
             publishedOn: pubDate,
             sourceCsv: `RSS: ${feed.label}`,
             summary,
@@ -6435,6 +6544,30 @@ const evidenceOpts = [
             deduped.push(row);
           });
           cachedRssCatalogRows = deduped.slice(0, 30);
+          if(!cachedRssCatalogRows.length){
+            const fallbackRows = (Array.isArray(window && window.immersiveOfficialBlogRssFallback) ? window.immersiveOfficialBlogRssFallback : [])
+              .filter((row)=> row && typeof row === 'object' && String(row.title || '').trim())
+              .map((row, idx)=> ({
+                id: String(row.id || `blog-post:fallback:${safeSlugForContent(row.title || idx)}`),
+                title: String(row.title || '').trim(),
+                slug: String(row.slug || '').trim(),
+                format: String(row.format || 'blog-post').trim().toLowerCase(),
+                category: cleanFeedMetadataLabel(String(row.category || 'blog')),
+                topicTags: [],
+                contributors: [],
+                url: normalizedHttpUrl(row.url),
+                linkLabel: 'Read more',
+                publishedOn: String(row.publishedOn || '').trim(),
+                sourceCsv: String(row.sourceCsv || 'RSS: Blog fallback').trim(),
+                summary: rssSummaryFromRaw(row.summary || '', 190),
+                imageUrl: normalizedHttpUrl(row.imageUrl || row.thumbnailUrl || '')
+              }))
+              .filter((row)=> !!row.url && isWithinContentAgeLimit(row.publishedOn))
+              .sort((a, b)=> publishedTimestamp(b.publishedOn) - publishedTimestamp(a.publishedOn));
+            if(fallbackRows.length){
+              cachedRssCatalogRows = fallbackRows.slice(0, 30);
+            }
+          }
           rssCatalogHydrated = true;
           rssCatalogFetchReport.loading = false;
           if(cachedRssCatalogRows.length === 0 && rssCatalogFetchReport.failed > 0){
@@ -6445,6 +6578,7 @@ const evidenceOpts = [
             }
           }
           cachedContentCatalogRows = null;
+          cachedContentImageLookup = null;
           if(state.currentView === 'recommendations'){
             const thread = resolveRecommendationThread(state.recommendationsThreadId || state.activeThread || 'current');
             renderContentRecommendationsView(recommendationsGateFromThread(thread));
@@ -6494,6 +6628,9 @@ const evidenceOpts = [
             const id = String(row.id || '').trim() || `content:${normalizeContentToken(row.title)}`;
             if(!id || seenIds.has(id)) return null;
             seenIds.add(id);
+            const publishedOn = String(row.publishedOn || '').trim();
+            const publishedTs = publishedTimestamp(publishedOn);
+            const ageDays = ageDaysFromPublished(publishedOn);
             return {
               id,
               title: String(row.title || '').trim(),
@@ -6514,11 +6651,11 @@ const evidenceOpts = [
                 return fallbackContentSearchUrl(row.title);
               })(),
               linkLabel: (() => {
-                if(normalizedHttpUrl(row.url)) return 'Open content';
+                if(normalizedHttpUrl(row.url)) return 'Read more';
                 const formatKey = String(row.format || '').trim().toLowerCase();
-                if(formatKey === 'blog-post' || formatKey === 'c7-blog') return 'Find content';
-                if(inferredContentUrl(row.format, row.slug)) return 'Open content';
-                return 'Find content';
+                if(formatKey === 'blog-post' || formatKey === 'c7-blog') return 'Read more';
+                if(inferredContentUrl(row.format, row.slug)) return 'Read more';
+                return 'Read more';
               })(),
               imageUrl: normalizedHttpUrl(
                 row.imageUrl
@@ -6528,11 +6665,13 @@ const evidenceOpts = [
                 || row.heroImage
                 || row.coverImage
               ),
-              publishedOn: String(row.publishedOn || '').trim(),
+              publishedOn,
+              publishedTs,
+              ageDays,
               sourceCsv: String(row.sourceCsv || '').trim()
             };
           })
-          .filter(Boolean);
+          .filter((row)=> !!row && (row.ageDays == null || row.ageDays <= CONTENT_MAX_AGE_DAYS));
         return cachedContentCatalogRows;
       }
 
@@ -6593,6 +6732,9 @@ const evidenceOpts = [
           score -= 8;
         }
         if(item.url) score += 3;
+        score += recencyScoreBonus(item.publishedOn);
+        if(isRssCatalogSource(item && item.sourceCsv)) score += 4;
+        if(normalizedHttpUrl(item && item.imageUrl) || matchedContentImageForItem(item)) score += 2;
         return score;
       }
 
@@ -6632,10 +6774,17 @@ const evidenceOpts = [
         if(!formatSet.size) return [];
         const rssWeight = (row)=> isRssCatalogSource(row && row.sourceCsv) ? 1 : 0;
         const available = catalogItems()
-          .filter((row)=> row && formatSet.has(String(row.format || '').toLowerCase()) && !usedIds.has(row.id))
+          .filter((row)=>
+            row
+            && formatSet.has(String(row.format || '').toLowerCase())
+            && !usedIds.has(row.id)
+            && isWithinContentAgeLimit(row.publishedOn)
+          )
           .sort((left, right)=>{
             const rssDelta = rssWeight(right) - rssWeight(left);
             if(rssDelta) return rssDelta;
+            const freshnessDelta = recencyScoreBonus(right.publishedOn) - recencyScoreBonus(left.publishedOn);
+            if(freshnessDelta) return freshnessDelta;
             return publishedTimestamp(right.publishedOn) - publishedTimestamp(left.publishedOn);
           });
         const picks = available.slice(0, Math.max(1, Number(limit) || 1));
@@ -6668,7 +6817,7 @@ const evidenceOpts = [
           summary,
           why: whyOverride || `Selected because it supports your ${outcomeLabel.toLowerCase()} priority.`,
           url: matched.url || '',
-          linkLabel: matched.linkLabel || 'Open content',
+          linkLabel: matched.linkLabel || 'Read more',
           source: matched.sourceCsv || '',
           publishedOn: matched.publishedOn || '',
           imageUrl: cardImageUrlForItem(matched)
@@ -6726,8 +6875,7 @@ const evidenceOpts = [
           if(cards.length >= maxCards) cards.pop();
           cards.push(card);
         };
-        ensureNewsFormat('c7-blog', "What's new", "Default What's New content so this page always includes the latest platform updates.");
-        ensureNewsFormat('blog-post', 'Blog', 'Default blog content to keep the page current with fresh thought leadership.');
+        ensureNewsFormat('blog-post', "What's new", 'Default blog content so this page always includes the latest platform updates.');
 
         return cards.slice(0, maxCards);
       }
@@ -6982,6 +7130,23 @@ const evidenceOpts = [
           { title:'Preferred delivery model', rows: packageFitRows.slice(0, 5) },
           { title:'Operating context', rows: contextRows.slice(0, 5) }
         ].filter((section)=> section.rows.length);
+        const contactTeam = [
+          {
+            name: 'Customer Success Lead',
+            role: 'Programme owner',
+            email: 'customer.success@immersivelabs.com'
+          },
+          {
+            name: 'Solutions Consultant',
+            role: 'Technical advisor',
+            email: 'solutions@immersivelabs.com'
+          },
+          {
+            name: 'Support Team',
+            role: 'Platform support',
+            email: 'support@immersivelabs.com'
+          }
+        ];
         const generatedOn = new Date().toISOString().slice(0, 10);
         return {
           sourceThreadId: String(record.id || 'current'),
@@ -6994,6 +7159,11 @@ const evidenceOpts = [
             eyebrow: 'Customer dashboard',
             title: `${String(record.company || 'Customer')} readiness dashboard`,
             subtitle: `Built from what ${profileName} shared, with recommendations focused on your top priorities and delivery outcomes.`,
+            imageUrl: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/678646ce52898299cc1134be_HERO%20IMAGE%20LABS.webp',
+            primaryCtaLabel: 'Recommended resources',
+            primaryCtaHref: '#recommended-resources',
+            secondaryCtaLabel: 'Contact your team',
+            secondaryCtaHref: '#contact-your-team',
             stats: [
               { label:'Primary outcome', value: (outcomeBlocks[0] && outcomeBlocks[0].title) || 'Priority outcome' },
               { label:'Package', value: String(gate.tier || 'Core') },
@@ -7032,11 +7202,12 @@ const evidenceOpts = [
                   summary:'No curated recommendations are available yet for this profile.',
                   why:'We could not find a strong content match for your selected priorities yet.',
                   url:'https://www.immersivelabs.com/resources/c7-blog',
-                  linkLabel:'Explore resources',
-                  imageUrl:picsumContentImage('no-mapped-content', 720, 420)
+                  linkLabel:'Read more',
+                  imageUrl:IMMERSIVE_DEFAULT_IMAGE_URL
                 }],
           whatsNewCards,
-          detailSections
+          detailSections,
+          contactTeam
         };
       }
 
@@ -7074,6 +7245,33 @@ const evidenceOpts = [
               videoMp4: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_mp4.mp4',
               videoWebm: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_webm.webm'
             };
+        const heroImageDefault = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/678646ce52898299cc1134be_HERO%20IMAGE%20LABS.webp';
+        const heroImageUrl = String(hero.imageUrl || '').trim() || heroImageDefault;
+        const heroPrimaryCtaLabel = String(hero.primaryCtaLabel || '').trim() || 'Recommended resources';
+        const heroPrimaryCtaHref = String(hero.primaryCtaHref || '').trim() || '#recommended-resources';
+        const heroSecondaryCtaLabel = String(hero.secondaryCtaLabel || '').trim() || 'Contact your team';
+        const heroSecondaryCtaHref = String(hero.secondaryCtaHref || '').trim() || '#contact-your-team';
+        const initialsFromName = (value)=> {
+          const tokens = String(value || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+          if(!tokens.length) return 'IL';
+          return tokens.map((token)=> token.charAt(0).toUpperCase()).join('').slice(0, 2);
+        };
+        const contactTeamRaw = Array.isArray(model.contactTeam) ? model.contactTeam.filter(Boolean).slice(0, 4) : [];
+        const contactTeam = (contactTeamRaw.length ? contactTeamRaw : [{
+          name: 'Customer Success Lead',
+          role: 'Programme owner',
+          email: 'customer.success@immersivelabs.com'
+        }]).map((contact)=> {
+          const entry = (contact && typeof contact === 'object') ? contact : {};
+          return {
+            name: String(entry.name || 'Customer Success Lead').trim() || 'Customer Success Lead',
+            role: String(entry.role || 'Programme owner').trim() || 'Programme owner',
+            email: String(entry.email || '').trim() || 'customer.success@immersivelabs.com',
+            imageUrl: String(entry.imageUrl || '').trim(),
+            initials: initialsFromName(entry.name || 'Customer Success Lead')
+          };
+        });
+        const primaryContactEmail = String((contactTeam[0] && contactTeam[0].email) || 'customer.success@immersivelabs.com').trim();
 
         const normalizedId = (value)=> String(value || '')
           .toLowerCase()
@@ -7180,7 +7378,11 @@ const evidenceOpts = [
           const focusArea = String(item.outcomeLabel || 'Priority outcome').trim() || 'Priority outcome';
           const summary = String(item.summary || '').trim();
           const why = String(item.why || '').trim();
-          return `<article class="contentCard">${item.imageUrl ? `<div class="contentImageWrap"><img class="contentImage" src="${esc(item.imageUrl)}" alt="${esc(item.title || 'Recommended content image')}" loading="lazy" /></div>` : ''}<p class="contentEyebrow">Recommendation ${idx + 1} | ${esc(formatLabel)}</p><h3>${esc(item.title || 'Content block')}</h3><p class="contentText"><strong>Focus area:</strong> ${esc(focusArea)}</p>${summary ? `<p class="contentText">${esc(summary)}</p>` : ''}${why ? `<p class="contentText"><strong>Why this is relevant:</strong> ${esc(why)}</p>` : ''}${item.url ? `<a class="contentLink" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.linkLabel || 'Open content')}</a>` : ''}</article>`;
+          const title = String(item.title || 'Content block').trim() || 'Content block';
+          const titleHtml = item.url
+            ? `<h3><a class="contentTitleLink" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(title)}</a></h3>`
+            : `<h3>${esc(title)}</h3>`;
+          return `<article class="contentCard">${item.imageUrl ? `<div class="contentImageWrap"><img class="contentImage" src="${esc(item.imageUrl)}" alt="${esc(item.title || 'Recommended content image')}" loading="lazy" /></div>` : ''}<p class="contentEyebrow">Recommendation ${idx + 1} | ${esc(formatLabel)}</p>${titleHtml}<p class="contentText"><strong>Focus area:</strong> ${esc(focusArea)}</p>${summary ? `<p class="contentText">${esc(summary)}</p>` : ''}${why ? `<p class="contentText"><strong>Why this is relevant:</strong> ${esc(why)}</p>` : ''}${item.url ? `<a class="contentLink" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.linkLabel || 'Read more')}</a>` : ''}</article>`;
         };
 
         const newsCards = (whatsNewCardsInput.length
@@ -7204,13 +7406,16 @@ const evidenceOpts = [
           const eyebrow = publishedLabel ? `${publishedLabel} | RSS post` : 'RSS post';
           const summary = String(item.summary || '').trim() || 'Latest update from the Immersive Labs blog.';
           const linkLabel = String(item.linkLabel || '').trim() || 'Read post';
-          return `<article class="contentCard">${item.imageUrl ? `<div class="contentImageWrap"><img class="contentImage" loading="lazy" src="${esc(item.imageUrl)}" alt="${esc(item.title || 'Latest post image')}" /></div>` : ''}<p class="contentEyebrow">${esc(eyebrow)}</p><h3>${esc(item.title || 'Latest post')}</h3><p class="contentText">${esc(summary)}</p>${item.url ? `<a class="contentLink" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(linkLabel)}</a>` : ''}</article>`;
+          const title = String(item.title || 'Latest post').trim() || 'Latest post';
+          const titleHtml = item.url
+            ? `<h3><a class="contentTitleLink" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(title)}</a></h3>`
+            : `<h3>${esc(title)}</h3>`;
+          return `<article class="contentCard">${item.imageUrl ? `<div class="contentImageWrap"><img class="contentImage" loading="lazy" src="${esc(item.imageUrl)}" alt="${esc(item.title || 'Latest post image')}" /></div>` : ''}<p class="contentEyebrow">${esc(eyebrow)}</p>${titleHtml}<p class="contentText">${esc(summary)}</p>${item.url ? `<a class="contentLink" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(linkLabel)}</a>` : ''}</article>`;
         };
 
         const logoSrc = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg';
         const companyLabel = String(model.company || 'your organisation').trim() || 'your organisation';
-        const readinessParagraphOne = 'Immersive does not just train teams. It measures real-world capability through hands-on labs and realistic exercises, so you can see where readiness is strong, where gaps remain, and how quickly those gaps are closing.';
-        const readinessParagraphTwo = `For ${companyLabel}, this means defensible evidence you can use with leadership and external stakeholders: clear baselines, visible movement over time, and proof aligned to board and regulatory expectations.`;
+        const readinessParagraph = `For ${companyLabel}, this means defensible evidence you can use with leadership and external stakeholders: clear baselines, visible movement over time, and proof aligned to board and regulatory expectations.`;
 
         return `<!doctype html>
 <html lang="en">
@@ -7231,16 +7436,15 @@ const evidenceOpts = [
     .topbarInner { max-width: var(--container); width: 100%; margin: 0px auto; padding: 0px 64px; height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 0.9rem; }
     .brand { display: inline-flex; align-items: center; }
     .brand img { display: block; height: 28px; width: auto; }
-    .topPackagePill { border: 1px solid var(--line); border-radius: var(--radius-btn); background: rgb(255, 255, 255); padding: 10px 16px; font-size: 16px; line-height: 20.8px; color: rgb(43, 63, 105); font-weight: 400; }
+    .topContactBtn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 10px 16px; border-radius: var(--radius-btn); border: 1px solid var(--primary-colours--azure); background: var(--primary-colours--azure); color: rgb(255, 255, 255); font-size: 16px; line-height: 20px; font-weight: 400; text-decoration: none; }
+    .topContactBtn:hover { background: rgb(86, 119, 248); border-color: rgb(86, 119, 248); color: rgb(255, 255, 255); }
     .hero { margin-top: 20px; }
     .padding-global.padding-24 { padding: 0px; }
     .container-large { max-width: 100%; margin: 0px auto; }
     .padding-section-24.platform-hero { padding: 0px; }
     .header90_component { width: 100%; }
-    .header90_card.platform { position: relative; display: grid; grid-template-columns: minmax(0px, 1fr) minmax(0px, 580px); min-height: 430px; background: rgb(243, 244, 247); border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; isolation: isolate; }
-    .header90_background-image-wrapper.platform-2.improve-2 { position: absolute; inset: 0px; z-index: 0; pointer-events: none; overflow: hidden; }
-    .header90_background-image-wrapper.platform-2.improve-2::before { content: ""; position: absolute; right: 10%; top: 0px; bottom: 0px; width: 46%; height: auto; background: linear-gradient(rgb(132, 240, 240) 0%, rgb(77, 119, 255) 58%, rgb(53, 95, 255) 100%); opacity: 0.96; }
-    .header90_background-image-wrapper.platform-2.improve-2::after { content: ""; position: absolute; right: 5%; top: 0px; bottom: 0px; width: 54%; height: auto; background: radial-gradient(60% 70% at 20% 70%, rgba(81, 223, 186, 0.54), transparent 68%); filter: blur(16px); }
+    .header90_card.platform { position: relative; display: grid; grid-template-columns: minmax(0px, 1fr) minmax(0px, 620px); min-height: 430px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; isolation: isolate; }
+    .header90_background-image-wrapper.platform-2.improve-2 { display: none; }
     .header90_card-content { position: relative; z-index: 2; padding: 44px 44px 42px; display: flex; flex-direction: column; justify-content: center; background: transparent; }
     .max-width-medium--lp { max-width: 62ch; }
     .margin-bottom.margin-small { margin-bottom: 14px; }
@@ -7255,8 +7459,8 @@ const evidenceOpts = [
     .button.is-secondary.is-lightmode.w-button { background: rgb(255, 255, 255); border-color: rgba(23, 24, 28, 0.18); color: rgb(31, 47, 82); }
     .button.is-secondary.is-lightmode.w-button:hover { background: rgb(245, 247, 252); }
     .header90_background-image-wrapper-platform.improve { position: relative; z-index: 1; min-height: 100%; overflow: hidden; background: transparent; }
-    .improve-lp-hero-image { position: absolute; inset: 0px; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; transform: none; z-index: 1; filter: drop-shadow(rgba(7, 18, 44, 0.22) 0px 24px 40px); }
-    .improve-ui-popup.prove { position: absolute; left: 8%; top: 18%; width: min(272px, 44%); height: auto; z-index: 2; filter: drop-shadow(rgba(7, 18, 44, 0.2) 0px 14px 26px); }
+    .improve-lp-hero-image { position: absolute; inset: 0px; width: 100%; height: 100%; object-fit: cover; object-position: center center; transform: none; z-index: 1; filter: none; }
+    .improve-ui-popup.prove { display: none; }
     .layout { margin: 20px 0px 42px; display: grid; gap: 16px; }
     .panel { border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-soft); padding: 24px; }
     .panel h2 { font-size: 34px; line-height: 1.05; }
@@ -7268,13 +7472,13 @@ const evidenceOpts = [
     .sectionHead--center > div { margin: 0px auto; }
     .sectionHead--center h2 { font-size: clamp(2.55rem, 3.45vw, 3.3rem); }
     .sectionHead--center p { font-size: 27px; }
-    .panel--understanding { border: none; border-radius: 0px; box-shadow: none; background: transparent; padding: 0px; }
-    .panel--understanding .understandingFeature { margin: 0px auto 56px; }
+    .sectionHeadSub { margin-top: 10px !important; font-size: clamp(1.6rem, 2.2vw, 2rem) !important; line-height: 1.2 !important; color: rgb(27, 46, 86) !important; }
+    .sectionHeadLead { margin: 14px auto 0px !important; font-size: 18px !important; line-height: 1.35 !important; max-width: 68ch; color: rgb(62, 79, 111) !important; }
     .panel--support { border: none; background: transparent; box-shadow: none; padding: 0px; }
     .panel--outcomes h2 { font-size: 34px; }
     .storyStack { --story-top: 96px; --story-gap: 20px; max-width: 1360px; margin: 20px auto 56px; padding-bottom: 120px; }
     .storyCard { position: relative; z-index: 1; border: 1px solid var(--line); border-radius: var(--radius-card); background: rgb(255, 255, 255); box-shadow: rgba(7, 18, 44, 0.12) 0px 16px 52px, rgba(7, 18, 44, 0.06) 0px 2px 10px; overflow: hidden; }
-    .storyStack .storyCard { --story-i: 0; --story-scale: 1; position: sticky; top: calc(var(--story-top) + (var(--story-i) * var(--story-gap))); transform: scale(var(--story-scale)); transform-origin: center top; will-change: transform; opacity: 0; transition: opacity 0.5s; }
+    .storyStack .storyCard { --story-i: 0; --story-scale: 1; position: sticky; top: calc(var(--story-top) + (var(--story-i) * var(--story-gap))); transform: scale(var(--story-scale)); transform-origin: center top; will-change: transform; opacity: 1; transition: opacity 0.5s; }
     .storyStack .storyCard.is-in { opacity: 1; }
     .storyStack .storyCard:not(:first-child) { margin-top: var(--story-gap); }
     .storyStack .storyCard:nth-child(1) { z-index: 1; --story-i: 0; }
@@ -7332,21 +7536,37 @@ const evidenceOpts = [
     .actionsList { margin: 12px 0px 0px; padding-left: 1.2rem; display: grid; gap: 8px; font-size: 18px; line-height: 1.25; }
     .resourceRow { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
     .resourcePill { border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: rgb(255, 255, 255); font-size: 14px; line-height: 18px; color: rgb(42, 58, 87); }
-    .understandingFeature { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0px, 1fr)); gap: 12px; align-items: stretch; }
-    .understandingFeatureCopy { border: none; border-radius: 0px; background: transparent; padding: 20px 22px; }
-    .understandingFeatureKicker { margin: 0px 0px 10px; font-size: 13px; line-height: 16px; text-transform: uppercase; letter-spacing: 0.14em; color: rgb(106, 120, 160); }
-    .understandingFeatureCopy h3 { margin: 0px; font-size: 36px; line-height: 1.05; color: rgb(27, 46, 86); }
-    .understandingFeatureCopy p { margin: 12px 0px 0px; color: rgb(62, 79, 111); font-size: 18px; line-height: 1.3; }
-    .understandingFeatureMedia { margin: 0px; min-height: 220px; border: none; border-radius: 0px; overflow: hidden; background: transparent; }
-    .understandingFeatureMedia img { display: block; width: 100%; height: 100%; object-fit: cover; }
     .contentGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
     .contentCard { border: 1px solid var(--line); border-radius: var(--radius-card); background: rgb(255, 255, 255); padding: 16px; display: grid; gap: 8px; }
     .contentImageWrap { margin: -16px -16px 8px; border-radius: var(--radius-card) var(--radius-card) 0 0; overflow: hidden; aspect-ratio: 16 / 9; background: rgb(220, 231, 255); }
     .contentImage { display: block; width: 100%; height: 100%; object-fit: cover; }
     .contentEyebrow { margin: 0px; font-size: 13px; line-height: 16px; letter-spacing: 0.1em; text-transform: uppercase; color: rgb(101, 119, 155); }
     .contentCard h3 { margin: 0px; font-size: 24px; line-height: 1.15; }
+    .contentTitleLink { color: inherit; text-decoration: none; text-decoration-thickness: 1.5px; text-underline-offset: 3px; border-radius: 4px; transition: color 0.18s, text-decoration-color 0.18s; }
+    .contentTitleLink:hover, .contentTitleLink:focus-visible { color: var(--primary-colours--azure); text-decoration: underline; text-decoration-color: rgba(60, 100, 255, 0.7); outline: none; }
     .contentText { margin: 0px; color: rgb(76, 93, 124); font-size: 16px; line-height: 1.3; }
     .contentLink { display: inline-flex; width: max-content; color: rgb(18, 56, 213); font-size: 16px; line-height: 20px; font-weight: 400; text-decoration: none; border-bottom: 1px solid rgba(18, 56, 213, 0.22); padding-bottom: 1px; }
+    .panel--contact { background: rgb(255, 255, 255); }
+    .contactGrid { margin-top: 16px; display: grid; gap: 16px; grid-template-columns: minmax(0px, 1fr) minmax(0px, 1.2fr); }
+    .contactTeamGrid { display: grid; gap: 12px; }
+    .contactPerson { border: 1px solid var(--line); border-radius: var(--radius-card); background: rgb(255, 255, 255); padding: 14px; display: grid; grid-template-columns: 56px minmax(0px, 1fr); gap: 10px; align-items: center; }
+    .contactAvatar, .contactAvatarImg { width: 56px; height: 56px; border-radius: 999px; display: block; }
+    .contactAvatar { border: 1px solid rgba(60, 100, 255, 0.22); background: rgba(60, 100, 255, 0.08); color: rgb(35, 66, 147); font-size: 18px; line-height: 56px; font-weight: 600; text-align: center; }
+    .contactAvatarImg { object-fit: cover; border: 1px solid rgba(60, 100, 255, 0.22); }
+    .contactPersonName { margin: 0px; font-size: 18px; line-height: 1.2; color: rgb(23, 39, 66); }
+    .contactPersonRole { margin: 4px 0px 0px; font-size: 14px; line-height: 1.35; color: rgb(82, 99, 130); }
+    .contactPersonEmail { margin: 6px 0px 0px; font-size: 14px; line-height: 1.35; color: rgb(23, 76, 180); text-decoration: none; }
+    .contactPersonEmail:hover, .contactPersonEmail:focus-visible { text-decoration: underline; outline: none; }
+    .contactForm { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 16px; background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%); }
+    .contactFormGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0px, 1fr)); }
+    .contactFormField { display: grid; gap: 6px; }
+    .contactFormField--full { grid-column: 1 / -1; }
+    .contactForm label { font-size: 14px; line-height: 1.3; color: rgb(70, 89, 122); }
+    .contactForm input, .contactForm textarea { width: 100%; border: 1px solid rgba(23, 24, 28, 0.18); border-radius: 4px; padding: 10px 12px; font: inherit; font-size: 16px; line-height: 1.35; color: var(--ink); background: rgb(255, 255, 255); }
+    .contactForm textarea { min-height: 116px; resize: vertical; }
+    .contactForm input:focus-visible, .contactForm textarea:focus-visible { outline: none; box-shadow: var(--focus); border-color: rgba(60, 100, 255, 0.55); }
+    .contactFormFoot { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .contactFormHint { margin: 0px; font-size: 13px; line-height: 1.35; color: rgb(82, 99, 130); }
     .detailsGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
     .detailCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 12%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(rgb(255, 255, 255), rgb(248, 250, 255)); padding: 16px; box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; }
     .detailCard h3 { margin: 0px 0px 10px; font-size: 24px; line-height: 1.1; color: rgb(36, 60, 104); }
@@ -7360,18 +7580,13 @@ const evidenceOpts = [
       .topbarInner { padding: 0px 40px; }
       .header90_card.platform { grid-template-columns: minmax(0px, 1fr) minmax(0px, 500px); }
       .header90_card-content { padding: 38px 36px; }
-      .improve-ui-popup.prove { left: 8%; top: 16%; width: min(250px, 44%); }
-      .header90_background-image-wrapper.platform-2.improve-2::before { right: 8%; width: 50%; }
     }
     @media (max-width: 1080px) {
       .wrap { padding: 0px 24px; }
       .topbarInner { padding: 0px 24px; height: 68px; }
       .header90_card.platform { grid-template-columns: minmax(0px, 1fr); min-height: 0px; }
       .header90_card-content { padding: 32px 26px; }
-      .header90_background-image-wrapper-platform.improve { min-height: 280px; }
-      .header90_background-image-wrapper.platform-2.improve-2::before { right: 20%; width: 52%; }
-      .header90_background-image-wrapper.platform-2.improve-2::after { right: 16%; width: 56%; }
-      .improve-ui-popup.prove { left: 8%; top: 14%; width: min(220px, 40%); }
+      .header90_background-image-wrapper-platform.improve { min-height: 320px; }
       .storyStack { --story-top: 0; --story-gap: 20px; padding-bottom: 48px; }
       .storyStack .storyCard { position: relative; top: auto; transition: none; opacity: 1; will-change: auto; transform: none !important; }
       .storyStack .storyCard:not(:first-child) { margin-top: 20px; }
@@ -7387,7 +7602,7 @@ const evidenceOpts = [
       .storyCard--tour .storyContent h3 { font-size: 30px; }
       .storyCard--tour .storyInner::before { background: linear-gradient(rgba(5, 10, 24, 0.66) 0%, rgba(5, 10, 24, 0.8) 100%); }
       .storyContent { padding: 30px 26px; }
-      .understandingFeature { grid-template-columns: 1fr; }
+      .contactGrid { grid-template-columns: 1fr; }
       .outcomeGrid, .contentGrid, .detailsGrid { grid-template-columns: repeat(2, minmax(0px, 1fr)); }
       .kvRow { grid-template-columns: 1fr; gap: 0.2rem; }
     }
@@ -7398,8 +7613,9 @@ const evidenceOpts = [
       .panel h2 { font-size: 28px; }
       .sectionHead h2 { font-size: 28px; }
       .storyContent h3 { font-size: 30px; }
-      .storyContent p, .storyBullets li, .storyList li, .actionsList, .understandingFeatureCopy p { font-size: 16px; }
-      .topPackagePill { font-size: 14px; line-height: 18px; padding: 8px 12px; }
+      .storyContent p, .storyBullets li, .storyList li, .actionsList { font-size: 16px; }
+      .topContactBtn { font-size: 14px; line-height: 18px; padding: 8px 12px; min-height: 40px; }
+      .contactFormGrid { grid-template-columns: 1fr; }
     }
     @media (max-width: 479px) {
       .wrap { padding: 0px 16px; }
@@ -7410,8 +7626,6 @@ const evidenceOpts = [
       .button-group { gap: 8px; }
       .button.w-button { width: 100%; }
       .header90_background-image-wrapper-platform.improve { min-height: 240px; }
-      .header90_background-image-wrapper.platform-2.improve-2::before { right: 18%; width: 54%; }
-      .improve-ui-popup.prove { width: min(170px, 40%); }
       .sectionHead h2 { font-size: 24px; }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -7425,7 +7639,7 @@ const evidenceOpts = [
       <a class="brand" href="https://www.immersivelabs.com/" target="_blank" rel="noopener noreferrer" aria-label="Immersive">
         <img src="${esc(logoSrc)}" alt="Immersive" />
       </a>
-      <span class="topPackagePill">Recommended package: ${esc(packageRecommendation.title || `${model.tier || 'Core'} package`)}</span>
+      <a class="topContactBtn" href="#contact-your-team">Contact us</a>
     </div>
   </header>
   <main class="wrap">
@@ -7435,7 +7649,6 @@ const evidenceOpts = [
           <div class="padding-section-24 platform-hero">
             <div class="header90_component">
               <div class="header90_card platform">
-                <div class="header90_background-image-wrapper platform-2 improve-2"></div>
                 <div class="header90_card-content">
                   <div class="max-width-medium--lp">
                     <div class="margin-bottom margin-small">
@@ -7450,14 +7663,13 @@ const evidenceOpts = [
                   </div>
                   <div class="margin-top margin-medium">
                     <div class="button-group">
-                      <a href="https://info.immersivelabs.com/whitepaper-improving-cyber-readiness" target="_blank" rel="noopener noreferrer" class="button w-button">Get the White Paper</a>
-                      <a href="https://www.immersivelabs.com/demo" target="_blank" rel="noopener noreferrer" class="button is-secondary is-lightmode w-button">Request a Demo</a>
+                      <a href="${esc(heroPrimaryCtaHref)}" class="button w-button">${esc(heroPrimaryCtaLabel)}</a>
+                      <a href="${esc(heroSecondaryCtaHref)}" class="button is-secondary is-lightmode w-button">${esc(heroSecondaryCtaLabel)}</a>
                     </div>
                   </div>
                 </div>
                 <div class="header90_background-image-wrapper-platform improve" aria-hidden="true">
-                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/690dd160fa41a6ef7268b02d_584dc5dbb5fc30e2827548aabd2b706f_improve-lp-hero-image.webp" loading="eager" alt="" class="improve-lp-hero-image" />
-                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6902225b2a4bb3e47190b10a_28d69c85968eeef4480b03c088187cd2_home-ui-pop-up-2.webp" loading="lazy" alt="" class="improve-ui-popup prove" width="255" height="95" />
+                  <img src="${esc(heroImageUrl)}" loading="eager" alt="" class="improve-lp-hero-image" />
                 </div>
               </div>
             </div>
@@ -7468,8 +7680,7 @@ const evidenceOpts = [
     <section class="layout">
       ${outcomeBlocks.length ? `<article class="panel panel--outcomes"><h2>Your top outcomes</h2><p class="panelSub">The three priorities we recommend focusing on first.</p><div class="outcomeGrid">${outcomeBlocks.map((outcome, idx)=> `<article class="outcomeCard"><div class="outcomeHead"><div class="outcomeRing" style="--pct:${metricPercent(outcome.metric, idx)}"><span>${metricPercent(outcome.metric, idx)}%</span></div><h3>${esc(outcome.title || `Priority outcome ${idx + 1}`)}</h3></div><p>${esc(outcome.detail || '')}</p></article>`).join('')}</div></article>` : ''}
       ${details.length ? `<article class="panel"><h2>What you told us in the meeting</h2><p class="panelSub">Your context, constraints, and operating priorities as we captured them.</p><div class="detailsGrid">${details.map((section)=> `<article class="detailCard"><h3>${esc(section.title || 'Section')}</h3>${(Array.isArray(section.rows) ? section.rows : []).map((row)=> `<div class="kvRow"><span class="kvLabel">${esc((row && row.label) || 'Field')}</span><span class="kvValue">${esc((row && row.value) || '—')}</span></div>`).join('')}</article>`).join('')}</div></article>` : ''}
-      <div class="sectionHead sectionHead--center"><div><h2>Our understanding of your needs</h2><p>Measured readiness, not assumptions.</p></div></div>
-      <article class="panel panel--understanding"><div class="understandingFeature"><div class="understandingFeatureCopy"><p class="understandingFeatureKicker">Readiness narrative</p><h3>Measuring cyber readiness with Immersive</h3><p>${esc(readinessParagraphOne)}</p><p>${esc(readinessParagraphTwo)}</p></div><figure class="understandingFeatureMedia"><img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/679228e2e5f16602a4b0c480_Why%20Immersive-cta-image.webp" alt="Immersive readiness visual" loading="lazy" width="770" height="645" /></figure></div></article>
+      <div class="sectionHead sectionHead--center"><div><h2>Our understanding of your needs</h2><p class="sectionHeadSub">Measuring cyber readiness with Immersive</p><p class="sectionHeadLead">${esc(readinessParagraph)}</p></div></div>
       <article class="panel panel--support">
         <div class="storyStack">
           <article class="storyCard reverse">
@@ -7548,22 +7759,51 @@ const evidenceOpts = [
         <p class="panelSub">Suggested next steps for your team over the next 30 days.</p>
         <ol class="actionsList">${actions.map((line)=> `<li>${esc(line)}</li>`).join('')}</ol>
       </article>
-      <article class="panel">
+      <article class="panel" id="recommended-resources">
         <h2>Recommended resources</h2>
         <p class="panelSub">Resources and content packs aligned to your priorities.</p>
         <div class="resourceRow">${resources.map((item)=> `<span class="resourcePill">${esc(item)}</span>`).join('')}</div>
       </article>
-      <article class="panel">
+      <article class="panel" id="recommended-for-you">
         <h2>Recommended for you</h2>
         <p class="panelSub">A short list of articles, webinars, and case studies selected for your team.</p>
         <div class="contentGrid">
           ${cards.map((card, idx)=> renderRecommendedCard(card, idx)).join('')}
         </div>
       </article>
-      <article class="panel">
+      <article class="panel" id="whats-new">
         <h2>What's new</h2>
         <div class="contentGrid" id="whatsNewGrid">
           ${finalNewsCards.map((card)=> renderNewsCard(card)).join('')}
+        </div>
+      </article>
+      <article class="panel panel--contact" id="contact-your-team">
+        <h2>Get in touch with your team</h2>
+        <p class="panelSub">Use this form to contact your Immersive customer team and align next steps.</p>
+        <div class="contactGrid">
+          <div class="contactTeamGrid">
+            ${contactTeam.map((contact)=> `<article class="contactPerson">${contact.imageUrl ? `<img class="contactAvatarImg" src="${esc(contact.imageUrl)}" alt="${esc(contact.name)}" loading="lazy" />` : `<span class="contactAvatar">${esc(contact.initials)}</span>`}<div><h3 class="contactPersonName">${esc(contact.name)}</h3><p class="contactPersonRole">${esc(contact.role)}</p><a class="contactPersonEmail" href="mailto:${esc(contact.email)}">${esc(contact.email)}</a></div></article>`).join('')}
+          </div>
+          <form class="contactForm" data-contact-form>
+            <div class="contactFormGrid">
+              <div class="contactFormField">
+                <label for="contactName">Your name</label>
+                <input id="contactName" name="name" type="text" autocomplete="name" required />
+              </div>
+              <div class="contactFormField">
+                <label for="contactEmail">Work email</label>
+                <input id="contactEmail" name="email" type="email" autocomplete="email" required />
+              </div>
+              <div class="contactFormField contactFormField--full">
+                <label for="contactMessage">Message</label>
+                <textarea id="contactMessage" name="message" required placeholder="How can we help your team next?"></textarea>
+              </div>
+            </div>
+            <div class="contactFormFoot">
+              <p class="contactFormHint">Messages are routed to ${esc(primaryContactEmail)}.</p>
+              <button type="submit" class="button w-button">Send message</button>
+            </div>
+          </form>
         </div>
       </article>
     </section>
@@ -7706,6 +7946,29 @@ const evidenceOpts = [
           asset.addEventListener('load', refreshStoryLayout, { once:true });
           asset.addEventListener('loadedmetadata', refreshStoryLayout, { once:true });
         });
+        var contactForm = document.querySelector('[data-contact-form]');
+        if(contactForm){
+          contactForm.addEventListener('submit', function(event){
+            event.preventDefault();
+            var recipient = '${esc(primaryContactEmail)}';
+            if(!recipient) return;
+            var nameEl = contactForm.querySelector('input[name="name"]');
+            var emailEl = contactForm.querySelector('input[name="email"]');
+            var messageEl = contactForm.querySelector('textarea[name="message"]');
+            var senderName = String(nameEl && nameEl.value || '').trim();
+            var senderEmail = String(emailEl && emailEl.value || '').trim();
+            var senderMessage = String(messageEl && messageEl.value || '').trim();
+            if(!senderName || !senderEmail || !senderMessage) return;
+            var subject = 'Customer dashboard follow-up';
+            var body = [
+              'Name: ' + senderName,
+              'Email: ' + senderEmail,
+              '',
+              senderMessage
+            ].join('\n');
+            window.location.href = 'mailto:' + recipient + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+          });
+        }
       });
     })();
   </script>
@@ -7917,8 +8180,7 @@ const evidenceOpts = [
         const actions = Array.isArray(draft.actions) ? draft.actions.filter(Boolean).slice(0, 5) : [];
         const details = Array.isArray(draft.detailSections) ? draft.detailSections.filter(Boolean).slice(0, 6) : [];
         const pitch = (draft.elevatorPitch && typeof draft.elevatorPitch === 'object') ? draft.elevatorPitch : null;
-        const understandingText = String(draft.needsSummary || (pitch ? pitch.pitch30 : '') || '').trim();
-        const understandingImageUrl = picsumContentImage(`${String(draft.company || 'customer').trim()}-understanding`, 960, 640);
+        const understandingLead = `For ${String(draft.company || 'your organisation').trim() || 'your organisation'}, this means defensible evidence you can use with leadership and external stakeholders: clear baselines, visible movement over time, and proof aligned to board and regulatory expectations.`;
         const esc = (value)=> escapeHtml(String(value == null ? '' : value));
         const demoCard = (draft.demoCard && typeof draft.demoCard === 'object') ? draft.demoCard : null;
         const safeToken = (value)=> String(value || '')
@@ -7993,20 +8255,11 @@ const evidenceOpts = [
               </div>
             </article>
           ` : ''}
-          ${understandingText ? `
-            <article class="customerPreviewSection">
-              <h5>Our understanding of your needs</h5>
-              <p>Measured readiness, not assumptions.</p>
-              <div class="customerPreviewUnderstandingGrid">
-                <div class="customerPreviewUnderstandingCard">
-                  <p>${esc(understandingText)}</p>
-                </div>
-                <figure class="customerPreviewUnderstandingMedia">
-                  <img src="${esc(understandingImageUrl)}" alt="Illustrative customer context image" loading="lazy" />
-                </figure>
-              </div>
-            </article>
-          ` : ''}
+          <article class="customerPreviewSection">
+            <h5>Our understanding of your needs</h5>
+            <p>Measuring cyber readiness with Immersive.</p>
+            <p>${esc(understandingLead)}</p>
+          </article>
           ${valueCards.length ? `
             <article class="customerPreviewSection customerPreviewSection--support">
               <div class="customerPreviewStoryStack">
@@ -8238,7 +8491,7 @@ const evidenceOpts = [
           card.summary = readValue('#customerTemplateFieldSummary') || card.summary || '';
           card.why = readValue('#customerTemplateFieldWhy') || card.why || '';
           card.url = contentUrl;
-          card.linkLabel = readValue('#customerTemplateFieldLinkLabel') || card.linkLabel || 'Open content';
+          card.linkLabel = readValue('#customerTemplateFieldLinkLabel') || card.linkLabel || 'Read more';
           card.imageUrl = imageUrl;
           return true;
         }
@@ -8499,7 +8752,7 @@ const evidenceOpts = [
               <p class="contentRecSummary">${escapeHtml(card.summary)}</p>
               <p class="contentRecWhy"><strong>Why this match:</strong> ${escapeHtml(card.why)}</p>
               ${card.url
-                ? `<a class="contentRecLink" href="${escapeHtml(card.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Open content')}</a>`
+                ? `<a class="contentRecLink" href="${escapeHtml(card.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Read more')}</a>`
                 : ''
               }
               ${publishedLabel ? `<p class="contentRecMeta"><strong>Published:</strong> ${escapeHtml(publishedLabel)}</p>` : ''}
@@ -8631,7 +8884,7 @@ const evidenceOpts = [
               <li>
                 <strong>${idx + 1}. ${escapeHtml(card.title)}</strong>
                 ${card.url
-                  ? ` <a href="${escapeHtml(card.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Open content')}</a>`
+                  ? ` <a href="${escapeHtml(card.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Read more')}</a>`
                   : ''
                 }
                 <div class="emailBuilderResourceMeta">${escapeHtml(`${card.format} · ${card.outcomeLabel}`)}</div>

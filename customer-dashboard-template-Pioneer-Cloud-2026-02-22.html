@@ -17,16 +17,15 @@
     .topbarInner { max-width: var(--container); width: 100%; margin: 0px auto; padding: 0px 64px; height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 0.9rem; }
     .brand { display: inline-flex; align-items: center; }
     .brand img { display: block; height: 28px; width: auto; }
-    .topPackagePill { border: 1px solid var(--line); border-radius: var(--radius-btn); background: rgb(255, 255, 255); padding: 10px 16px; font-size: 16px; line-height: 20.8px; color: rgb(43, 63, 105); font-weight: 400; }
+    .topContactBtn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 10px 16px; border-radius: var(--radius-btn); border: 1px solid var(--primary-colours--azure); background: var(--primary-colours--azure); color: rgb(255, 255, 255); font-size: 16px; line-height: 20px; font-weight: 400; text-decoration: none; }
+    .topContactBtn:hover { background: rgb(86, 119, 248); border-color: rgb(86, 119, 248); color: rgb(255, 255, 255); }
     .hero { margin-top: 20px; }
     .padding-global.padding-24 { padding: 0px; }
     .container-large { max-width: 100%; margin: 0px auto; }
     .padding-section-24.platform-hero { padding: 0px; }
     .header90_component { width: 100%; }
-    .header90_card.platform { position: relative; display: grid; grid-template-columns: minmax(0px, 1fr) minmax(0px, 580px); min-height: 430px; background: rgb(243, 244, 247); border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; isolation: isolate; }
-    .header90_background-image-wrapper.platform-2.improve-2 { position: absolute; inset: 0px; z-index: 0; pointer-events: none; overflow: hidden; }
-    .header90_background-image-wrapper.platform-2.improve-2::before { content: ""; position: absolute; right: 10%; top: 0px; bottom: 0px; width: 46%; height: auto; background: linear-gradient(rgb(132, 240, 240) 0%, rgb(77, 119, 255) 58%, rgb(53, 95, 255) 100%); opacity: 0.96; }
-    .header90_background-image-wrapper.platform-2.improve-2::after { content: ""; position: absolute; right: 5%; top: 0px; bottom: 0px; width: 54%; height: auto; background: radial-gradient(60% 70% at 20% 70%, rgba(81, 223, 186, 0.54), transparent 68%); filter: blur(16px); }
+    .header90_card.platform { position: relative; display: grid; grid-template-columns: minmax(0px, 1fr) minmax(0px, 620px); min-height: 430px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; isolation: isolate; }
+    .header90_background-image-wrapper.platform-2.improve-2 { display: none; }
     .header90_card-content { position: relative; z-index: 2; padding: 44px 44px 42px; display: flex; flex-direction: column; justify-content: center; background: transparent; }
     .max-width-medium--lp { max-width: 62ch; }
     .margin-bottom.margin-small { margin-bottom: 14px; }
@@ -41,8 +40,8 @@
     .button.is-secondary.is-lightmode.w-button { background: rgb(255, 255, 255); border-color: rgba(23, 24, 28, 0.18); color: rgb(31, 47, 82); }
     .button.is-secondary.is-lightmode.w-button:hover { background: rgb(245, 247, 252); }
     .header90_background-image-wrapper-platform.improve { position: relative; z-index: 1; min-height: 100%; overflow: hidden; background: transparent; }
-    .improve-lp-hero-image { position: absolute; inset: 0px; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; transform: none; z-index: 1; filter: drop-shadow(rgba(7, 18, 44, 0.22) 0px 24px 40px); }
-    .improve-ui-popup.prove { position: absolute; left: 8%; top: 18%; width: min(272px, 44%); height: auto; z-index: 2; filter: drop-shadow(rgba(7, 18, 44, 0.2) 0px 14px 26px); }
+    .improve-lp-hero-image { position: absolute; inset: 0px; width: 100%; height: 100%; object-fit: cover; object-position: center center; transform: none; z-index: 1; filter: none; }
+    .improve-ui-popup.prove { display: none; }
     .layout { margin: 20px 0px 42px; display: grid; gap: 16px; }
     .panel { border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-soft); padding: 24px; }
     .panel h2 { font-size: 34px; line-height: 1.05; }
@@ -54,13 +53,13 @@
     .sectionHead--center > div { margin: 0px auto; }
     .sectionHead--center h2 { font-size: clamp(2.55rem, 3.45vw, 3.3rem); }
     .sectionHead--center p { font-size: 27px; }
-    .panel--understanding { border: none; border-radius: 0px; box-shadow: none; background: transparent; padding: 0px; }
-    .panel--understanding .understandingFeature { margin: 0px auto 56px; }
+    .sectionHeadSub { margin-top: 10px !important; font-size: clamp(1.6rem, 2.2vw, 2rem) !important; line-height: 1.2 !important; color: rgb(27, 46, 86) !important; }
+    .sectionHeadLead { margin: 14px auto 0px !important; font-size: 18px !important; line-height: 1.35 !important; max-width: 68ch; color: rgb(62, 79, 111) !important; }
     .panel--support { border: none; background: transparent; box-shadow: none; padding: 0px; }
     .panel--outcomes h2 { font-size: 34px; }
     .storyStack { --story-top: 96px; --story-gap: 20px; max-width: 1360px; margin: 20px auto 56px; padding-bottom: 120px; }
     .storyCard { position: relative; z-index: 1; border: 1px solid var(--line); border-radius: var(--radius-card); background: rgb(255, 255, 255); box-shadow: rgba(7, 18, 44, 0.12) 0px 16px 52px, rgba(7, 18, 44, 0.06) 0px 2px 10px; overflow: hidden; }
-    .storyStack .storyCard { --story-i: 0; --story-scale: 1; position: sticky; top: calc(var(--story-top) + (var(--story-i) * var(--story-gap))); transform: scale(var(--story-scale)); transform-origin: center top; will-change: transform; opacity: 0; transition: opacity 0.5s; }
+    .storyStack .storyCard { --story-i: 0; --story-scale: 1; position: sticky; top: calc(var(--story-top) + (var(--story-i) * var(--story-gap))); transform: scale(var(--story-scale)); transform-origin: center top; will-change: transform; opacity: 1; transition: opacity 0.5s; }
     .storyStack .storyCard.is-in { opacity: 1; }
     .storyStack .storyCard:not(:first-child) { margin-top: var(--story-gap); }
     .storyStack .storyCard:nth-child(1) { z-index: 1; --story-i: 0; }
@@ -118,21 +117,37 @@
     .actionsList { margin: 12px 0px 0px; padding-left: 1.2rem; display: grid; gap: 8px; font-size: 18px; line-height: 1.25; }
     .resourceRow { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
     .resourcePill { border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: rgb(255, 255, 255); font-size: 14px; line-height: 18px; color: rgb(42, 58, 87); }
-    .understandingFeature { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0px, 1fr)); gap: 12px; align-items: stretch; }
-    .understandingFeatureCopy { border: none; border-radius: 0px; background: transparent; padding: 20px 22px; }
-    .understandingFeatureKicker { margin: 0px 0px 10px; font-size: 13px; line-height: 16px; text-transform: uppercase; letter-spacing: 0.14em; color: rgb(106, 120, 160); }
-    .understandingFeatureCopy h3 { margin: 0px; font-size: 36px; line-height: 1.05; color: rgb(27, 46, 86); }
-    .understandingFeatureCopy p { margin: 12px 0px 0px; color: rgb(62, 79, 111); font-size: 18px; line-height: 1.3; }
-    .understandingFeatureMedia { margin: 0px; min-height: 220px; border: none; border-radius: 0px; overflow: hidden; background: transparent; }
-    .understandingFeatureMedia img { display: block; width: 100%; height: 100%; object-fit: cover; }
     .contentGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
     .contentCard { border: 1px solid var(--line); border-radius: var(--radius-card); background: rgb(255, 255, 255); padding: 16px; display: grid; gap: 8px; }
     .contentImageWrap { margin: -16px -16px 8px; border-radius: var(--radius-card) var(--radius-card) 0 0; overflow: hidden; aspect-ratio: 16 / 9; background: rgb(220, 231, 255); }
     .contentImage { display: block; width: 100%; height: 100%; object-fit: cover; }
     .contentEyebrow { margin: 0px; font-size: 13px; line-height: 16px; letter-spacing: 0.1em; text-transform: uppercase; color: rgb(101, 119, 155); }
     .contentCard h3 { margin: 0px; font-size: 24px; line-height: 1.15; }
+    .contentTitleLink { color: inherit; text-decoration: none; text-decoration-thickness: 1.5px; text-underline-offset: 3px; border-radius: 4px; transition: color 0.18s, text-decoration-color 0.18s; }
+    .contentTitleLink:hover, .contentTitleLink:focus-visible { color: var(--primary-colours--azure); text-decoration: underline; text-decoration-color: rgba(60, 100, 255, 0.7); outline: none; }
     .contentText { margin: 0px; color: rgb(76, 93, 124); font-size: 16px; line-height: 1.3; }
     .contentLink { display: inline-flex; width: max-content; color: rgb(18, 56, 213); font-size: 16px; line-height: 20px; font-weight: 400; text-decoration: none; border-bottom: 1px solid rgba(18, 56, 213, 0.22); padding-bottom: 1px; }
+    .panel--contact { background: rgb(255, 255, 255); }
+    .contactGrid { margin-top: 16px; display: grid; gap: 16px; grid-template-columns: minmax(0px, 1fr) minmax(0px, 1.2fr); }
+    .contactTeamGrid { display: grid; gap: 12px; }
+    .contactPerson { border: 1px solid var(--line); border-radius: var(--radius-card); background: rgb(255, 255, 255); padding: 14px; display: grid; grid-template-columns: 56px minmax(0px, 1fr); gap: 10px; align-items: center; }
+    .contactAvatar, .contactAvatarImg { width: 56px; height: 56px; border-radius: 999px; display: block; }
+    .contactAvatar { border: 1px solid rgba(60, 100, 255, 0.22); background: rgba(60, 100, 255, 0.08); color: rgb(35, 66, 147); font-size: 18px; line-height: 56px; font-weight: 600; text-align: center; }
+    .contactAvatarImg { object-fit: cover; border: 1px solid rgba(60, 100, 255, 0.22); }
+    .contactPersonName { margin: 0px; font-size: 18px; line-height: 1.2; color: rgb(23, 39, 66); }
+    .contactPersonRole { margin: 4px 0px 0px; font-size: 14px; line-height: 1.35; color: rgb(82, 99, 130); }
+    .contactPersonEmail { margin: 6px 0px 0px; font-size: 14px; line-height: 1.35; color: rgb(23, 76, 180); text-decoration: none; }
+    .contactPersonEmail:hover, .contactPersonEmail:focus-visible { text-decoration: underline; outline: none; }
+    .contactForm { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 16px; background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%); }
+    .contactFormGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0px, 1fr)); }
+    .contactFormField { display: grid; gap: 6px; }
+    .contactFormField--full { grid-column: 1 / -1; }
+    .contactForm label { font-size: 14px; line-height: 1.3; color: rgb(70, 89, 122); }
+    .contactForm input, .contactForm textarea { width: 100%; border: 1px solid rgba(23, 24, 28, 0.18); border-radius: 4px; padding: 10px 12px; font: inherit; font-size: 16px; line-height: 1.35; color: var(--ink); background: rgb(255, 255, 255); }
+    .contactForm textarea { min-height: 116px; resize: vertical; }
+    .contactForm input:focus-visible, .contactForm textarea:focus-visible { outline: none; box-shadow: var(--focus); border-color: rgba(60, 100, 255, 0.55); }
+    .contactFormFoot { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .contactFormHint { margin: 0px; font-size: 13px; line-height: 1.35; color: rgb(82, 99, 130); }
     .detailsGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
     .detailCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 12%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(rgb(255, 255, 255), rgb(248, 250, 255)); padding: 16px; box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; }
     .detailCard h3 { margin: 0px 0px 10px; font-size: 24px; line-height: 1.1; color: rgb(36, 60, 104); }
@@ -146,18 +161,13 @@
       .topbarInner { padding: 0px 40px; }
       .header90_card.platform { grid-template-columns: minmax(0px, 1fr) minmax(0px, 500px); }
       .header90_card-content { padding: 38px 36px; }
-      .improve-ui-popup.prove { left: 8%; top: 16%; width: min(250px, 44%); }
-      .header90_background-image-wrapper.platform-2.improve-2::before { right: 8%; width: 50%; }
     }
     @media (max-width: 1080px) {
       .wrap { padding: 0px 24px; }
       .topbarInner { padding: 0px 24px; height: 68px; }
       .header90_card.platform { grid-template-columns: minmax(0px, 1fr); min-height: 0px; }
       .header90_card-content { padding: 32px 26px; }
-      .header90_background-image-wrapper-platform.improve { min-height: 280px; }
-      .header90_background-image-wrapper.platform-2.improve-2::before { right: 20%; width: 52%; }
-      .header90_background-image-wrapper.platform-2.improve-2::after { right: 16%; width: 56%; }
-      .improve-ui-popup.prove { left: 8%; top: 14%; width: min(220px, 40%); }
+      .header90_background-image-wrapper-platform.improve { min-height: 320px; }
       .storyStack { --story-top: 0; --story-gap: 20px; padding-bottom: 48px; }
       .storyStack .storyCard { position: relative; top: auto; transition: none; opacity: 1; will-change: auto; transform: none !important; }
       .storyStack .storyCard:not(:first-child) { margin-top: 20px; }
@@ -173,7 +183,7 @@
       .storyCard--tour .storyContent h3 { font-size: 30px; }
       .storyCard--tour .storyInner::before { background: linear-gradient(rgba(5, 10, 24, 0.66) 0%, rgba(5, 10, 24, 0.8) 100%); }
       .storyContent { padding: 30px 26px; }
-      .understandingFeature { grid-template-columns: 1fr; }
+      .contactGrid { grid-template-columns: 1fr; }
       .outcomeGrid, .contentGrid, .detailsGrid { grid-template-columns: repeat(2, minmax(0px, 1fr)); }
       .kvRow { grid-template-columns: 1fr; gap: 0.2rem; }
     }
@@ -184,8 +194,9 @@
       .panel h2 { font-size: 28px; }
       .sectionHead h2 { font-size: 28px; }
       .storyContent h3 { font-size: 30px; }
-      .storyContent p, .storyBullets li, .storyList li, .actionsList, .understandingFeatureCopy p { font-size: 16px; }
-      .topPackagePill { font-size: 14px; line-height: 18px; padding: 8px 12px; }
+      .storyContent p, .storyBullets li, .storyList li, .actionsList { font-size: 16px; }
+      .topContactBtn { font-size: 14px; line-height: 18px; padding: 8px 12px; min-height: 40px; }
+      .contactFormGrid { grid-template-columns: 1fr; }
     }
     @media (max-width: 479px) {
       .wrap { padding: 0px 16px; }
@@ -196,8 +207,6 @@
       .button-group { gap: 8px; }
       .button.w-button { width: 100%; }
       .header90_background-image-wrapper-platform.improve { min-height: 240px; }
-      .header90_background-image-wrapper.platform-2.improve-2::before { right: 18%; width: 54%; }
-      .improve-ui-popup.prove { width: min(170px, 40%); }
       .sectionHead h2 { font-size: 24px; }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -211,7 +220,7 @@
       <a class="brand" href="https://www.immersivelabs.com/" target="_blank" rel="noopener noreferrer" aria-label="Immersive">
         <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg" alt="Immersive" />
       </a>
-      <span class="topPackagePill">Recommended package: Advanced package</span>
+      <a class="topContactBtn" href="#contact-your-team">Contact us</a>
     </div>
   </header>
   <main class="wrap">
@@ -221,7 +230,6 @@
           <div class="padding-section-24 platform-hero">
             <div class="header90_component">
               <div class="header90_card platform">
-                <div class="header90_background-image-wrapper platform-2 improve-2"></div>
                 <div class="header90_card-content">
                   <div class="max-width-medium--lp">
                     <div class="margin-bottom margin-small">
@@ -236,14 +244,13 @@
                   </div>
                   <div class="margin-top margin-medium">
                     <div class="button-group">
-                      <a href="https://info.immersivelabs.com/whitepaper-improving-cyber-readiness" target="_blank" rel="noopener noreferrer" class="button w-button">Get the White Paper</a>
-                      <a href="https://www.immersivelabs.com/demo" target="_blank" rel="noopener noreferrer" class="button is-secondary is-lightmode w-button">Request a Demo</a>
+                      <a href="#recommended-resources" class="button w-button">Recommended resources</a>
+                      <a href="#contact-your-team" class="button is-secondary is-lightmode w-button">Contact your team</a>
                     </div>
                   </div>
                 </div>
                 <div class="header90_background-image-wrapper-platform improve" aria-hidden="true">
-                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/690dd160fa41a6ef7268b02d_584dc5dbb5fc30e2827548aabd2b706f_improve-lp-hero-image.webp" loading="eager" alt="" class="improve-lp-hero-image" />
-                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6902225b2a4bb3e47190b10a_28d69c85968eeef4480b03c088187cd2_home-ui-pop-up-2.webp" loading="lazy" alt="" class="improve-ui-popup prove" width="255" height="95" />
+                  <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/678646ce52898299cc1134be_HERO%20IMAGE%20LABS.webp" loading="eager" alt="" class="improve-lp-hero-image" />
                 </div>
               </div>
             </div>
@@ -254,8 +261,7 @@
     <section class="layout">
       <article class="panel panel--outcomes"><h2>Your top outcomes</h2><p class="panelSub">The three priorities we recommend focusing on first.</p><div class="outcomeGrid"><article class="outcomeCard"><div class="outcomeHead"><div class="outcomeRing" style="--pct:61"><span>61%</span></div><h3>Compliance translated into evidence &amp; benchmarks</h3></div><p>Move from checkbox compliance to evidence-based capability mapped to NIST, MITRE, and DORA.</p></article><article class="outcomeCard"><div class="outcomeHead"><div class="outcomeRing" style="--pct:27"><span>27%</span></div><h3>Secure the next-gen modern enterprise</h3></div><p>Shrink attack surface and cut remediation time across code, cloud, identity, and network.</p></article><article class="outcomeCard"><div class="outcomeHead"><div class="outcomeRing" style="--pct:12"><span>12%</span></div><h3>Faster detection, response &amp; decision-making</h3></div><p>Cut MTTD/MTTR and make better business decisions under pressure.</p></article></div></article>
       <article class="panel"><h2>What you told us in the meeting</h2><p class="panelSub">Your context, constraints, and operating priorities as we captured them.</p><div class="detailsGrid"><article class="detailCard"><h3>Your team</h3><div class="kvRow"><span class="kvLabel">Name</span><span class="kvValue">Will Bloor</span></div><div class="kvRow"><span class="kvLabel">Company</span><span class="kvValue">Pioneer Cloud</span></div><div class="kvRow"><span class="kvLabel">Role</span><span class="kvValue">CISO</span></div><div class="kvRow"><span class="kvLabel">Company size</span><span class="kvValue">10,000–50,000 employees</span></div><div class="kvRow"><span class="kvLabel">Operating country</span><span class="kvValue">United States</span></div></article><article class="detailCard"><h3>What we heard</h3><div class="kvRow"><span class="kvLabel">Pressure sources</span><span class="kvValue">Board · Regulator · Customers</span></div><div class="kvRow"><span class="kvLabel">Urgent win</span><span class="kvValue">Board-ready evidence &amp; benchmarks</span></div><div class="kvRow"><span class="kvLabel">Risk environment</span><span class="kvValue">Cloud · Identity</span></div><div class="kvRow"><span class="kvLabel">Measured on today</span><span class="kvValue">Vulnerability backlog</span></div><div class="kvRow"><span class="kvLabel">Organisation challenge</span><span class="kvValue">Proving to external stakeholders</span></div></article><article class="detailCard"><h3>Who we need to support</h3><div class="kvRow"><span class="kvLabel">Coverage groups</span><span class="kvValue">SOC / Incident Response · Cloud security · Executive Crisis Team (CMT)</span></div><div class="kvRow"><span class="kvLabel">Cadence</span><span class="kvValue">Programmatic</span></div><div class="kvRow"><span class="kvLabel">Measurement</span><span class="kvValue">Performance-centric</span></div></article><article class="detailCard"><h3>Preferred delivery model</h3><div class="kvRow"><span class="kvLabel">Realism</span><span class="kvValue">Must mirror our environment and threat landscape</span></div><div class="kvRow"><span class="kvLabel">Scope</span><span class="kvValue">Enterprise / multi-region / exec plus technical</span></div><div class="kvRow"><span class="kvLabel">Current state</span><span class="kvValue">Already under scrutiny (audits, board, regulators)</span></div><div class="kvRow"><span class="kvLabel">Delivery model</span><span class="kvValue">Dedicated program team + evidence packaging + bespoke realism</span></div><div class="kvRow"><span class="kvLabel">Risk frame</span><span class="kvValue">We need proof for governance</span></div></article><article class="detailCard"><h3>Operating context</h3><div class="kvRow"><span class="kvLabel">Industry</span><span class="kvValue">Technology / SaaS</span></div><div class="kvRow"><span class="kvLabel">Region</span><span class="kvValue">North America</span></div><div class="kvRow"><span class="kvLabel">Regulatory references</span><span class="kvValue">NIST CSF · ISO/IEC 27001 · SOC 2</span></div></article></div></article>
-      <div class="sectionHead sectionHead--center"><div><h2>Our understanding of your needs</h2><p>Measured readiness, not assumptions.</p></div></div>
-      <article class="panel panel--understanding"><div class="understandingFeature"><div class="understandingFeatureCopy"><p class="understandingFeatureKicker">Readiness narrative</p><h3>Measuring cyber readiness with Immersive</h3><p>Immersive does not just train teams. It measures real-world capability through hands-on labs and realistic exercises, so you can see where readiness is strong, where gaps remain, and how quickly those gaps are closing.</p><p>For Pioneer Cloud, this means defensible evidence you can use with leadership and external stakeholders: clear baselines, visible movement over time, and proof aligned to board and regulatory expectations.</p></div><figure class="understandingFeatureMedia"><img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/679228e2e5f16602a4b0c480_Why%20Immersive-cta-image.webp" alt="Immersive readiness visual" loading="lazy" width="770" height="645" /></figure></div></article>
+      <div class="sectionHead sectionHead--center"><div><h2>Our understanding of your needs</h2><p class="sectionHeadSub">Measuring cyber readiness with Immersive</p><p class="sectionHeadLead">For Pioneer Cloud, this means defensible evidence you can use with leadership and external stakeholders: clear baselines, visible movement over time, and proof aligned to board and regulatory expectations.</p></div></div>
       <article class="panel panel--support">
         <div class="storyStack">
           <article class="storyCard reverse">
@@ -334,22 +340,53 @@
         <p class="panelSub">Suggested next steps for your team over the next 30 days.</p>
         <ol class="actionsList"><li>Lock framework mapping and define the evidence pack for board/regulator/insurer.</li><li>Prioritize code/cloud/identity/OT backlog and define remediation SLA targets.</li><li>Agree scenario scope, response KPIs (MTTD/MTTR/decision latency), and reporting cadence.</li></ol>
       </article>
-      <article class="panel">
+      <article class="panel" id="recommended-resources">
         <h2>Recommended resources</h2>
         <p class="panelSub">Resources and content packs aligned to your priorities.</p>
         <div class="resourceRow"><span class="resourcePill">Framework-to-evidence mapping template (NIST / MITRE / DORA)</span><span class="resourcePill">Code/cloud/identity remediation benchmark pack</span><span class="resourcePill">Crisis decision and IR benchmarking examples</span></div>
       </article>
-      <article class="panel">
+      <article class="panel" id="recommended-for-you">
         <h2>Recommended for you</h2>
         <p class="panelSub">A short list of articles, webinars, and case studies selected for your team.</p>
         <div class="contentGrid">
-          <article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/blog-post-the-imperative-for-australian-boards-and-senior-executives-to-champion/720/420" alt="The Imperative for Australian Boards and Senior Executives to Champion Cyber Security Culture: Key Updates in the ISM Framework" loading="lazy" /></div><p class="contentEyebrow">Recommendation 1 | Blog post</p><h3>The Imperative for Australian Boards and Senior Executives to Champion Cyber Security Culture: Key Updates in the ISM Framework</h3><p class="contentText"><strong>Focus area:</strong> Compliance translated into evidence &amp; benchmarks</p><p class="contentText">Topics: cybersecurity-training · cybersecurity-exercising · compliance</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your compliance translated into evidence &amp; benchmarks priority.</p><a class="contentLink" href="https://www.google.com/search?q=site%3Aimmersivelabs.com%20The%20Imperative%20for%20Australian%20Boards%20and%20Senior%20Executives%20to%20Champion%20Cyber%20Security%20Culture%3A%20Key%20Updates%20in%20the%20ISM%20Framework" target="_blank" rel="noopener noreferrer">Find content</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/webinar-measuring-cyber-resilience-how-to-prove-to-the-board-your-team-is-ready-/720/420" alt="Measuring Cyber Resilience: How to Prove to the Board Your Team is Ready for the Next Attack" loading="lazy" /></div><p class="contentEyebrow">Recommendation 2 | Webinar</p><h3>Measuring Cyber Resilience: How to Prove to the Board Your Team is Ready for the Next Attack</h3><p class="contentText"><strong>Focus area:</strong> Compliance translated into evidence &amp; benchmarks</p><p class="contentText">Topics: cyber-resilience-framework</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your compliance translated into evidence &amp; benchmarks priority.</p><a class="contentLink" href="https://www.immersivelabs.com/resources/webinars/measuring-cyber-resilience-how-to-prove-to-the-board-your-team-is-ready-for-the-next-attack/" target="_blank" rel="noopener noreferrer">Open content</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/blog-post-secure-and-driving-roi-by-design-reframing-appsec-as-a-code-quality-im/720/420" alt="Secure and Driving ROI by Design: Reframing AppSec as a Code Quality Imperative" loading="lazy" /></div><p class="contentEyebrow">Recommendation 3 | Blog post</p><h3>Secure and Driving ROI by Design: Reframing AppSec as a Code Quality Imperative</h3><p class="contentText"><strong>Focus area:</strong> Secure the next-gen modern enterprise</p><p class="contentText">Topics: application-security-challenges · secure-coding</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your secure the next-gen modern enterprise priority.</p><a class="contentLink" href="https://www.google.com/search?q=site%3Aimmersivelabs.com%20Secure%20and%20Driving%20ROI%20by%20Design%3A%20Reframing%20AppSec%20as%20a%20Code%20Quality%20Imperative" target="_blank" rel="noopener noreferrer">Find content</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/blog-post-achieving-devsecops-maturity-turning-secure-code-into-roi/720/420" alt="Achieving DevSecOps Maturity: Turning Secure Code into ROI" loading="lazy" /></div><p class="contentEyebrow">Recommendation 4 | Blog post</p><h3>Achieving DevSecOps Maturity: Turning Secure Code into ROI</h3><p class="contentText"><strong>Focus area:</strong> Secure the next-gen modern enterprise</p><p class="contentText">Topics: application-security-challenges · secure-coding</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your secure the next-gen modern enterprise priority.</p><a class="contentLink" href="https://www.google.com/search?q=site%3Aimmersivelabs.com%20Achieving%20DevSecOps%20Maturity%3A%20Turning%20Secure%20Code%20into%20ROI" target="_blank" rel="noopener noreferrer">Find content</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/webinar-staffing-and-training-a-cyber-incident-response-team/720/420" alt="Staffing and Training a Cyber Incident Response Team" loading="lazy" /></div><p class="contentEyebrow">Recommendation 5 | Webinar</p><h3>Staffing and Training a Cyber Incident Response Team</h3><p class="contentText"><strong>Focus area:</strong> Faster detection, response &amp; decision-making</p><p class="contentText">Category: threat-intelligence</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your faster detection, response &amp; decision-making priority.</p><a class="contentLink" href="https://youtu.be/BJ1aN0xXWf0" target="_blank" rel="noopener noreferrer">Open content</a></article>
+          <article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/blog-post-the-imperative-for-australian-boards-and-senior-executives-to-champion/720/420" alt="The Imperative for Australian Boards and Senior Executives to Champion Cyber Security Culture: Key Updates in the ISM Framework" loading="lazy" /></div><p class="contentEyebrow">Recommendation 1 | Blog post</p><h3>The Imperative for Australian Boards and Senior Executives to Champion Cyber Security Culture: Key Updates in the ISM Framework</h3><p class="contentText"><strong>Focus area:</strong> Compliance translated into evidence &amp; benchmarks</p><p class="contentText">Topics: cybersecurity-training · cybersecurity-exercising · compliance</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your compliance translated into evidence &amp; benchmarks priority.</p><a class="contentLink" href="https://www.google.com/search?q=site%3Aimmersivelabs.com%20The%20Imperative%20for%20Australian%20Boards%20and%20Senior%20Executives%20to%20Champion%20Cyber%20Security%20Culture%3A%20Key%20Updates%20in%20the%20ISM%20Framework" target="_blank" rel="noopener noreferrer">Read more</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/webinar-measuring-cyber-resilience-how-to-prove-to-the-board-your-team-is-ready-/720/420" alt="Measuring Cyber Resilience: How to Prove to the Board Your Team is Ready for the Next Attack" loading="lazy" /></div><p class="contentEyebrow">Recommendation 2 | Webinar</p><h3>Measuring Cyber Resilience: How to Prove to the Board Your Team is Ready for the Next Attack</h3><p class="contentText"><strong>Focus area:</strong> Compliance translated into evidence &amp; benchmarks</p><p class="contentText">Topics: cyber-resilience-framework</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your compliance translated into evidence &amp; benchmarks priority.</p><a class="contentLink" href="https://www.immersivelabs.com/resources/webinars/measuring-cyber-resilience-how-to-prove-to-the-board-your-team-is-ready-for-the-next-attack/" target="_blank" rel="noopener noreferrer">Read more</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/blog-post-secure-and-driving-roi-by-design-reframing-appsec-as-a-code-quality-im/720/420" alt="Secure and Driving ROI by Design: Reframing AppSec as a Code Quality Imperative" loading="lazy" /></div><p class="contentEyebrow">Recommendation 3 | Blog post</p><h3>Secure and Driving ROI by Design: Reframing AppSec as a Code Quality Imperative</h3><p class="contentText"><strong>Focus area:</strong> Secure the next-gen modern enterprise</p><p class="contentText">Topics: application-security-challenges · secure-coding</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your secure the next-gen modern enterprise priority.</p><a class="contentLink" href="https://www.google.com/search?q=site%3Aimmersivelabs.com%20Secure%20and%20Driving%20ROI%20by%20Design%3A%20Reframing%20AppSec%20as%20a%20Code%20Quality%20Imperative" target="_blank" rel="noopener noreferrer">Read more</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/blog-post-achieving-devsecops-maturity-turning-secure-code-into-roi/720/420" alt="Achieving DevSecOps Maturity: Turning Secure Code into ROI" loading="lazy" /></div><p class="contentEyebrow">Recommendation 4 | Blog post</p><h3>Achieving DevSecOps Maturity: Turning Secure Code into ROI</h3><p class="contentText"><strong>Focus area:</strong> Secure the next-gen modern enterprise</p><p class="contentText">Topics: application-security-challenges · secure-coding</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your secure the next-gen modern enterprise priority.</p><a class="contentLink" href="https://www.google.com/search?q=site%3Aimmersivelabs.com%20Achieving%20DevSecOps%20Maturity%3A%20Turning%20Secure%20Code%20into%20ROI" target="_blank" rel="noopener noreferrer">Read more</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" src="https://picsum.photos/seed/webinar-staffing-and-training-a-cyber-incident-response-team/720/420" alt="Staffing and Training a Cyber Incident Response Team" loading="lazy" /></div><p class="contentEyebrow">Recommendation 5 | Webinar</p><h3>Staffing and Training a Cyber Incident Response Team</h3><p class="contentText"><strong>Focus area:</strong> Faster detection, response &amp; decision-making</p><p class="contentText">Category: threat-intelligence</p><p class="contentText"><strong>Why this is relevant:</strong> Selected because it supports your faster detection, response &amp; decision-making priority.</p><a class="contentLink" href="https://youtu.be/BJ1aN0xXWf0" target="_blank" rel="noopener noreferrer">Read more</a></article>
         </div>
       </article>
-      <article class="panel">
+      <article class="panel" id="whats-new">
         <h2>What's new</h2>
         <div class="contentGrid" id="whatsNewGrid">
           <article class="contentCard"><div class="contentImageWrap"><img class="contentImage" loading="lazy" src="https://cdn.prod.website-files.com/678a13476d0a697e355dec29/69789a8dedfc30dfad573b6e_Header%20Image.png" alt="Maximize CrowdStrike ROI with Immersive One Cyber Simulations" /></div><p class="contentEyebrow">Jan 27, 2026 | RSS post</p><h3>Maximize CrowdStrike ROI with Immersive One Cyber Simulations</h3><p class="contentText">Learn how Immersive One’s new CrowdStrike Falcon simulations help SOC teams close the readiness gap, reduce MTTR, and prove cyber resilience.</p><a class="contentLink" href="https://www.immersivelabs.com/resources/blog/maximizing-crowdstrike-roi-is-seamless-with-immersive-ones-new-capability" target="_blank" rel="noopener noreferrer">Read post</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" loading="lazy" src="https://cdn.prod.website-files.com/678a13476d0a697e355dec29/69787d5b0b5e5c18a0dd536d_Immersive%20-%20Blog%20Post%20-%202026%20Forecast%20Webinar%20Recap%20-%20Header%201920x1080.png" alt="2026 Cyber Readiness: Moving from Compliance to Capability" /></div><p class="contentEyebrow">Jan 27, 2026 | RSS post</p><h3>2026 Cyber Readiness: Moving from Compliance to Capability</h3><p class="contentText">Bridge the gap between perceived readiness and actual capability. Discover the 2026 cyber threat forecast, from quantum risks to AI prompt injection labs.</p><a class="contentLink" href="https://www.immersivelabs.com/resources/blog/the-cyber-readiness-outlook-2025-threat-reflections-and-2026-forecast" target="_blank" rel="noopener noreferrer">Read post</a></article><article class="contentCard"><div class="contentImageWrap"><img class="contentImage" loading="lazy" src="https://cdn.prod.website-files.com/678a13476d0a697e355dec29/697240ba97401e17e76ab0cd_Header.png" alt="From Check-Box Training to Continuous Cyber Readiness" /></div><p class="contentEyebrow">Jan 22, 2026 | RSS post</p><h3>From Check-Box Training to Continuous Cyber Readiness</h3><p class="contentText">Learn how Swisscom is preparing for 2026 by moving beyond passive training to continuous, measurable readiness.</p><a class="contentLink" href="https://www.immersivelabs.com/resources/blog/from-check-box-training-to-continuous-readiness-how-one-immersive-customer-is-preparing-for-2026" target="_blank" rel="noopener noreferrer">Read post</a></article>
+        </div>
+      </article>
+      <article class="panel panel--contact" id="contact-your-team">
+        <h2>Get in touch with your team</h2>
+        <p class="panelSub">Use this form to contact your Immersive customer team and align next steps.</p>
+        <div class="contactGrid">
+          <div class="contactTeamGrid">
+            <article class="contactPerson"><span class="contactAvatar">CS</span><div><h3 class="contactPersonName">Customer Success Lead</h3><p class="contactPersonRole">Programme owner</p><a class="contactPersonEmail" href="mailto:customer.success@immersivelabs.com">customer.success@immersivelabs.com</a></div></article>
+            <article class="contactPerson"><span class="contactAvatar">SC</span><div><h3 class="contactPersonName">Solutions Consultant</h3><p class="contactPersonRole">Technical advisor</p><a class="contactPersonEmail" href="mailto:solutions@immersivelabs.com">solutions@immersivelabs.com</a></div></article>
+            <article class="contactPerson"><span class="contactAvatar">ST</span><div><h3 class="contactPersonName">Support Team</h3><p class="contactPersonRole">Platform support</p><a class="contactPersonEmail" href="mailto:support@immersivelabs.com">support@immersivelabs.com</a></div></article>
+          </div>
+          <form class="contactForm" data-contact-form>
+            <div class="contactFormGrid">
+              <div class="contactFormField">
+                <label for="contactName">Your name</label>
+                <input id="contactName" name="name" type="text" autocomplete="name" required />
+              </div>
+              <div class="contactFormField">
+                <label for="contactEmail">Work email</label>
+                <input id="contactEmail" name="email" type="email" autocomplete="email" required />
+              </div>
+              <div class="contactFormField contactFormField--full">
+                <label for="contactMessage">Message</label>
+                <textarea id="contactMessage" name="message" required placeholder="How can we help your team next?"></textarea>
+              </div>
+            </div>
+            <div class="contactFormFoot">
+              <p class="contactFormHint">Messages are routed to customer.success@immersivelabs.com.</p>
+              <button type="submit" class="button w-button">Send message</button>
+            </div>
+          </form>
         </div>
       </article>
     </section>
@@ -492,6 +529,36 @@
           asset.addEventListener('load', refreshStoryLayout, { once:true });
           asset.addEventListener('loadedmetadata', refreshStoryLayout, { once:true });
         });
+        document.querySelectorAll('.contentCard').forEach(function(card){
+          var titleEl = card.querySelector('h3');
+          var linkEl = card.querySelector('.contentLink');
+          if(!titleEl || !linkEl || titleEl.querySelector('a')) return;
+          var titleText = String(titleEl.textContent || '').trim();
+          if(!titleText) return;
+          titleEl.innerHTML = '<a class="contentTitleLink" href="' + linkEl.getAttribute('href') + '" target="_blank" rel="noopener noreferrer">' + titleText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</a>';
+        });
+        var contactForm = document.querySelector('[data-contact-form]');
+        if(contactForm){
+          contactForm.addEventListener('submit', function(event){
+            event.preventDefault();
+            var recipient = 'customer.success@immersivelabs.com';
+            var nameEl = contactForm.querySelector('input[name=\"name\"]');
+            var emailEl = contactForm.querySelector('input[name=\"email\"]');
+            var messageEl = contactForm.querySelector('textarea[name=\"message\"]');
+            var senderName = String(nameEl && nameEl.value || '').trim();
+            var senderEmail = String(emailEl && emailEl.value || '').trim();
+            var senderMessage = String(messageEl && messageEl.value || '').trim();
+            if(!senderName || !senderEmail || !senderMessage) return;
+            var subject = 'Customer dashboard follow-up';
+            var body = [
+              'Name: ' + senderName,
+              'Email: ' + senderEmail,
+              '',
+              senderMessage
+            ].join('\\n');
+            window.location.href = 'mailto:' + recipient + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+          });
+        }
       });
     })();
   </script>

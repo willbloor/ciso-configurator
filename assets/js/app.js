@@ -1807,6 +1807,14 @@
         return 'guided';
       }
 
+      function effectiveConfiguratorFieldMode(recordMode){
+        const accountMode = accountFieldModeValue();
+        if(accountMode === 'sdr-lite'){
+          return 'sdr-lite';
+        }
+        return resolveConfiguratorFieldMode(recordMode || accountMode);
+      }
+
       function accountFieldModeValue(){
         const account = (typeof settingsState !== 'undefined' && settingsState && settingsState.account)
           ? settingsState.account
@@ -1916,7 +1924,7 @@
       function renderConfiguratorProgressRail(){
         const nav = $('#configProgressNav') || $('.progress');
         if(!nav) return;
-        const mode = resolveConfiguratorFieldMode(state.fieldMode || accountFieldModeValue());
+        const mode = effectiveConfiguratorFieldMode(state.fieldMode);
         const questionSteps = configuratorQuestionSteps();
         const requiredSteps = requiredQuestionStepSetForMode(mode);
         const requiredQuestionSteps = questionSteps.filter((item)=> requiredSteps.has(item.step));
@@ -3004,7 +3012,12 @@ const evidenceOpts = [
         if(cfg.syncRoute !== false){
           syncRouteWithState({ replace:true });
         }
-        if(cfg.render) update();
+        if(cfg.render){
+          update();
+        }else{
+          syncGlobalActionBar();
+          renderWorkspaceBreadcrumb();
+        }
       }
 
       function syncGlobalActionBar(){
@@ -3410,7 +3423,7 @@ const evidenceOpts = [
           : state.fieldMode
         );
         const ctx = {
-          fieldMode: resolveConfiguratorFieldMode(sourceFieldMode || accountFieldModeValue()),
+          fieldMode: effectiveConfiguratorFieldMode(sourceFieldMode),
           role: String(src.role || '').trim(),
           fullName: String(src.fullName || '').trim(),
           company: String(src.company || '').trim(),
@@ -3441,7 +3454,7 @@ const evidenceOpts = [
 
       function readinessRequirements(source){
         const ctx = buildReadinessContext(source);
-        const mode = resolveConfiguratorFieldMode(ctx.fieldMode || state.fieldMode || accountFieldModeValue());
+        const mode = effectiveConfiguratorFieldMode(ctx.fieldMode || state.fieldMode);
         return questionRequirementRows()
           .filter((requirement)=> requirementEnabledForMode(requirement, mode))
           .map((requirement)=> ({
@@ -12356,7 +12369,7 @@ const evidenceOpts = [
         setText('#selPill', `${selDone}/${selTotal} captured`);
 
         // Step completion + incomplete highlighting
-        const activeMode = resolveConfiguratorFieldMode(state.fieldMode || accountFieldModeValue());
+        const activeMode = effectiveConfiguratorFieldMode(state.fieldMode);
         const requiredQuestionSteps = requiredQuestionStepSetForMode(activeMode);
         const questionSteps = new Set(configuratorQuestionSteps().map((row)=> row.step));
 
@@ -13627,9 +13640,11 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       };
       let accountChangesDirty = false;
       let accountLastSavedAt = 0;
+      let accountSaveIsThinking = false;
+      let accountSavePulseUntil = 0;
 
       function resolveFontScale(next){
-        const allowed = [0.9, 1, 1.1];
+        const allowed = [0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5];
         const n = Number(next);
         if(!Number.isFinite(n)) return 1;
         return allowed.reduce((best, val)=> Math.abs(val - n) < Math.abs(best - n) ? val : best, 1);
@@ -13691,6 +13706,18 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         }catch(err){
           return '';
         }
+      }
+
+      function syncAccountSaveButtonUI(){
+        if(!accountSaveChangesBtn) return;
+        const justSaved = !accountSaveIsThinking && Date.now() < (accountSavePulseUntil || 0);
+        accountSaveChangesBtn.disabled = accountSaveIsThinking || !accountChangesDirty;
+        accountSaveChangesBtn.dataset.saved = justSaved ? 'true' : 'false';
+        accountSaveChangesBtn.dataset.thinking = accountSaveIsThinking ? 'true' : 'false';
+        accountSaveChangesBtn.setAttribute('aria-busy', accountSaveIsThinking ? 'true' : 'false');
+        accountSaveChangesBtn.textContent = accountSaveIsThinking
+          ? 'Saving...'
+          : (justSaved ? 'Saved' : 'Save changes');
       }
 
       function accountPermissionSummaryText(profile){
@@ -13781,14 +13808,19 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       function setAccountDirtyState(isDirty, opts){
         const cfg = Object.assign({ saved:false }, opts || {});
         accountChangesDirty = !!isDirty;
+        if(accountChangesDirty){
+          accountSavePulseUntil = 0;
+        }
         if(cfg.saved){
           accountLastSavedAt = Date.now();
+          accountSavePulseUntil = Date.now() + 1600;
         }
-        if(accountSaveChangesBtn){
-          accountSaveChangesBtn.disabled = !accountChangesDirty;
-        }
+        syncAccountSaveButtonUI();
         if(accountSaveState){
-          if(accountChangesDirty){
+          if(accountSaveIsThinking){
+            accountSaveState.dataset.state = 'saving';
+            accountSaveState.textContent = 'Saving...';
+          }else if(accountChangesDirty){
             accountSaveState.dataset.state = 'dirty';
             accountSaveState.textContent = 'Unsaved changes';
           }else{
@@ -14241,7 +14273,26 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       });
       if(accountSaveChangesBtn){
         accountSaveChangesBtn.addEventListener('click', ()=>{
-          commitAccountChanges();
+          if(accountSaveIsThinking || !accountChangesDirty){
+            return;
+          }
+          accountSaveIsThinking = true;
+          accountSavePulseUntil = 0;
+          syncAccountSaveButtonUI();
+          if(accountSaveState){
+            accountSaveState.dataset.state = 'saving';
+            accountSaveState.textContent = 'Saving...';
+          }
+          window.setTimeout(()=>{
+            accountSaveIsThinking = false;
+            commitAccountChanges();
+            syncAccountSaveButtonUI();
+            window.setTimeout(()=>{
+              if(Date.now() >= (accountSavePulseUntil || 0)){
+                syncAccountSaveButtonUI();
+              }
+            }, 1700);
+          }, 560);
         });
       }
       if(accountApplyNowBtn){

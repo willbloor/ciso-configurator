@@ -538,17 +538,16 @@
     .progressSectionLabel{
       display:flex;
       align-items:center;
-      justify-content:center;
-      text-align:center;
-      min-height: 28px;
-      margin-top: 10px;
-      padding: 6px 10px 0;
+      justify-content:flex-start;
+      text-align:left;
+      min-height: 24px;
+      margin-top: 12px;
+      padding: 4px 2px 0;
       font-size:.68rem;
       font-weight:700;
       letter-spacing:.11em;
       text-transform: uppercase;
       color: var(--muted);
-      border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
       white-space: nowrap;
       pointer-events: none;
     }
@@ -1529,6 +1528,11 @@
       border-color: color-mix(in srgb, var(--tangerine) 56%, var(--border));
       background: color-mix(in srgb, var(--tangerine) 8%, var(--surface));
       color: color-mix(in srgb, var(--tangerine) 78%, var(--text) 22%);
+    }
+    .accountSaveState[data-state="saving"]{
+      border-color: color-mix(in srgb, var(--azure) 52%, var(--border));
+      background: color-mix(in srgb, var(--azure) 10%, var(--surface));
+      color: color-mix(in srgb, var(--azure) 82%, var(--text) 18%);
     }
     .accountSaveState[data-state="saved"]{
       border-color: color-mix(in srgb, var(--lime) 44%, var(--border));
@@ -5583,12 +5587,11 @@
     .progressSectionLabel{
       display:flex;
       align-items:center;
-      justify-content:center;
-      text-align:center;
-      min-height: 30px;
-      margin-top: 10px;
-      padding: 6px 10px 0;
-      border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+      justify-content:flex-start;
+      text-align:left;
+      min-height: 24px;
+      margin-top: 12px;
+      padding: 4px 2px 0;
       background: transparent;
       color: color-mix(in srgb, var(--muted) 92%, var(--text) 8%);
       font-size:.68rem;
@@ -6487,16 +6490,15 @@
         box-sizing: border-box;
         display:flex;
         align-items:center;
-        justify-content:center;
-        text-align:center;
+        justify-content:flex-start;
+        text-align:left;
         margin-top: 10px;
-        padding: 6px 8px 0;
-        font-size:.68rem;
+        padding: 6px 8px 0 45px;
+        font-size:10px;
         letter-spacing:.11em;
         text-transform: uppercase;
         font-weight: 700;
         color: color-mix(in srgb, var(--muted) 90%, var(--text) 10%);
-        border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
         border-bottom: 0;
         background: transparent;
       }

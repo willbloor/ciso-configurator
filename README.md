@@ -183,8 +183,11 @@ Permission constants and guards are in:
   - `Settings` (theme/display/test data + layout reset)
 - Save model:
   - Explicit `Save changes` button
+  - Save button animation now mirrors record save UX (`Saving...` -> `Saved` -> `Save changes`)
   - Dirty/saved state pill (`Unsaved changes` / `Saved HH:MM`)
   - `Apply to current record` action
+- Font size scale options now include:
+  - `90%`, `100%`, `110%`, `120%`, `130%`, `140%`, `150%`
 - Configurator mode control:
   - mode select includes `SDR`, `Guided`, `Advanced`
   - dedicated `SDR mode` on/off toggle maps directly to mode selection in My account
@@ -214,6 +217,7 @@ Permission constants and guards are in:
   - `advanced`
 - Mode behavior currently implemented:
   - requirement/gap/completion engine uses mode-filtered requirement rows
+  - account `SDR` mode is now session-authoritative for required-question logic and progress rail rendering, including existing saved records
   - mode is persisted per record snapshot as `snapshot.fieldMode`
   - CSV export/import includes `config_mode`
   - SDR mode requires 7 of 22 question requirements (~31.8%)
@@ -222,7 +226,13 @@ Permission constants and guards are in:
   - `step_label` drives the visible chip labels after regenerating `assets/js/question-bank.js`
   - in SDR mode, non-required steps are grouped under an `Optional` rail heading
   - optional steps are shown as optional (not auto-marked complete), using neutral hollow-circle markers
+  - optional heading is left-aligned to the rail chip start and no longer renders a top divider rule
   - current content-step skeleton remains `1..5` plus `Review` (UI section structure is still fixed)
+
+### View-state action bar syncing
+
+- Global dashboard/interstitial action buttons are now synchronized even on `setView(..., { render:false })` transitions.
+- This prevents stale interstitial actions (`View record`/`Share`) from persisting when returning to dashboard.
 - Current intentional constraint:
   - question UI remains fully visible for now; mode changes required-question logic and progress math first (safe migration path before full dynamic rendering)
 

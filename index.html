@@ -31,6 +31,38 @@
           </div>
           <div class="workspaceCompaniesList" id="workspaceCompaniesList"></div>
         </section>
+        <section class="accountLhn" id="accountLhn" aria-label="My account navigation">
+          <div class="accountLhnHead">
+            <span class="accountLhnLabel">My account</span>
+            <span class="accountLhnMeta" id="accountLhnMode">Mode: Guided</span>
+          </div>
+          <div class="accountLhnList">
+            <button type="button" class="accountLhnBtn" data-account-nav-target="accountProfileDefaults" data-active="true">
+              <span class="accountLhnBtnTitle">Profile</span>
+              <span class="accountLhnBtnSub">Identity and defaults</span>
+            </button>
+            <button type="button" class="accountLhnBtn" data-account-nav-target="accountPreferencesGeneral" data-active="false">
+              <span class="accountLhnBtnTitle">Preferences</span>
+              <span class="accountLhnBtnSub">General</span>
+            </button>
+            <button type="button" class="accountLhnBtn" data-account-nav-target="accountPreferencesNotifications" data-active="false">
+              <span class="accountLhnBtnTitle">Preferences</span>
+              <span class="accountLhnBtnSub">Notifications</span>
+            </button>
+            <button type="button" class="accountLhnBtn" data-account-nav-target="accountWorkspaceProfiles" data-active="false">
+              <span class="accountLhnBtnTitle">Workspace tools</span>
+              <span class="accountLhnBtnSub">Profiles and CSV</span>
+            </button>
+            <button type="button" class="accountLhnBtn" data-account-nav-target="accountWorkspaceSettings" data-active="false">
+              <span class="accountLhnBtnTitle">Settings</span>
+              <span class="accountLhnBtnSub">Theme, display and test data</span>
+            </button>
+          </div>
+          <div class="accountLhnSummary">
+            <span class="accountLhnSummaryItem" id="accountLhnPrefill">Prefill: On</span>
+            <span class="accountLhnSummaryItem" id="accountLhnNotifications">Alerts: 2 enabled</span>
+          </div>
+        </section>
         <div class="recordContext" id="recordContext">
           <button type="button" class="recordContextBtn" id="recordOverviewBtn" aria-label="Back to record overview">
             <span class="recordContextArrow" aria-hidden="true">←</span>
@@ -107,6 +139,7 @@
           </svg>
         </button>
         <button class="btn primary small" type="button" id="globalEditConfigurator" hidden>Edit record</button>
+        <button class="btn secondaryBlue small" type="button" id="globalShareRecord" data-action="openShareRecord" hidden>Share</button>
         <button class="btn secondaryBlue small" type="button" id="globalViewRecommendations" hidden>View content recommendations</button>
         <button class="btn secondaryBlue small" type="button" id="globalBookConsultation" hidden>Book consultation</button>
       </div>
@@ -257,10 +290,13 @@
             <h2>My account</h2>
             <p class="accountSub">Google Workspace profile defaults used to prefill new records and shape role-aware configurator behavior.</p>
           </div>
-          <button class="btn" type="button" id="accountOpenSettings">Open settings</button>
+          <div class="accountHeadActions">
+            <span class="accountSaveState" id="accountSaveState" data-state="saved">Saved</span>
+            <button class="btn primary small" type="button" id="accountSaveChanges">Save changes</button>
+          </div>
         </header>
         <div class="accountBody">
-          <section class="settingsRow">
+          <section class="settingsRow" id="accountProfileDefaults">
             <div class="settingsLabel">Profile defaults</div>
             <div class="settingsFieldGrid">
               <label class="settingsField">
@@ -280,6 +316,27 @@
                 <select id="accountRole">
                   <option value="">No default</option>
                 </select>
+              </label>
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Workspace access role</span>
+                <select id="accountWorkspaceRole">
+                  <option value="owner">Owner</option>
+                  <option value="admin">Admin</option>
+                  <option value="editor">Collaborator/editor</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+                <p class="settingsFieldNote">Admin can add/remove users. Owner can set sharing permissions. Editor and viewer can add viewers only.</p>
+              </label>
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Permission mode (testing)</span>
+                <select id="accountPermissionTestMode">
+                  <option value="live">Live membership rules</option>
+                  <option value="force-admin">Force admin (test)</option>
+                  <option value="force-owner">Force owner (test)</option>
+                  <option value="force-editor">Force editor (test)</option>
+                  <option value="force-viewer">Force viewer (test)</option>
+                </select>
+                <p class="settingsFieldNote" id="accountPermissionSummary">Role matrix applies to sharing and edit controls.</p>
               </label>
               <label class="settingsField">
                 <span class="settingsFieldLabel">Default operating country</span>
@@ -312,7 +369,36 @@
               <button class="btn small" id="accountReset" type="button">Reset account defaults</button>
             </div>
           </section>
-          <section class="settingsRow">
+          <section class="settingsRow" id="accountPreferencesGeneral">
+            <div class="settingsLabel">Your preferences · General</div>
+            <div class="settingsFieldGrid">
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Preferred start page</span>
+                <select id="accountLandingView">
+                  <option value="dashboard">Dashboard</option>
+                  <option value="account">My account</option>
+                </select>
+              </label>
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Dashboard date column default</span>
+                <select id="accountDashboardDateMode">
+                  <option value="modified">Date modified</option>
+                  <option value="created">Date created</option>
+                </select>
+              </label>
+            </div>
+            <p class="settingsHint">These defaults shape your workspace landing and dashboard table behavior.</p>
+          </section>
+          <section class="settingsRow" id="accountPreferencesNotifications">
+            <div class="settingsLabel">Your preferences · Notifications</div>
+            <div class="settingsOptions" id="accountNotificationOptions">
+              <button class="settingsOption" type="button" data-account-notify="recordUpdates" aria-pressed="true">Record update alerts</button>
+              <button class="settingsOption" type="button" data-account-notify="lockAvailability" aria-pressed="true">Lock availability alerts</button>
+              <button class="settingsOption" type="button" data-account-notify="dailyDigest" aria-pressed="false">Daily digest</button>
+            </div>
+            <p class="settingsHint">Notification preferences are saved now. Delivery channels (email/Slack/in-app) can be connected in the backend phase.</p>
+          </section>
+          <section class="settingsRow" id="accountWorkspaceProfiles">
             <div class="settingsLabel">Workspace profiles</div>
             <p class="settingsHint">Load a saved profile dataset to switch record portfolios instantly, upload a CSV profile, or export all records for sharing and backup.</p>
             <div class="settingsRowActions">
@@ -322,6 +408,44 @@
               <button class="btn small" id="accountExportAllCsv" type="button">Export high-fidelity CSV</button>
             </div>
             <input id="accountUploadProfileFile" type="file" accept=".csv,text/csv" hidden />
+          </section>
+          <section class="accountSettingsSection" id="accountWorkspaceSettings">
+            <div class="settingsLabel">My settings</div>
+            <p class="settingsHint">Theme, display and test data options for your workspace session.</p>
+            <div class="settingsRow">
+              <div class="settingsLabel">Theme</div>
+              <div class="settingsOptions" id="toneOptions">
+                <button class="settingsOption" type="button" data-tone="default" aria-pressed="true">Default</button>
+                <button class="settingsOption" type="button" data-tone="soft" aria-pressed="false">Soft</button>
+                <button class="settingsOption" type="button" data-tone="dark" aria-pressed="false">Onyx 1</button>
+                <button class="settingsOption" type="button" data-tone="comfort" aria-pressed="false">Comfort</button>
+              </div>
+            </div>
+            <div class="settingsRow">
+              <div class="settingsLabel">Display</div>
+              <div class="settingsOptions" id="densityOptions">
+                <button class="settingsOption" type="button" data-density="comfortable" aria-pressed="true">Comfortable</button>
+                <button class="settingsOption" type="button" data-density="compact" aria-pressed="false">Compact</button>
+              </div>
+            </div>
+            <div class="settingsRow">
+              <div class="settingsLabel">Font size scale</div>
+              <div class="settingsOptions" id="fontScaleOptions">
+                <button class="settingsOption" type="button" data-font-scale="0.9" aria-pressed="false">90%</button>
+                <button class="settingsOption" type="button" data-font-scale="1" aria-pressed="true">100%</button>
+                <button class="settingsOption" type="button" data-font-scale="1.1" aria-pressed="false">110%</button>
+              </div>
+            </div>
+            <div class="settingsRow">
+              <div class="settingsLabel">Test data</div>
+              <div class="settingsOptions" id="dummyOptions">
+                <button class="settingsOption" type="button" data-dummy="off" aria-pressed="true">Dummy account off</button>
+                <button class="settingsOption" type="button" data-dummy="on" aria-pressed="false">Dummy account on</button>
+              </div>
+            </div>
+            <div class="settingsReset">
+              <button class="btn small" id="resetLayoutWidths" type="button">Reset layout widths</button>
+            </div>
           </section>
         </div>
       </article>
@@ -372,11 +496,21 @@
 
     <div class="grid">
       <!-- MAIN -->
-      <section class="card">
+      <section class="card" id="configuratorEditor">
         <div class="cardPad title">
           <div class="titleBar">
-            <h1>Cyber readiness configurator</h1>
+            <div class="titleMainRow">
+              <h1>Cyber readiness configurator</h1>
+              <span class="titleSavedMeta" id="recordSavedMeta">Not saved yet</span>
+            </div>
             <div class="titleActions">
+              <div class="titleCollabTools" id="configuratorCollabTools">
+                <button class="titleAddUserBtn" type="button" id="configuratorShareRecordBtn" data-action="openShareRecord">Add user</button>
+                <button class="titleAddUserIconBtn" type="button" data-action="openShareRecord" data-collab-add-trigger="true" aria-label="Add collaborator">
+                  <span aria-hidden="true">+</span>
+                </button>
+                <div class="collabAvatarStack collabAvatarStack--md" id="configuratorCollabAvatars" aria-label="Record collaborators" hidden></div>
+              </div>
               <button class="btn secondaryBlue small" type="button" id="jumpNextIncompleteBtn" data-jump-next-incomplete="true" title="Jump to next incomplete section">
                 <span class="jumpNextIncompleteBtnLabel" id="jumpNextIncompleteBtnLabel">Next incomplete</span>
               </button>
@@ -386,6 +520,10 @@
                 <span class="saveCheck" aria-hidden="true">✓</span>
               </button>
             </div>
+          </div>
+          <div class="collabStatus" id="collabStatus" data-tone="info" hidden role="status" aria-live="polite">
+            <strong id="collabStatusTitle">Shared record</strong>
+            <span id="collabStatusBody">Collaboration status appears when a saved record is open.</span>
           </div>
         </div>
 
@@ -1315,6 +1453,48 @@
       </div>
     </div>
   </div>
+  <div class="modal" id="shareModal">
+    <div class="modalCard shareModalCard" role="dialog" aria-modal="true" aria-label="Share record">
+      <h3 id="shareModalTitle">Share record</h3>
+      <p id="shareModalBody">Add collaborators and copy a shareable link.</p>
+      <div class="shareModalFields">
+        <label for="shareInviteInput" class="shareModalLabel">Add collaborators (email)</label>
+        <div class="shareInviteRow">
+          <input id="shareInviteInput" type="text" placeholder="name@company.com, teammate@company.com" />
+          <select id="shareInviteRole" aria-label="New collaborator role">
+            <option value="viewer">Viewer</option>
+            <option value="editor">Editor</option>
+            <option value="owner">Owner</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button class="btn secondaryBlue small" type="button" id="shareAddCollaboratorBtn">Add</button>
+        </div>
+        <label for="shareInviteMessage" class="shareModalLabel">Message (optional)</label>
+        <textarea id="shareInviteMessage" rows="3" placeholder="Optional context for collaborators..."></textarea>
+      </div>
+      <section class="shareModalSection">
+        <div class="shareModalSectionTitle">Collaborators</div>
+        <div class="shareCollaboratorList" id="shareCollaboratorList" aria-live="polite"></div>
+      </section>
+      <section class="shareModalSection">
+        <div class="shareModalSectionTitle">General access</div>
+        <div class="shareAccessRow">
+          <span class="shareAccessLabel">Anyone in this group with the link</span>
+          <select id="shareGeneralAccess">
+            <option value="workspace-viewer">Can view</option>
+            <option value="workspace-editor">Can edit</option>
+            <option value="restricted">Restricted</option>
+          </select>
+        </div>
+      </section>
+      <div class="modalActions">
+        <button class="btn secondaryBlue small" type="button" id="shareCopyLinkBtn">Copy link</button>
+        <button class="btn secondaryBlue small" type="button" id="shareRequestAccessBtn" hidden>Request access</button>
+        <button class="btn" type="button" data-action="closeShareModal">Cancel</button>
+        <button class="btn primary" type="button" id="shareSaveBtn">Save sharing</button>
+      </div>
+    </div>
+  </div>
   <div class="consultation" id="consultationPanel" aria-hidden="true">
     <aside class="consultationSheet" role="dialog" aria-modal="true" aria-label="Consultation planner">
       <div class="consultationHead">
@@ -1493,54 +1673,6 @@
         </section>
       </div>
     </aside>
-  </div>
-
-  <div class="settings" id="settings" aria-hidden="true">
-    <div class="settingsPanel" role="dialog" aria-label="My settings">
-      <div class="settingsHead">
-        <div>
-          <h3 class="settingsTitle">My settings</h3>
-          <p class="settingsSub">Theme, display &amp; test data</p>
-        </div>
-        <button class="btn small" id="closeSettings" type="button" aria-label="Close settings">Close</button>
-      </div>
-      <div class="settingsBody">
-        <div class="settingsRow">
-          <div class="settingsLabel">Theme</div>
-          <div class="settingsOptions" id="toneOptions">
-            <button class="settingsOption" type="button" data-tone="default" aria-pressed="true">Default</button>
-            <button class="settingsOption" type="button" data-tone="soft" aria-pressed="false">Soft</button>
-            <button class="settingsOption" type="button" data-tone="dark" aria-pressed="false">Onyx 1</button>
-            <button class="settingsOption" type="button" data-tone="comfort" aria-pressed="false">Comfort</button>
-          </div>
-        </div>
-        <div class="settingsRow">
-          <div class="settingsLabel">Display</div>
-          <div class="settingsOptions" id="densityOptions">
-            <button class="settingsOption" type="button" data-density="comfortable" aria-pressed="true">Comfortable</button>
-            <button class="settingsOption" type="button" data-density="compact" aria-pressed="false">Compact</button>
-          </div>
-        </div>
-        <div class="settingsRow">
-          <div class="settingsLabel">Font size scale</div>
-          <div class="settingsOptions" id="fontScaleOptions">
-            <button class="settingsOption" type="button" data-font-scale="0.9" aria-pressed="false">90%</button>
-            <button class="settingsOption" type="button" data-font-scale="1" aria-pressed="true">100%</button>
-            <button class="settingsOption" type="button" data-font-scale="1.1" aria-pressed="false">110%</button>
-          </div>
-        </div>
-        <div class="settingsRow">
-          <div class="settingsLabel">Test data</div>
-          <div class="settingsOptions" id="dummyOptions">
-            <button class="settingsOption" type="button" data-dummy="off" aria-pressed="true">Dummy account off</button>
-            <button class="settingsOption" type="button" data-dummy="on" aria-pressed="false">Dummy account on</button>
-          </div>
-        </div>
-        <div class="settingsReset">
-          <button class="btn small" id="resetLayoutWidths" type="button">Reset layout widths</button>
-        </div>
-      </div>
-    </div>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

@@ -242,6 +242,92 @@
       border-bottom:1px solid var(--border);
       background: color-mix(in srgb, var(--surface) 97%, var(--accent) 3%);
     }
+    .accountLhn{
+      display:none;
+      border-bottom:1px solid var(--border);
+      background: color-mix(in srgb, var(--surface) 97%, var(--accent) 3%);
+    }
+    .accountLhnHead{
+      display:grid;
+      gap:4px;
+      padding: 10px 12px 8px;
+      border-bottom:1px solid color-mix(in srgb, var(--border) 86%, transparent);
+    }
+    .accountLhnLabel{
+      font-size:.68rem;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color: var(--muted);
+      font-weight:700;
+    }
+    .accountLhnMeta{
+      font-size:.78rem;
+      color: var(--text);
+      font-weight:650;
+    }
+    .accountLhnList{
+      display:grid;
+      gap:6px;
+      padding: 8px;
+    }
+    .accountLhnBtn{
+      appearance:none;
+      border:1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius:10px;
+      background: var(--surface);
+      color: var(--text);
+      text-align:left;
+      padding: 8px 9px;
+      display:grid;
+      gap:3px;
+      cursor:pointer;
+      transition: border-color .14s ease, background .14s ease, transform .16s ease, box-shadow .16s ease;
+    }
+    .accountLhnBtn:hover{
+      border-color: color-mix(in srgb, var(--azure) 78%, var(--border));
+      background: var(--surface);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px color-mix(in srgb, var(--azure) 10%, transparent);
+    }
+    .accountLhnBtn[data-active="true"]{
+      border-color: color-mix(in srgb, var(--azure) 84%, var(--border));
+      background: color-mix(in srgb, var(--azure) 8%, var(--surface));
+      box-shadow: none;
+    }
+    .accountLhnBtn:focus-visible{
+      outline:none;
+      border-color: color-mix(in srgb, var(--azure) 84%, var(--border));
+      box-shadow: var(--focus);
+    }
+    .accountLhnBtnTitle{
+      display:block;
+      font-size:.84rem;
+      font-weight:700;
+      letter-spacing:-.01em;
+      line-height:1.2;
+    }
+    .accountLhnBtnSub{
+      display:block;
+      font-size:.72rem;
+      color: var(--muted);
+      line-height:1.25;
+    }
+    .accountLhnSummary{
+      display:grid;
+      gap:6px;
+      padding: 0 8px 8px;
+    }
+    .accountLhnSummaryItem{
+      display:block;
+      border:1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius:999px;
+      background: var(--surface);
+      padding: 4px 8px;
+      font-size:.72rem;
+      color: var(--muted);
+      font-weight:600;
+      line-height:1.25;
+    }
     .workspaceCompaniesHead{
       display:flex;
       align-items:center;
@@ -569,6 +655,12 @@
       display:block;
     }
     body.is-account-view #accountView{
+      display:block;
+    }
+    body.is-account-view .workspaceCompanies{
+      display:none;
+    }
+    body.is-account-view .accountLhn{
       display:block;
     }
     body.is-recommendations-view #contentRecommendationsView{
@@ -980,11 +1072,31 @@
       opacity:.82;
     }
     .dash-created{
-      display:inline-block;
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
       color: var(--muted);
       font-size:.84rem;
       font-weight:620;
       white-space:nowrap;
+    }
+    .dash-createdDot{
+      width:8px;
+      height:8px;
+      border-radius:999px;
+      background: color-mix(in srgb, var(--lime) 74%, #1e9a4b);
+      opacity:0;
+      transform: scale(.78);
+      transition: opacity .16s ease, transform .16s ease;
+      flex: 0 0 auto;
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface) 70%, var(--border));
+    }
+    .dash-created[data-unseen="true"] .dash-createdDot{
+      opacity:1;
+      transform: scale(1);
+    }
+    .dash-createdLabel{
+      display:inline-block;
     }
     .dashColResizer{
       appearance:none;
@@ -1036,6 +1148,10 @@
       align-items:center;
       gap:8px;
       min-width:0;
+    }
+    .dashCollabWrap{
+      margin-left:2px;
+      flex: 0 0 auto;
     }
     .dashStarBtn{
       appearance:none;
@@ -1138,6 +1254,57 @@
       overflow:hidden;
       text-overflow:ellipsis;
       white-space:nowrap;
+    }
+    .collabAvatarStack{
+      display:inline-flex;
+      align-items:center;
+      min-height: 22px;
+    }
+    .collabAvatar{
+      --collab-size: 22px;
+      width: var(--collab-size);
+      height: var(--collab-size);
+      border-radius: 999px;
+      border: 2px solid var(--surface);
+      background: color-mix(in srgb, var(--azure) 78%, var(--surface) 22%);
+      color: #fff;
+      display:grid;
+      place-items:center;
+      font-size: .62rem;
+      font-weight: 800;
+      letter-spacing: .01em;
+      line-height: 1;
+      margin-left: -7px;
+      box-shadow: 0 1px 0 rgba(15,23,42,.10);
+      user-select:none;
+    }
+    .collabAvatar:first-child{
+      margin-left:0;
+    }
+    .collabAvatar[data-locked="true"]{
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber) 62%, transparent);
+    }
+    .collabAvatarMore{
+      background: color-mix(in srgb, var(--muted) 72%, var(--surface) 28%);
+      color: #fff;
+    }
+    .collabAvatarStack--sm .collabAvatar{
+      --collab-size: 20px;
+      font-size:.58rem;
+      margin-left:-6px;
+      border-width: 2px;
+    }
+    .collabAvatarStack--md .collabAvatar{
+      --collab-size: 24px;
+      font-size:.67rem;
+      margin-left:-8px;
+      border-width: 2px;
+    }
+    .collabAvatarStack--lg .collabAvatar{
+      --collab-size: 28px;
+      font-size:.72rem;
+      margin-left:-9px;
+      border-width: 2px;
     }
     .dash-tier{
       display:inline-flex;
@@ -1254,6 +1421,36 @@
         radial-gradient(620px 240px at 10% -20%, color-mix(in srgb, var(--azure) 10%, transparent), transparent 70%),
         linear-gradient(180deg, color-mix(in srgb, var(--surface) 95%, var(--accent) 5%), var(--surface));
     }
+    .accountHeadActions{
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .accountSaveState{
+      display:inline-flex;
+      align-items:center;
+      border:1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius:999px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size:.78rem;
+      font-weight:650;
+      line-height:1.2;
+      padding: 5px 9px;
+      white-space:nowrap;
+    }
+    .accountSaveState[data-state="dirty"]{
+      border-color: color-mix(in srgb, var(--tangerine) 56%, var(--border));
+      background: color-mix(in srgb, var(--tangerine) 8%, var(--surface));
+      color: color-mix(in srgb, var(--tangerine) 78%, var(--text) 22%);
+    }
+    .accountSaveState[data-state="saved"]{
+      border-color: color-mix(in srgb, var(--lime) 44%, var(--border));
+      background: color-mix(in srgb, var(--lime) 10%, var(--surface));
+      color: color-mix(in srgb, var(--lime) 82%, #0f5132 18%);
+    }
     .accountHead h2{
       margin:0;
       font-size: clamp(1.35rem, 2.6vw, 1.85rem);
@@ -1273,6 +1470,19 @@
       gap:14px;
     }
     #accountView .settingsRow{
+      margin:0;
+    }
+    .accountSettingsSection{
+      display:grid;
+      gap:12px;
+    }
+    .accountSettingsSection > .settingsLabel{
+      margin-bottom:0;
+    }
+    .accountSettingsSection > .settingsHint{
+      margin-top:-4px;
+    }
+    .accountSettingsSection > .settingsRow{
       margin:0;
     }
     #interstitialView{
@@ -1305,6 +1515,11 @@
       align-items:center;
       gap:10px;
       min-width:0;
+    }
+    .interTitleCollab{
+      margin-left:2px;
+      display:inline-flex;
+      align-items:center;
     }
     .interTitleIconBtn{
       appearance:none;
@@ -1803,11 +2018,11 @@
 
     /* Intro */
     .titleBar{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:12px;
-      flex-wrap:wrap;
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      align-items:center;
+      column-gap:14px;
+      row-gap:8px;
     }
     .title h1{
       margin:0;
@@ -1816,12 +2031,122 @@
       letter-spacing:-0.04em;
       font-weight:650;
     }
+    .titleMainRow{
+      min-width:0;
+      display:flex;
+      align-items:baseline;
+      gap:16px;
+      flex-wrap:wrap;
+    }
+    .titleSavedMeta{
+      font-size:.84rem;
+      color: var(--muted);
+      letter-spacing:.01em;
+      font-weight:600;
+      white-space:nowrap;
+    }
     .titleActions{
       display:flex;
       align-items:center;
       justify-content:flex-end;
-      gap:10px;
-      margin-left:auto;
+      gap:12px;
+      margin-left:0;
+    }
+    .titleCollabTools{
+      display:flex;
+      align-items:center;
+      gap:7px;
+    }
+    .titleAddUserBtn{
+      appearance:none;
+      border:0;
+      background:transparent;
+      color: color-mix(in srgb, var(--azure) 90%, #1f4acc 10%);
+      font-size:.84rem;
+      letter-spacing:.02em;
+      font-weight:700;
+      line-height:1;
+      text-transform:uppercase;
+      padding:0;
+      cursor:pointer;
+    }
+    .titleAddUserBtn:hover{
+      color: color-mix(in srgb, var(--azure) 82%, var(--text) 18%);
+    }
+    .titleAddUserBtn:disabled{
+      opacity:.48;
+      cursor:default;
+    }
+    .titleAddUserIconBtn{
+      appearance:none;
+      border:1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius:999px;
+      width:34px;
+      height:34px;
+      background: var(--surface);
+      color: color-mix(in srgb, var(--azure) 88%, var(--text) 12%);
+      font-size:1.44rem;
+      font-weight:500;
+      line-height:1;
+      display:grid;
+      place-items:center;
+      padding:0;
+      cursor:pointer;
+      transition: border-color .14s ease, box-shadow .14s ease, color .14s ease, background .14s ease;
+    }
+    .titleAddUserIconBtn:hover{
+      border-color: color-mix(in srgb, var(--azure) 42%, var(--border));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--azure) 12%, transparent);
+    }
+    .titleAddUserIconBtn:disabled{
+      opacity:.48;
+      cursor:default;
+      box-shadow:none;
+    }
+    .titleCollabTools .collabAvatarStack{
+      min-height:34px;
+    }
+    .titleCollabTools .collabAvatarStack--md .collabAvatar{
+      --collab-size: 34px;
+      margin-left:-10px;
+      font-size:.76rem;
+    }
+    .collabStatus{
+      margin-top:10px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background: color-mix(in srgb, var(--soft) 72%, var(--surface));
+      color: var(--text);
+      padding:10px 12px;
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .collabStatus strong{
+      font-size:.87rem;
+      line-height:1.25;
+      letter-spacing:-0.01em;
+      font-weight:700;
+    }
+    .collabStatus span{
+      font-size:.84rem;
+      line-height:1.45;
+      color: var(--muted);
+    }
+    .collabStatus[data-tone="success"]{
+      border-color: color-mix(in srgb, var(--lime) 50%, var(--border));
+      background: color-mix(in srgb, var(--lime) 13%, var(--surface));
+    }
+    .collabStatus[data-tone="warning"]{
+      border-color: color-mix(in srgb, var(--amber) 58%, var(--border));
+      background: color-mix(in srgb, var(--amber) 14%, var(--surface));
+    }
+    .collabStatus[data-tone="info"]{
+      border-color: color-mix(in srgb, var(--azure) 32%, var(--border));
+      background: color-mix(in srgb, var(--azure) 10%, var(--surface));
+    }
+    body.is-record-readonly #configuratorEditor{
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 50%, transparent), var(--shadow);
     }
     .saveRecordBtn{
       min-width: 124px;
@@ -1868,13 +2193,20 @@
       to { transform: rotate(360deg); }
     }
     @media (max-width: 720px){
+      .titleMainRow{
+        gap:10px;
+      }
       .titleActions{
         width:100%;
         margin-left:0;
         justify-content:flex-end;
+        flex-wrap:wrap;
       }
       .saveRecordBtn{
         width:auto;
+      }
+      .titleSavedMeta{
+        width:100%;
       }
     }
     .subhead{
@@ -3322,6 +3654,150 @@
       gap:10px;
       margin-top:16px;
     }
+    .shareModalCard{
+      width:min(760px, 100%);
+    }
+    .shareModalFields{
+      margin-top:12px;
+      display:grid;
+      gap:8px;
+    }
+    .shareModalLabel{
+      font-size:.76rem;
+      font-weight:700;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+      color: var(--muted);
+    }
+    .shareInviteRow{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto auto;
+      gap:8px;
+      align-items:center;
+    }
+    #shareInviteRole{
+      min-width: 150px;
+    }
+    .shareModalFields textarea{
+      min-height:84px;
+      resize:vertical;
+    }
+    .shareModalSection{
+      margin-top:14px;
+      border:1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      background: color-mix(in srgb, var(--surface-2) 66%, var(--surface));
+    }
+    .shareModalSectionTitle{
+      font-size:.76rem;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+      font-weight:700;
+      color: var(--muted);
+      margin-bottom:8px;
+    }
+    .shareCollaboratorList{
+      display:grid;
+      gap:8px;
+    }
+    .shareCollaboratorRow{
+      display:grid;
+      grid-template-columns:auto minmax(0,1fr) auto auto;
+      gap:8px;
+      align-items:center;
+      border:1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius: 10px;
+      background: var(--surface);
+      padding: 6px 8px;
+    }
+    .shareCollaboratorMeta{
+      min-width:0;
+      display:grid;
+      gap:1px;
+    }
+    .shareCollaboratorName{
+      font-size:.86rem;
+      line-height:1.25;
+      color: var(--text);
+      font-weight:650;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .shareCollaboratorEmail{
+      font-size:.75rem;
+      line-height:1.25;
+      color: var(--muted);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .shareCollaboratorRemove{
+      appearance:none;
+      border:1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius:8px;
+      background: var(--surface);
+      color: var(--muted);
+      padding: 4px 7px;
+      font-size:.78rem;
+      line-height:1;
+      cursor:pointer;
+    }
+    .shareCollaboratorRemove:hover{
+      border-color: color-mix(in srgb, var(--coral) 52%, var(--border));
+      color: color-mix(in srgb, var(--coral) 78%, var(--text) 22%);
+      background: color-mix(in srgb, var(--coral) 8%, var(--surface));
+    }
+    .shareCollaboratorRole{
+      font-size:.74rem;
+      line-height:1;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+      border:1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius: 999px;
+      padding: 6px 9px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--surface-2) 62%, var(--surface));
+      white-space: nowrap;
+    }
+    .shareCollaboratorRoleSelect{
+      min-width: 118px;
+      font-size:.79rem;
+      padding: 5px 8px;
+    }
+    .shareCollaboratorEmpty{
+      color: var(--muted);
+      font-size:.82rem;
+      line-height:1.4;
+      padding: 2px 2px 0;
+    }
+    .shareAccessRow{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      align-items:center;
+      gap:10px;
+    }
+    .shareAccessLabel{
+      font-size:.86rem;
+      color: var(--text);
+    }
+    @media (max-width: 760px){
+      .shareInviteRow{
+        grid-template-columns:minmax(0,1fr);
+      }
+      #shareInviteRole{
+        min-width:0;
+      }
+      .shareCollaboratorRow{
+        grid-template-columns:auto minmax(0,1fr);
+      }
+      .shareCollaboratorRole,
+      .shareCollaboratorRoleSelect,
+      .shareCollaboratorRemove{
+        justify-self:start;
+      }
+    }
 
     .settings{
       position:fixed;
@@ -3647,6 +4123,10 @@
       flex-wrap:wrap;
     }
     @media (max-width: 720px){
+      .accountHeadActions{
+        width:100%;
+        justify-content:flex-start;
+      }
       .settingsFieldGrid{
         grid-template-columns: 1fr;
       }
@@ -5852,7 +6332,13 @@
       .workspaceCompanies{
         border-bottom:1px solid var(--border);
       }
+      .accountLhn{
+        border-bottom:1px solid var(--border);
+      }
       .workspaceCompaniesHead{
+        padding: 8px 8px 8px 20px;
+      }
+      .accountLhnHead{
         padding: 8px 8px 8px 20px;
       }
       .workspaceCompaniesList{
@@ -6685,6 +7171,9 @@
       align-items:center !important;
       column-gap:12px !important;
     }
+    section.card > .cardPad.title .collabStatus{
+      grid-column:1 / -1;
+    }
     section.card > .cardPad.title .titleActions{
       margin-left:0 !important;
       width:auto !important;
@@ -6720,4 +7209,5 @@
       .colResize{ display:none !important; }
       .nav-settingsDock{ display:none; }
       .workspaceCompanies{ display:none; }
+      .accountLhn{ display:none !important; }
     }

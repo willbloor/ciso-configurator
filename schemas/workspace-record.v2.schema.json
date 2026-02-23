@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/immersive-one/workspace-record.v2.schema.json",
+  "title": "Immersive One Workspace Record v2",
+  "type": "object",
+  "required": [
+    "recordId",
+    "workspaceId",
+    "version",
+    "updatedBy",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "workspace-record.v2"
+    },
+    "recordId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "id": {
+      "type": "string",
+      "description": "Legacy/UI alias for recordId"
+    },
+    "workspaceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "updatedBy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "updatedById": {
+      "type": "string"
+    },
+    "updatedByEmail": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "number",
+      "minimum": 1
+    },
+    "createdAt": {
+      "type": "number",
+      "minimum": 1
+    },
+    "lockOwner": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "lockExpiresAt": {
+      "type": "number",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": true
+}

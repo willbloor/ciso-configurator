@@ -1,6 +1,6 @@
 # CISO Configurator
 
-Last updated: 2026-02-22
+Last updated: 2026-02-23
 
 This repository contains the static configurator app used to generate customer dashboard pages.
 
@@ -17,6 +17,7 @@ This repository contains the static configurator app used to generate customer d
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`
 - Main logic: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
 - Styles: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+- Collaboration record schema: `/Users/will.bloor/Documents/Configurator/schemas/workspace-record.v2.schema.json`
 
 The generated customer dashboard is created in code (not from a static HTML file) by:
 
@@ -63,6 +64,150 @@ Current section order in generated output:
 - "Recommended resources" section was removed from output and preview.
 - Any `site:immersivelabs.com` Google-search fallback links were removed.
 - Content links are now first-party/direct where possible.
+
+## Collaboration + Account Plumbing (Implemented)
+
+### Record model + local persistence
+
+- Canonical record metadata includes:
+  - `recordId`
+  - `workspaceId`
+  - `version`
+  - `updatedBy`
+  - `updatedById`
+  - `updatedByEmail`
+  - `updatedAt`
+  - `lockOwner`
+  - `lockExpiresAt`
+  - `shareAccess`
+  - `collaborators[]`
+- Record schema source:
+  - `/Users/will.bloor/Documents/Configurator/schemas/workspace-record.v2.schema.json`
+- Local persistence is wrapped via `recordStore` in:
+  - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+- Cross-tab sync is wired via `window.storage` events on:
+  - `THREAD_STORAGE_KEY = immersive.launchpad.savedThreads.v1`
+
+### Roles and permission matrix (frontend guards)
+
+Roles currently enforced in UI guards (backend enforcement deferred):
+
+1. `admin`
+   - Can edit records
+   - Can add/remove collaborators
+   - Can set collaborator roles
+   - Can set general link access
+   - Can manage workspace users
+2. `owner`
+   - Can edit records
+   - Can add/remove collaborators
+   - Can set collaborator roles
+   - Can set general link access
+3. `editor` (collaborator)
+   - Can edit records
+   - Can add viewers
+   - Cannot remove collaborators or elevate roles
+4. `viewer`
+   - Read-only for record editing
+   - Can add viewers
+   - Cannot change access levels
+
+Permission constants and guards are in:
+
+- `COLLAB_PERMISSION_MATRIX`
+- `actorPermissionsForThread(thread)`
+- `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+### Locking and concurrency behavior
+
+- Edit lock model:
+  - `RECORD_LOCK_TTL_MS = 45000`
+  - `RECORD_LOCK_HEARTBEAT_MS = 15000`
+- If another collaborator holds the lock, configurator enters read-only mode and shows status.
+- Save flow increments record `version`, updates `updatedBy*` and `updatedAt`, and releases lock until edit resumes.
+- Collaboration status banner is rendered in configurator header:
+  - `/Users/will.bloor/Documents/Configurator/index.html` (`#collabStatus`)
+
+### Update visibility (unseen changes)
+
+- Dashboard rows now show an unread indicator (small green dot) to the left of `Date modified`.
+- Dot appears only when:
+  - Date column mode is `modified`, and
+  - Record `version` is newer than `state.recordSeenVersions[recordId]`.
+- Dot clears once the record is opened (overview/configurator marks current version as seen).
+- Implementation:
+  - `threadHasUnseenUpdate(thread)` in `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+  - Date-cell dot styles in `/Users/will.bloor/Documents/Configurator/assets/css/app.css` (`.dash-createdDot`)
+
+### Sharing UX + request access flow
+
+- Share modal includes:
+  - Add collaborators by email
+  - Per-user role assignment
+  - General access level (`workspace-viewer` / `workspace-editor`)
+  - Copy-link action
+  - Save sharing action
+  - Request-access action for blocked users
+- Access requests are persisted in:
+  - `ACCESS_REQUESTS_STORAGE_KEY = cfg_record_access_requests_v1`
+- Share modal source:
+  - `/Users/will.bloor/Documents/Configurator/index.html` (`#shareModal`)
+
+### My Account + Settings information architecture
+
+- My Account now includes a dedicated left-hand nav with:
+  - `Profile defaults`
+  - `Your preferences · General`
+  - `Your preferences · Notifications`
+  - `Workspace profiles`
+  - `Settings` (theme/display/test data + layout reset)
+- Save model:
+  - Explicit `Save changes` button
+  - Dirty/saved state pill (`Unsaved changes` / `Saved HH:MM`)
+  - `Apply to current record` action
+- Account-level settings persisted in:
+  - `ACCOUNT_PROFILE_STORAGE_KEY = cfg_shell_account_profile_v1`
+- Shell settings persisted in:
+  - `cfg_shell_tone`
+  - `cfg_shell_density`
+  - `cfg_shell_font_scale`
+  - `cfg_shell_dummy_mode`
+- Layout widths persisted in:
+  - `cfg_shell_lhn_w`
+  - `cfg_shell_right_w`
+- Dashboard column widths persisted in:
+  - `cfg_dashboard_col_widths_v1`
+
+### Permission testing modes (for QA)
+
+Available account test modes:
+
+- `live`
+- `force-admin`
+- `force-owner`
+- `force-editor`
+- `force-viewer`
+
+These modes alter effective UI role for guard testing without backend changes.
+
+### Routing support
+
+Hash routes supported for major states:
+
+- `#/dashboard`
+- `#/archived`
+- `#/account`
+- `#/records/:recordId/overview`
+- `#/records/:recordId/configure?step=1..6`
+- `#/records/:recordId/recommendations`
+
+### Current deliberate UI choices
+
+- Workspace LHN cards remain decluttered:
+  - collaborator avatar stacks are intentionally not shown in the LHN card list.
+- Collaborator avatars remain in:
+  - configurator header
+  - dashboard/archived table company cell
 
 ## Content And RSS System
 
@@ -215,4 +360,16 @@ rg -n "picsum\.photos" assets/js/app.js landing-pages/customer-dashboard-templat
 
 # JS syntax check
 node --check assets/js/app.js
+
+# all browser JS files syntax check
+for f in assets/js/*.js; do node --check "$f"; done
+
+# scripts syntax check
+for f in scripts/*.mjs; do node --check "$f"; done
+
+# schema JSON parse check
+node -e "const fs=require('fs'); JSON.parse(fs.readFileSync('schemas/workspace-record.v2.schema.json','utf8'));"
+
+# no unresolved merge markers
+rg -n "^(<<<<<<<|=======|>>>>>>>)" -g '!*.csv' .
 ```

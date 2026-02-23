@@ -291,6 +291,14 @@
         customerTemplateBuildTheatrePending: false,
         recommendationsThreadId: 'current',
         recommendationsReturnView: 'configurator',
+        recordSeenVersions: Object.create(null),
+        collaborationNoticeTitle: '',
+        collaborationNoticeBody: '',
+        collaborationNoticeTone: 'info',
+        collaborationNoticeRecordId: '',
+        collaborationNoticeUntil: 0,
+        recordReadOnly: false,
+        lockReacquirePending: false,
 
         // record persistence
         savedThreads: [],
@@ -301,9 +309,29 @@
       };
       const THREAD_STORAGE_KEY = 'immersive.launchpad.savedThreads.v1';
       const WORKSPACE_PROFILE_KEY = 'immersive.launchpad.workspaceProfile.v1';
+      const ACCESS_REQUESTS_STORAGE_KEY = 'cfg_record_access_requests_v1';
+      const DEFAULT_WORKSPACE_ID = 'workspace-local';
+      const RECORD_SCHEMA_VERSION = 'workspace-record.v2';
+      const ROUTE_HASH_PREFIX = '#/';
       const AUTO_SAVE_FAST_MS = 30000;
       const AUTO_SAVE_BASE_MS = 60000;
+      const RECORD_LOCK_TTL_MS = 45000;
+      const RECORD_LOCK_HEARTBEAT_MS = 15000;
+      const LOCAL_TAB_SESSION_ID = (()=> {
+        try{
+          if(window.crypto && typeof window.crypto.randomUUID === 'function'){
+            return window.crypto.randomUUID();
+          }
+        }catch(err){
+          // Ignore and fallback.
+        }
+        return `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      })();
       let autoSaveTimerId = 0;
+      let recordLockHeartbeatTimerId = 0;
+      let routeSyncIsApplying = false;
+      let routeSyncListenersBound = false;
+      let shareModalRecordId = '';
       let archivePromptMode = 'archive';
       let archivePromptIds = [];
       const DASHBOARD_COL_STORAGE_KEY = 'cfg_dashboard_col_widths_v1';
@@ -349,6 +377,668 @@
         actions: { css:'--dash-col-actions', min:8, max:20, fallback:11 }
       };
       let dashboardColWidths = Object.create(null);
+
+      const recordStore = {
+        list(){
+          try{
+            const raw = window.localStorage.getItem(THREAD_STORAGE_KEY);
+            if(!raw) return [];
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+          }catch(err){
+            return [];
+          }
+        },
+        get(recordId){
+          const target = String(recordId || '').trim();
+          if(!target) return null;
+          const rows = this.list();
+          return rows.find((row)=> {
+            if(!row || typeof row !== 'object') return false;
+            const id = String((row.recordId || row.id) || '').trim();
+            return id === target;
+          }) || null;
+        },
+        save(record){
+          if(!record || typeof record !== 'object') return null;
+          const rows = this.list();
+          const incomingId = String((record.recordId || record.id) || '').trim();
+          if(!incomingId) return null;
+          const idx = rows.findIndex((row)=> {
+            const id = String((row && (row.recordId || row.id)) || '').trim();
+            return id === incomingId;
+          });
+          if(idx >= 0){
+            rows[idx] = record;
+          }else{
+            rows.unshift(record);
+          }
+          this.saveAll(rows);
+          return record;
+        },
+        saveAll(rows){
+          try{
+            const safeRows = Array.isArray(rows) ? rows : [];
+            window.localStorage.setItem(THREAD_STORAGE_KEY, JSON.stringify(safeRows));
+          }catch(err){
+            // Ignore storage failures.
+          }
+        }
+      };
+
+      function activeCollaboratorIdentity(){
+        const account = (typeof settingsState !== 'undefined' && settingsState && settingsState.account)
+          ? settingsState.account
+          : {};
+        const rawName = String(
+          account.fullName
+          || state.fullName
+          || ''
+        ).trim();
+        const email = String(
+          account.email
+          || state.email
+          || ''
+        ).trim().toLowerCase();
+        const fallbackName = rawName || (email ? email : 'Local collaborator');
+        const userId = email
+          ? `email:${email}`
+          : `name:${fallbackName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'local-collaborator'}`;
+        const workspaceRole = resolveCollaboratorRole(account.workspaceRole, 'owner');
+        const permissionTestMode = resolvePermissionTestMode(account.permissionTestMode);
+        return {
+          userId,
+          email,
+          displayName: fallbackName,
+          sessionId: LOCAL_TAB_SESSION_ID,
+          workspaceRole,
+          permissionTestMode
+        };
+      }
+
+      function setCollaborationNotice(tone, title, body, recordId, durationMs){
+        state.collaborationNoticeTone = (tone === 'warning' || tone === 'success') ? tone : 'info';
+        state.collaborationNoticeTitle = String(title || '').trim();
+        state.collaborationNoticeBody = String(body || '').trim();
+        state.collaborationNoticeRecordId = String(recordId || '').trim();
+        state.collaborationNoticeUntil = Date.now() + Math.max(1200, Number(durationMs) || 0);
+      }
+
+      const COLLABORATOR_COLOR_POOL = Object.freeze([
+        '#1a73e8',
+        '#188038',
+        '#d93025',
+        '#f9ab00',
+        '#9334e6',
+        '#00796b',
+        '#ad1457',
+        '#5f6368'
+      ]);
+      const COLLAB_ROLE_ORDER = Object.freeze({
+        viewer: 0,
+        editor: 1,
+        owner: 2,
+        admin: 3
+      });
+      const COLLAB_ROLE_LABELS = Object.freeze({
+        admin: 'Admin',
+        owner: 'Owner',
+        editor: 'Editor',
+        viewer: 'Viewer'
+      });
+      const PERMISSION_TEST_MODES = Object.freeze(new Set([
+        'live',
+        'force-admin',
+        'force-owner',
+        'force-editor',
+        'force-viewer'
+      ]));
+      const COLLAB_PERMISSION_MATRIX = Object.freeze({
+        admin: Object.freeze({
+          canViewRecord: true,
+          canEditRecord: true,
+          canAddCollaborators: true,
+          canRemoveCollaborators: true,
+          canSetCollaboratorRole: true,
+          canSetGeneralAccess: true,
+          canManageWorkspaceUsers: true,
+          assignableRoles: Object.freeze(['admin', 'owner', 'editor', 'viewer'])
+        }),
+        owner: Object.freeze({
+          canViewRecord: true,
+          canEditRecord: true,
+          canAddCollaborators: true,
+          canRemoveCollaborators: true,
+          canSetCollaboratorRole: true,
+          canSetGeneralAccess: true,
+          canManageWorkspaceUsers: false,
+          assignableRoles: Object.freeze(['owner', 'editor', 'viewer'])
+        }),
+        editor: Object.freeze({
+          canViewRecord: true,
+          canEditRecord: true,
+          canAddCollaborators: true,
+          canRemoveCollaborators: false,
+          canSetCollaboratorRole: false,
+          canSetGeneralAccess: false,
+          canManageWorkspaceUsers: false,
+          assignableRoles: Object.freeze(['viewer'])
+        }),
+        viewer: Object.freeze({
+          canViewRecord: true,
+          canEditRecord: false,
+          canAddCollaborators: true,
+          canRemoveCollaborators: false,
+          canSetCollaboratorRole: false,
+          canSetGeneralAccess: false,
+          canManageWorkspaceUsers: false,
+          assignableRoles: Object.freeze(['viewer'])
+        })
+      });
+
+      function resolveCollaboratorRole(value, fallback){
+        const raw = String(value || '').trim().toLowerCase();
+        if(raw === 'admin') return 'admin';
+        if(raw === 'owner') return 'owner';
+        if(raw === 'editor' || raw === 'collaborator') return 'editor';
+        if(raw === 'viewer') return 'viewer';
+        return resolveCollaboratorRole(fallback || 'editor', 'editor');
+      }
+
+      function collaborationRoleLabel(role){
+        const resolved = resolveCollaboratorRole(role, 'viewer');
+        return COLLAB_ROLE_LABELS[resolved] || 'Viewer';
+      }
+
+      function resolvePermissionTestMode(value){
+        const raw = String(value || '').trim().toLowerCase();
+        return PERMISSION_TEST_MODES.has(raw) ? raw : 'live';
+      }
+
+      function forcedRoleFromTestMode(mode){
+        const resolved = resolvePermissionTestMode(mode);
+        if(!resolved.startsWith('force-')) return '';
+        return resolveCollaboratorRole(resolved.slice(6), '');
+      }
+
+      function collaborationRoleRank(role){
+        return Number(COLLAB_ROLE_ORDER[resolveCollaboratorRole(role, 'viewer')]) || 0;
+      }
+
+      function roleAtLeast(role, minimumRole){
+        return collaborationRoleRank(role) >= collaborationRoleRank(minimumRole);
+      }
+
+      function normalizeEmail(value){
+        return String(value || '').trim().toLowerCase();
+      }
+
+      function collaboratorInitials(nameOrEmail){
+        const source = String(nameOrEmail || '').trim();
+        if(!source) return '??';
+        const emailLocal = source.includes('@') ? source.split('@')[0] : source;
+        const parts = emailLocal
+          .replace(/[_\.]+/g, ' ')
+          .replace(/[^a-z0-9 ]/gi, ' ')
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean);
+        if(!parts.length){
+          return source.slice(0, 2).toUpperCase();
+        }
+        if(parts.length === 1){
+          return parts[0].slice(0, 2).toUpperCase();
+        }
+        return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
+      }
+
+      function collaboratorColor(seed){
+        const token = String(seed || '').trim().toLowerCase();
+        if(!token) return COLLABORATOR_COLOR_POOL[0];
+        let hash = 0;
+        for(let i = 0; i < token.length; i += 1){
+          hash = ((hash << 5) - hash) + token.charCodeAt(i);
+          hash |= 0;
+        }
+        const idx = Math.abs(hash) % COLLABORATOR_COLOR_POOL.length;
+        return COLLABORATOR_COLOR_POOL[idx];
+      }
+
+      function normalizeCollaboratorEntry(raw, idx){
+        const source = (raw && typeof raw === 'object') ? raw : {};
+        const email = normalizeEmail(source.email);
+        const userIdFromName = `name:${String(source.name || source.displayName || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `collaborator-${idx + 1}`}`;
+        const userId = String(source.userId || (email ? `email:${email}` : userIdFromName)).trim();
+        const name = String(source.name || source.displayName || email || userId || `Collaborator ${idx + 1}`).trim();
+        return {
+          userId,
+          name: name || `Collaborator ${idx + 1}`,
+          email,
+          role: resolveCollaboratorRole(source.role, idx === 0 ? 'owner' : 'editor'),
+          color: String(source.color || collaboratorColor(userId || email || name)).trim() || collaboratorColor(userId || email || name),
+          initials: collaboratorInitials(name || email)
+        };
+      }
+
+      function ensureCollaboratorOwner(rows){
+        const list = Array.isArray(rows) ? rows.slice() : [];
+        if(!list.length) return list;
+        const hasPrivileged = list.some((row)=> {
+          const role = resolveCollaboratorRole(row && row.role, 'viewer');
+          return role === 'owner' || role === 'admin';
+        });
+        if(hasPrivileged) return list;
+        list[0] = Object.assign({}, list[0], { role:'owner' });
+        return list;
+      }
+
+      function normalizeCollaboratorList(raw){
+        const rows = Array.isArray(raw) ? raw : [];
+        const out = [];
+        const seen = new Set();
+        rows.forEach((row, idx)=>{
+          const normalized = normalizeCollaboratorEntry(row, idx);
+          const key = String(normalized.userId || normalized.email || normalized.name).trim().toLowerCase();
+          if(!key || seen.has(key)) return;
+          seen.add(key);
+          out.push(normalized);
+        });
+        return ensureCollaboratorOwner(out);
+      }
+
+      function collaboratorsWithActor(collaborators, actor, opts){
+        const cfg = Object.assign({ desiredRole:'editor', promote:false }, opts || {});
+        const base = normalizeCollaboratorList(collaborators);
+        const next = base.slice();
+        const actorEmail = normalizeEmail(actor && actor.email);
+        const actorId = String((actor && actor.userId) || '').trim();
+        const actorName = String((actor && actor.displayName) || actorEmail || 'Local collaborator').trim();
+        const desiredRole = resolveCollaboratorRole(cfg.desiredRole, 'editor');
+        const actorEntry = normalizeCollaboratorEntry({
+          userId: actorId || (actorEmail ? `email:${actorEmail}` : ''),
+          email: actorEmail,
+          name: actorName,
+          role: desiredRole
+        }, next.length);
+        const matchIdx = next.findIndex((row)=> {
+          if(!row) return false;
+          if(actorId && String(row.userId || '').trim() === actorId) return true;
+          if(actorEmail && normalizeEmail(row.email) === actorEmail) return true;
+          return false;
+        });
+        if(matchIdx >= 0){
+          const currentRole = resolveCollaboratorRole(next[matchIdx].role, 'viewer');
+          const role = cfg.promote ? (roleAtLeast(currentRole, desiredRole) ? currentRole : desiredRole) : currentRole;
+          next[matchIdx] = Object.assign({}, next[matchIdx], actorEntry, { role });
+        }else{
+          next.push(actorEntry);
+        }
+        return normalizeCollaboratorList(next);
+      }
+
+      function threadCollaborators(thread){
+        const source = (thread && typeof thread === 'object') ? thread : {};
+        let rows = normalizeCollaboratorList(source.collaborators);
+        if(!rows.length){
+          const fallback = [];
+          const updatedByName = String(source.updatedBy || '').trim();
+          const updatedByEmail = normalizeEmail(source.updatedByEmail);
+          if(updatedByName || updatedByEmail){
+            fallback.push({
+              userId: String(source.updatedById || (updatedByEmail ? `email:${updatedByEmail}` : '')).trim(),
+              name: updatedByName || updatedByEmail,
+              email: updatedByEmail
+            });
+          }
+          rows = normalizeCollaboratorList(fallback);
+        }
+        return rows;
+      }
+
+      function collaboratorStackHtml(thread, opts){
+        const cfg = Object.assign({ maxVisible:3, size:'sm', showSingle:false }, opts || {});
+        const rows = threadCollaborators(thread);
+        if(!rows.length) return '';
+        if(!cfg.showSingle && rows.length < 2) return '';
+        const visible = rows.slice(0, Math.max(1, Number(cfg.maxVisible) || 3));
+        const remaining = Math.max(0, rows.length - visible.length);
+        const lockOwner = threadLockOwner(thread);
+        const lockActive = !!(lockOwner && Number(thread && thread.lockExpiresAt) > Date.now());
+        const lockOwnerId = String(lockOwner && lockOwner.userId || '').trim();
+        const lockOwnerName = String(lockOwner && lockOwner.name || '').trim().toLowerCase();
+        const itemHtml = visible.map((row)=> {
+          const key = String(row.userId || row.email || row.name || '').trim();
+          const isLockedOwner = lockActive && (
+            (lockOwnerId && key && key === lockOwnerId)
+            || (!lockOwnerId && lockOwnerName && String(row.name || '').trim().toLowerCase() === lockOwnerName)
+          );
+          const titleParts = [String(row.name || '').trim()];
+          if(row.email) titleParts.push(row.email);
+          if(isLockedOwner) titleParts.push('editing now');
+          return `<span class="collabAvatar" style="background:${escapeHtml(row.color)};" title="${escapeHtml(titleParts.filter(Boolean).join(' · '))}" data-locked="${isLockedOwner ? 'true' : 'false'}">${escapeHtml(row.initials)}</span>`;
+        }).join('');
+        const moreHtml = remaining > 0
+          ? `<span class="collabAvatar collabAvatarMore" title="${remaining} more collaborator${remaining === 1 ? '' : 's'}">+${remaining}</span>`
+          : '';
+        return `<span class="collabAvatarStack collabAvatarStack--${escapeHtml(cfg.size)}">${itemHtml}${moreHtml}</span>`;
+      }
+
+      function resolveShareAccess(value){
+        const raw = String(value || '').trim().toLowerCase();
+        if(raw === 'workspace-editor') return 'workspace-editor';
+        if(raw === 'restricted') return 'restricted';
+        return 'workspace-viewer';
+      }
+
+      function collaboratorMatchesActor(row, actor){
+        if(!row || !actor) return false;
+        const actorId = String(actor.userId || '').trim();
+        const actorEmail = normalizeEmail(actor.email);
+        const rowId = String(row.userId || '').trim();
+        const rowEmail = normalizeEmail(row.email);
+        if(actorId && rowId && actorId === rowId) return true;
+        if(actorEmail && rowEmail && actorEmail === rowEmail) return true;
+        return false;
+      }
+
+      function actorWorkspaceRole(){
+        const account = (typeof settingsState !== 'undefined' && settingsState && settingsState.account)
+          ? settingsState.account
+          : {};
+        return resolveCollaboratorRole(account.workspaceRole, 'owner');
+      }
+
+      function actorPermissionTestMode(){
+        const account = (typeof settingsState !== 'undefined' && settingsState && settingsState.account)
+          ? settingsState.account
+          : {};
+        return resolvePermissionTestMode(account.permissionTestMode);
+      }
+
+      function effectiveActorRoleForThread(thread, opts){
+        const cfg = opts || {};
+        const actor = cfg.actor || activeCollaboratorIdentity();
+        const forced = forcedRoleFromTestMode(actor.permissionTestMode || actorPermissionTestMode());
+        if(forced) return forced;
+
+        const workspaceRole = resolveCollaboratorRole(actor.workspaceRole || actorWorkspaceRole(), 'owner');
+        if(workspaceRole === 'admin') return 'admin';
+        const sourceThread = (thread && typeof thread === 'object') ? thread : null;
+        if(!sourceThread) return workspaceRole;
+
+        const rows = threadCollaborators(sourceThread);
+        const membership = rows.find((row)=> collaboratorMatchesActor(row, actor));
+        if(membership){
+          return resolveCollaboratorRole(membership.role, 'viewer');
+        }
+
+        const threadUpdatedById = String(sourceThread.updatedById || '').trim();
+        const actorId = String(actor.userId || '').trim();
+        if(threadUpdatedById && actorId && threadUpdatedById === actorId){
+          return 'owner';
+        }
+
+        const shareAccess = resolveShareAccess(sourceThread.shareAccess);
+        if(shareAccess === 'workspace-editor' && workspaceRole !== 'viewer'){
+          return 'editor';
+        }
+        if(shareAccess === 'restricted'){
+          return 'viewer';
+        }
+        if(shareAccess === 'workspace-viewer'){
+          return 'viewer';
+        }
+        return resolveCollaboratorRole(workspaceRole, 'viewer');
+      }
+
+      function actorPermissionsForThread(thread, opts){
+        const role = effectiveActorRoleForThread(thread, opts);
+        const template = COLLAB_PERMISSION_MATRIX[role] || COLLAB_PERMISSION_MATRIX.viewer;
+        return {
+          role,
+          roleLabel: collaborationRoleLabel(role),
+          canViewRecord: !!template.canViewRecord,
+          canEditRecord: !!template.canEditRecord,
+          canAddCollaborators: !!template.canAddCollaborators,
+          canRemoveCollaborators: !!template.canRemoveCollaborators,
+          canSetCollaboratorRole: !!template.canSetCollaboratorRole,
+          canSetGeneralAccess: !!template.canSetGeneralAccess,
+          canManageWorkspaceUsers: !!template.canManageWorkspaceUsers,
+          assignableRoles: Array.from(template.assignableRoles || ['viewer']),
+          canShareRecord: true
+        };
+      }
+
+      function canActorEditThread(thread, opts){
+        return !!actorPermissionsForThread(thread, opts).canEditRecord;
+      }
+
+      function activeRecordPermissionSnapshot(){
+        const thread = activeCollaborationThreadModel();
+        return actorPermissionsForThread(thread);
+      }
+
+      function currentEditableRecordId(){
+        if((state.currentView || '') !== 'configurator') return '';
+        const id = String(state.activeThread || '').trim();
+        if(!id || id === 'current') return '';
+        return id;
+      }
+
+      function syncSavedThreadInMemory(thread){
+        if(!thread || typeof thread !== 'object') return;
+        ensureSavedThreadsLoaded();
+        const idx = (state.savedThreads || []).findIndex((row)=> row && row.id === thread.id);
+        if(idx >= 0){
+          state.savedThreads[idx] = thread;
+        }else{
+          state.savedThreads.unshift(thread);
+        }
+      }
+
+      function actorOwnsLock(owner, actor){
+        if(!owner || !actor) return false;
+        const actorId = String(actor.userId || '').trim();
+        const ownerId = String(owner.userId || '').trim();
+        const ownerSessionId = String(owner.sessionId || '').trim();
+        if(ownerSessionId && ownerSessionId === LOCAL_TAB_SESSION_ID) return true;
+        if(ownerId && actorId && ownerId === actorId) return true;
+        return false;
+      }
+
+      function clearRecordLockHeartbeat(){
+        if(recordLockHeartbeatTimerId){
+          window.clearInterval(recordLockHeartbeatTimerId);
+          recordLockHeartbeatTimerId = 0;
+        }
+      }
+
+      function acquireRecordLock(recordId, opts){
+        const cfg = Object.assign({ quiet:false }, opts || {});
+        const targetId = String(recordId || '').trim();
+        if(!targetId || targetId === 'current'){
+          return { ok:false, reason:'draft' };
+        }
+
+        const actor = activeCollaboratorIdentity();
+        const storedRaw = recordStore.get(targetId);
+        const latest = storedRaw ? normalizeThreadModel(storedRaw, 0) : findSavedThread(targetId);
+        if(!latest){
+          return { ok:false, reason:'missing' };
+        }
+
+        const owner = threadLockOwner(latest);
+        const lockExpiresAt = Number(latest.lockExpiresAt) || 0;
+        const lockActive = !!(owner && lockExpiresAt > Date.now());
+        if(lockActive && !actorOwnsLock(owner, actor)){
+          syncSavedThreadInMemory(latest);
+          state.lockReacquirePending = true;
+          if(!cfg.quiet){
+            setCollaborationNotice(
+              'warning',
+              'Read-only mode',
+              `${owner.name} is editing this record. You can edit after they save.`,
+              targetId,
+              14000
+            );
+          }
+          return { ok:false, reason:'held', thread:latest, holder:owner };
+        }
+
+        const nextThread = normalizeThreadModel(Object.assign({}, latest, {
+          lockOwner: {
+            userId: actor.userId,
+            name: actor.displayName,
+            email: actor.email,
+            sessionId: actor.sessionId
+          },
+          lockExpiresAt: Date.now() + RECORD_LOCK_TTL_MS
+        }), 0);
+
+        recordStore.save(nextThread);
+        syncSavedThreadInMemory(nextThread);
+        state.lockReacquirePending = false;
+        return { ok:true, reason:'acquired', thread:nextThread };
+      }
+
+      function renewRecordLock(recordId, opts){
+        const cfg = Object.assign({ quiet:true }, opts || {});
+        const targetId = String(recordId || '').trim();
+        if(!targetId || targetId === 'current') return false;
+
+        const actor = activeCollaboratorIdentity();
+        const storedRaw = recordStore.get(targetId);
+        const latest = storedRaw ? normalizeThreadModel(storedRaw, 0) : findSavedThread(targetId);
+        if(!latest) return false;
+
+        const owner = threadLockOwner(latest);
+        const lockExpiresAt = Number(latest.lockExpiresAt) || 0;
+        const lockActive = !!(owner && lockExpiresAt > Date.now());
+        if(lockActive && !actorOwnsLock(owner, actor)){
+          syncSavedThreadInMemory(latest);
+          state.lockReacquirePending = true;
+          if(!cfg.quiet){
+            setCollaborationNotice(
+              'warning',
+              'Read-only mode',
+              `${owner.name} is editing this record. You can edit after they save.`,
+              targetId,
+              12000
+            );
+          }
+          return false;
+        }
+
+        const nextThread = normalizeThreadModel(Object.assign({}, latest, {
+          lockOwner: {
+            userId: actor.userId,
+            name: actor.displayName,
+            email: actor.email,
+            sessionId: actor.sessionId
+          },
+          lockExpiresAt: Date.now() + RECORD_LOCK_TTL_MS
+        }), 0);
+
+        recordStore.save(nextThread);
+        syncSavedThreadInMemory(nextThread);
+        return true;
+      }
+
+      function releaseRecordLock(recordId, opts){
+        const cfg = Object.assign({ force:false }, opts || {});
+        const targetId = String(recordId || '').trim();
+        if(!targetId || targetId === 'current') return false;
+
+        const actor = activeCollaboratorIdentity();
+        const storedRaw = recordStore.get(targetId);
+        const latest = storedRaw ? normalizeThreadModel(storedRaw, 0) : findSavedThread(targetId);
+        if(!latest) return false;
+
+        const owner = threadLockOwner(latest);
+        const lockExpiresAt = Number(latest.lockExpiresAt) || 0;
+        const lockPresent = !!(owner || lockExpiresAt > 0);
+        if(!lockPresent) return false;
+        if(owner && !cfg.force && !actorOwnsLock(owner, actor)){
+          return false;
+        }
+
+        const nextThread = normalizeThreadModel(Object.assign({}, latest, {
+          lockOwner: null,
+          lockExpiresAt: 0
+        }), 0);
+
+        recordStore.save(nextThread);
+        syncSavedThreadInMemory(nextThread);
+        return true;
+      }
+
+      function ensureRecordLockHeartbeat(){
+        const targetId = currentEditableRecordId();
+        if(!targetId || state.recordReadOnly || state.lockReacquirePending){
+          clearRecordLockHeartbeat();
+          return;
+        }
+        const thread = findSavedThread(targetId);
+        if(thread && !canActorEditThread(thread)){
+          clearRecordLockHeartbeat();
+          return;
+        }
+
+        const renewed = renewRecordLock(targetId, { quiet:true });
+        if(!renewed){
+          clearRecordLockHeartbeat();
+          return;
+        }
+
+        if(recordLockHeartbeatTimerId) return;
+        recordLockHeartbeatTimerId = window.setInterval(()=>{
+          const activeId = currentEditableRecordId();
+          if(!activeId || state.recordReadOnly || state.lockReacquirePending){
+            clearRecordLockHeartbeat();
+            return;
+          }
+          const activeThread = findSavedThread(activeId);
+          if(activeThread && !canActorEditThread(activeThread)){
+            clearRecordLockHeartbeat();
+            return;
+          }
+          const ok = renewRecordLock(activeId, { quiet:true });
+          if(!ok){
+            clearRecordLockHeartbeat();
+            update();
+          }
+        }, RECORD_LOCK_HEARTBEAT_MS);
+      }
+
+      function attemptPendingRecordLock(opts){
+        const cfg = Object.assign({ showNotice:false, render:false }, opts || {});
+        if(!state.lockReacquirePending || state.recordReadOnly) return false;
+        const targetId = currentEditableRecordId();
+        if(!targetId) return false;
+        const thread = findSavedThread(targetId);
+        if(thread && !canActorEditThread(thread)){
+          state.lockReacquirePending = false;
+          clearRecordLockHeartbeat();
+          return false;
+        }
+        const acquired = acquireRecordLock(targetId, { quiet:true });
+        if(!acquired.ok) return false;
+
+        ensureRecordLockHeartbeat();
+        if(cfg.showNotice){
+          setCollaborationNotice(
+            'info',
+            'Editing lock active',
+            'You can now edit this shared record.',
+            targetId,
+            5000
+          );
+        }
+        if(cfg.render){
+          update();
+        }
+        return true;
+      }
 
       function sanitizeDashboardSortMode(raw){
         const value = String(raw || '').trim().toLowerCase();
@@ -1663,11 +2353,135 @@ const evidenceOpts = [
         });
       }
 
+      function encodeRouteSegment(value){
+        return encodeURIComponent(String(value || 'current').trim() || 'current');
+      }
+
+      function decodeRouteSegment(value){
+        try{
+          return decodeURIComponent(String(value || '').trim());
+        }catch(err){
+          return String(value || '').trim();
+        }
+      }
+
+      function routeHashFromState(){
+        const view = state.currentView || 'dashboard';
+        const recordId = String(state.activeThread || 'current').trim() || 'current';
+        if(view === 'dashboard') return `${ROUTE_HASH_PREFIX}dashboard`;
+        if(view === 'archived') return `${ROUTE_HASH_PREFIX}archived`;
+        if(view === 'account') return `${ROUTE_HASH_PREFIX}account`;
+        if(view === 'interstitial'){
+          return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recordId)}/overview`;
+        }
+        if(view === 'recommendations'){
+          const recThreadId = String(state.recommendationsThreadId || recordId).trim() || recordId;
+          return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recThreadId)}/recommendations`;
+        }
+        return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recordId)}/configure?step=${clamp(Number(state.activeStep) || 1, 1, 6)}`;
+      }
+
+      function syncRouteWithState(opts){
+        if(routeSyncIsApplying) return;
+        const cfg = Object.assign({ replace:true }, opts || {});
+        const nextHash = routeHashFromState();
+        const currentHash = String(window.location.hash || '');
+        if(nextHash === currentHash) return;
+        const base = `${window.location.pathname}${window.location.search}`;
+        if(cfg.replace){
+          window.history.replaceState(null, '', `${base}${nextHash}`);
+        }else{
+          window.history.pushState(null, '', `${base}${nextHash}`);
+        }
+      }
+
+      function parseRouteFromHash(hashValue){
+        const raw = String(hashValue || '').trim().replace(/^#/, '');
+        if(!raw || raw === '/') return { view:'dashboard' };
+        const parts = raw.split('?');
+        const pathPart = String(parts[0] || '').replace(/^\/+/, '');
+        const query = new URLSearchParams(parts[1] || '');
+        const segs = pathPart.split('/').filter(Boolean);
+        if(!segs.length) return { view:'dashboard' };
+
+        if(segs[0] === 'dashboard') return { view:'dashboard' };
+        if(segs[0] === 'archived') return { view:'archived' };
+        if(segs[0] === 'account') return { view:'account' };
+        if(segs[0] !== 'records' || segs.length < 2) return null;
+
+        const recordId = decodeRouteSegment(segs[1]) || 'current';
+        const mode = String(segs[2] || '').toLowerCase();
+        if(mode === 'overview') return { view:'interstitial', recordId };
+        if(mode === 'recommendations') return { view:'recommendations', recordId };
+        if(mode === 'configure'){
+          const step = clamp(Number(query.get('step')) || 1, 1, 6);
+          return { view:'configurator', recordId, step };
+        }
+        return null;
+      }
+
+      function applyRoute(route){
+        if(!route || typeof route !== 'object') return false;
+        routeSyncIsApplying = true;
+        try{
+          if(route.view === 'dashboard'){
+            setView('dashboard');
+            return true;
+          }
+          if(route.view === 'archived'){
+            setView('archived');
+            return true;
+          }
+          if(route.view === 'account'){
+            setView('account');
+            return true;
+          }
+          if(route.view === 'interstitial'){
+            openThreadOverview(route.recordId || 'current');
+            return true;
+          }
+          if(route.view === 'recommendations'){
+            openRecommendationsForThread(route.recordId || 'current', { returnView:'interstitial' });
+            return true;
+          }
+          if(route.view === 'configurator'){
+            openThreadConfigurator(route.recordId || 'current', clamp(Number(route.step) || 1, 1, 6));
+            return true;
+          }
+          return false;
+        }finally{
+          routeSyncIsApplying = false;
+        }
+      }
+
+      function applyRouteFromLocation(){
+        const parsed = parseRouteFromHash(window.location.hash || '');
+        if(!parsed) return false;
+        return applyRoute(parsed);
+      }
+
+      function ensureRouteSyncListeners(){
+        if(routeSyncListenersBound) return;
+        routeSyncListenersBound = true;
+        window.addEventListener('hashchange', ()=>{
+          applyRouteFromLocation();
+        });
+      }
+
       // ---------- navigation ----------
       function setView(view, opts){
-        const cfg = Object.assign({ render: true }, opts || {});
+        const cfg = Object.assign({ render: true, syncRoute: true }, opts || {});
         const prev = state.currentView || 'dashboard';
         const next = (view === 'dashboard' || view === 'archived' || view === 'interstitial' || view === 'account' || view === 'recommendations') ? view : 'configurator';
+        if(prev === 'configurator' && next !== 'configurator'){
+          const prevRecordId = String(state.activeThread || '').trim();
+          if(prevRecordId && prevRecordId !== 'current'){
+            releaseRecordLock(prevRecordId, { force:false });
+          }
+          clearRecordLockHeartbeat();
+          state.lockReacquirePending = false;
+          state.recordReadOnly = false;
+        }
         state.currentView = next;
         if(prev !== next && state.consultationOpen){
           toggleConsultation(false);
@@ -1688,6 +2502,9 @@ const evidenceOpts = [
           clearScheduledAutoSave();
         }else{
           requestAutoSave(AUTO_SAVE_BASE_MS);
+          if(!state.recordReadOnly){
+            ensureRecordLockHeartbeat();
+          }
         }
 
         const workspaceArchive = $('#workspaceArchive');
@@ -1705,6 +2522,9 @@ const evidenceOpts = [
           recordContextName.textContent = editingCompany || ((thread && thread.company) ? thread.company : 'Record');
         }
 
+        if(cfg.syncRoute !== false){
+          syncRouteWithState({ replace:true });
+        }
         if(cfg.render) update();
       }
 
@@ -1718,11 +2538,20 @@ const evidenceOpts = [
         const createBtn = $('#globalCreateRecord');
         const deleteBtn = $('#globalDeleteRecord');
         const editBtn = $('#globalEditConfigurator');
+        const shareBtn = $('#globalShareRecord');
         const recsBtn = $('#globalViewRecommendations');
         const bookBtn = $('#globalBookConsultation');
         const view = state.currentView || 'configurator';
         const interThread = (view === 'interstitial') ? activeThreadModel() : null;
-        const canDeleteThread = !!(interThread && interThread.id && interThread.id !== 'current' && findSavedThread(interThread.id));
+        const interPerms = interThread ? actorPermissionsForThread(interThread) : actorPermissionsForThread(null);
+        const canDeleteThread = !!(
+          interThread
+          && interThread.id
+          && interThread.id !== 'current'
+          && findSavedThread(interThread.id)
+          && (interPerms.role === 'admin' || interPerms.role === 'owner')
+        );
+        const canShareThread = !!(interThread && interThread.id && interThread.id !== 'current');
         const interRecsGate = (view === 'interstitial' && interThread)
           ? recommendationsGateFromThread(interThread)
           : null;
@@ -1736,6 +2565,7 @@ const evidenceOpts = [
         setActionBtnVisible(createBtn, view === 'dashboard');
         setActionBtnVisible(deleteBtn, view === 'interstitial' && canDeleteThread);
         setActionBtnVisible(editBtn, view === 'interstitial');
+        setActionBtnVisible(shareBtn, view === 'interstitial' && canShareThread);
         setActionBtnVisible(recsBtn, view === 'interstitial');
         setActionBtnVisible(bookBtn, view === 'interstitial');
         if(recsBtn){
@@ -1746,6 +2576,15 @@ const evidenceOpts = [
           recsBtn.title = unlocked
             ? 'Open recommended resources'
             : `Locked until completion reaches 90% (current: ${(interRecsGate && interRecsGate.completion) || '0/22 (0%)'})`;
+        }
+        if(editBtn){
+          editBtn.textContent = interPerms.canEditRecord ? 'Edit record' : 'View record';
+          editBtn.title = interPerms.canEditRecord ? 'Edit this record' : 'Open this record in read-only mode';
+        }
+        if(shareBtn){
+          shareBtn.disabled = !interPerms.canShareRecord;
+          shareBtn.setAttribute('aria-disabled', shareBtn.disabled ? 'true' : 'false');
+          shareBtn.title = interPerms.canShareRecord ? 'Open sharing controls' : 'Sharing is not available for this role';
         }
         let targetSlot = null;
         if(view === 'dashboard') targetSlot = dashboardSlot;
@@ -1816,7 +2655,7 @@ const evidenceOpts = [
 
       function setActiveStep(n){
         const nn = clamp(Number(n)||1, 1, 6);
-        setView('configurator', { render:false });
+        setView('configurator', { render:false, syncRoute:false });
         state.activeStep = nn;
         state.visited.add(nn);
 
@@ -1824,6 +2663,7 @@ const evidenceOpts = [
         $$('.chip').forEach(c => c.dataset.active = (c.dataset.chip === String(nn)) ? 'true' : 'false');
 
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        syncRouteWithState({ replace:true });
         update();
       }
 
@@ -2682,6 +3522,11 @@ const evidenceOpts = [
             completion: '18/22 (82%)',
             tier: 'Advanced',
             priority: true,
+            collaborators: [
+              { userId:'email:will.bloor@immersivelabs.com', name:'Will Bloor', email:'will.bloor@immersivelabs.com' },
+              { userId:'email:alex.morgan@immersivelabs.com', name:'Alex Morgan', email:'alex.morgan@immersivelabs.com' }
+            ],
+            shareAccess: 'workspace-editor',
             outcomes: ['Evidence-led follow-up planning', 'Coverage roadmap'],
             outcomesText: 'Evidence-led follow-up planning · Coverage roadmap',
             gapSummary: 'Cadence baseline still needed',
@@ -2852,6 +3697,12 @@ const evidenceOpts = [
 	            stage: 'Discovery',
 	            completion: '8/22 (36%)',
 	            tier: 'Core',
+	            collaborators: [
+	              { userId:'email:will.bloor@immersivelabs.com', name:'Will Bloor', email:'will.bloor@immersivelabs.com' },
+	              { userId:'email:jordan.lee@immersivelabs.com', name:'Jordan Lee', email:'jordan.lee@immersivelabs.com' },
+	              { userId:'email:wendy.barker@immersivelabs.com', name:'Wendy Barker', email:'wendy.barker@immersivelabs.com' }
+	            ],
+	            shareAccess: 'workspace-viewer',
 	            outcomes: ['Build and retain a cyber-ready workforce', 'Secure the next-gen modern enterprise'],
 	            outcomesText: 'Build and retain a cyber-ready workforce · Secure the next-gen modern enterprise',
 	            gapSummary: 'Coverage groups not selected · Package fit unanswered',
@@ -2904,6 +3755,11 @@ const evidenceOpts = [
 	            stage: 'Discovery',
 	            completion: '9/22 (41%)',
 	            tier: 'Core',
+	            collaborators: [
+	              { userId:'email:will.bloor@immersivelabs.com', name:'Will Bloor', email:'will.bloor@immersivelabs.com' },
+	              { userId:'email:jess.lawson@immersivelabs.com', name:'Jess Lawson', email:'jess.lawson@immersivelabs.com' }
+	            ],
+	            shareAccess: 'workspace-editor',
 	            outcomes: ['Faster detection, response & decision-making', 'Coverage roadmap'],
 	            outcomesText: 'Faster detection, response & decision-making · Coverage roadmap',
 	            gapSummary: 'Cadence not selected · Context unanswered',
@@ -3134,6 +3990,8 @@ const evidenceOpts = [
               email: 'will.bloor@immersivelabs.com',
               phone: '+1 555 123 4567',
               defaultRole: 'senior_enterprise_account_manager',
+              workspaceRole: 'owner',
+              permissionTestMode: 'live',
               defaultCountry: 'United States',
               defaultRegion: 'NA',
               fieldMode: 'guided',
@@ -3149,6 +4007,8 @@ const evidenceOpts = [
               email: 'alex.morgan@immersivelabs.com',
               phone: '+1 555 987 6543',
               defaultRole: 'lead_customer_success_manager',
+              workspaceRole: 'owner',
+              permissionTestMode: 'live',
               defaultCountry: 'United States',
               defaultRegion: 'NA',
               fieldMode: 'guided',
@@ -3168,6 +4028,52 @@ const evidenceOpts = [
         state.dashboardRowAnimatedIds = new Set();
         state.workspaceCompanyAnimatedIds = new Set();
         state.interstitialAnimatedThreadIds = new Set();
+        state.recordSeenVersions = Object.create(null);
+        state.collaborationNoticeTitle = '';
+        state.collaborationNoticeBody = '';
+        state.collaborationNoticeTone = 'info';
+        state.collaborationNoticeRecordId = '';
+        state.collaborationNoticeUntil = 0;
+        state.recordReadOnly = false;
+        state.lockReacquirePending = false;
+      }
+
+      function refreshSavedThreadsFromStore(opts){
+        const cfg = Object.assign({ external:false, render:false }, opts || {});
+        const prevById = new Map((state.savedThreads || []).map((thread)=> [String((thread && thread.id) || ''), thread]));
+        const nextRows = recordStore.list().map((thread, idx)=> normalizeThreadModel(thread, idx));
+        state.savedThreads = nextRows;
+        state.savedThreadsLoaded = true;
+
+        if(cfg.external){
+          const activeId = String(state.activeThread || '').trim();
+          if(activeId && activeId !== 'current'){
+            const prevThread = prevById.get(activeId) || null;
+            const nextThread = nextRows.find((thread)=> thread.id === activeId) || null;
+            if(nextThread){
+              const prevVersion = Math.max(0, Number(prevThread && prevThread.version) || 0);
+              const nextVersion = Math.max(0, Number(nextThread.version) || 0);
+              const actor = activeCollaboratorIdentity();
+              const nextById = String(nextThread.updatedById || '').trim();
+              const nextByName = String(nextThread.updatedBy || '').trim();
+              const fromOther = nextById
+                ? (nextById !== String(actor.userId || '').trim())
+                : (nextByName && nextByName !== String(actor.displayName || '').trim());
+              if(nextVersion > prevVersion && fromOther){
+                setCollaborationNotice(
+                  'info',
+                  'New update available',
+                  `Saved by ${nextThread.updatedBy || 'another collaborator'} at ${formatDashboardDate(nextThread.updatedAt)}.`,
+                  activeId,
+                  18000
+                );
+              }
+            }
+          }
+        }
+        if(cfg.render){
+          update();
+        }
       }
 
       function applyWorkspaceThreadPortfolio(rows, opts){
@@ -3190,6 +4096,7 @@ const evidenceOpts = [
             nextId = `${base}-${seq}`;
           }
           thread.id = nextId;
+          thread.recordId = nextId;
           used.add(nextId);
         });
 
@@ -3257,8 +4164,25 @@ const evidenceOpts = [
           const progress = threadReadinessProgress(thread);
           const stackList = dashLabelsFromIds(snapshot.stack, stackLabels);
           if(String(snapshot.stackOther || '').trim()) stackList.push(String(snapshot.stackOther).trim());
+          const lockOwner = (thread && thread.lockOwner && typeof thread.lockOwner === 'object')
+            ? thread.lockOwner
+            : null;
+          const collaborators = threadCollaborators(thread);
           return {
             record_id: thread.id,
+            workspace_id: thread.workspaceId || DEFAULT_WORKSPACE_ID,
+            schema_version: thread.schemaVersion || RECORD_SCHEMA_VERSION,
+            version: Number(thread.version) || 1,
+            updated_by: thread.updatedBy || '',
+            updated_by_id: thread.updatedById || '',
+            updated_by_email: thread.updatedByEmail || '',
+            share_access: resolveShareAccess(thread.shareAccess),
+            collaborators_count: collaborators.length,
+            collaborators_json: toJson(collaborators),
+            collaborators_emails: join(collaborators.map((row)=> row && row.email).filter(Boolean)),
+            lock_owner_name: lockOwner ? String(lockOwner.name || '') : '',
+            lock_owner_user_id: lockOwner ? String(lockOwner.userId || '') : '',
+            lock_expires_at: Number(thread.lockExpiresAt) ? new Date(Number(thread.lockExpiresAt)).toISOString() : '',
             company: thread.company,
             stage: thread.stage,
             completion: progress.completion,
@@ -3614,9 +4538,47 @@ const evidenceOpts = [
         const createdAt = coerceTimestamp(createdRaw);
         const updatedAt = coerceTimestamp(updatedRaw) || Date.now() - (idx * 60000);
         const idFromCsv = String(csvRowValue(row, ['record_id', 'id']) || `imported-${idx + 1}`).trim();
+        const workspaceId = String(csvRowValue(row, ['workspace_id']) || DEFAULT_WORKSPACE_ID).trim() || DEFAULT_WORKSPACE_ID;
+        const version = Math.max(1, Math.floor(Number(csvRowValue(row, ['version'])) || 1));
+        const updatedBy = String(csvRowValue(row, ['updated_by']) || snapshot.fullName || '').trim() || 'Unknown collaborator';
+        const updatedById = String(csvRowValue(row, ['updated_by_id']) || '').trim();
+        const updatedByEmail = String(csvRowValue(row, ['updated_by_email']) || '').trim();
+        const lockOwnerName = String(csvRowValue(row, ['lock_owner_name']) || '').trim();
+        const lockOwnerUserId = String(csvRowValue(row, ['lock_owner_user_id']) || '').trim();
+        const lockExpiresAt = coerceTimestamp(csvRowValue(row, ['lock_expires_at']));
+        const shareAccess = resolveShareAccess(csvRowValue(row, ['share_access']));
+        const collaboratorsJson = csvTryJson(csvRowValue(row, ['collaborators_json']));
+        const collaboratorsEmailsRaw = String(csvRowValue(row, ['collaborators_emails']) || '').trim();
+        const collaboratorRows = Array.isArray(collaboratorsJson)
+          ? collaboratorsJson
+          : (
+            collaboratorsEmailsRaw
+              ? collaboratorsEmailsRaw.split(/[;,]/).map((value)=> String(value || '').trim()).filter(Boolean).map((email)=> ({
+                  userId: `email:${normalizeEmail(email)}`,
+                  email: normalizeEmail(email),
+                  name: email
+                }))
+              : []
+          );
+        const collaborators = normalizeCollaboratorList(collaboratorRows);
+        const lockOwner = (lockOwnerName || lockOwnerUserId)
+          ? {
+              name: lockOwnerName,
+              userId: lockOwnerUserId,
+              email: '',
+              sessionId: ''
+            }
+          : null;
 
         return {
           id: idFromCsv || `imported-${idx + 1}`,
+          recordId: idFromCsv || `imported-${idx + 1}`,
+          workspaceId,
+          schemaVersion: String(csvRowValue(row, ['schema_version']) || RECORD_SCHEMA_VERSION).trim() || RECORD_SCHEMA_VERSION,
+          version,
+          updatedBy,
+          updatedById,
+          updatedByEmail,
           company,
           stage: String(csvRowValue(row, ['stage']) || '').trim() || 'Discovery',
           completion: csvCompletionSummary(csvRowValue(row, ['completion']), csvRowValue(row, ['completion_pct', 'completion_percent'])),
@@ -3632,7 +4594,11 @@ const evidenceOpts = [
           updatedAt,
           priority: csvBoolValue(csvRowValue(row, ['priority', 'starred'])),
           archived: csvBoolValue(csvRowValue(row, ['archived'])),
-          archivedAt: 0
+          archivedAt: 0,
+          shareAccess,
+          collaborators,
+          lockOwner,
+          lockExpiresAt
         };
       }
 
@@ -3719,6 +4685,7 @@ const evidenceOpts = [
       function normalizeThreadModel(raw, idx){
         const source = (raw && typeof raw === 'object') ? raw : {};
         const sourceCompany = String(source.company || (source.snapshot && source.snapshot.company) || 'Record');
+        const normalizedId = String(source.recordId || source.id || `record-${idx + 1}`).trim() || `record-${idx + 1}`;
         const outcomes = Array.isArray(source.outcomes)
           ? source.outcomes.map((it)=> String(it || '').trim()).filter(Boolean)
           : [];
@@ -3731,7 +4698,7 @@ const evidenceOpts = [
             }))
           : [];
         const vizIn = (source.viz && typeof source.viz === 'object') ? source.viz : {};
-        const snapshotSeed = staticThreadSnapshotSeed(source.id, sourceCompany);
+        const snapshotSeed = staticThreadSnapshotSeed(source.recordId || source.id || normalizedId, sourceCompany);
         const snapshot = mergeSnapshotWithSeed(
           (source.snapshot && typeof source.snapshot === 'object')
             ? source.snapshot
@@ -3747,9 +4714,35 @@ const evidenceOpts = [
         const updatedAt = sourceUpdatedAt || seededThreadUpdatedAt(idx);
         const createdAt = sourceCreatedAt || seededThreadCreatedAt(updatedAt, idx);
         const normalizedCreatedAt = Math.min(createdAt, updatedAt);
+        const workspaceId = String(source.workspaceId || DEFAULT_WORKSPACE_ID).trim() || DEFAULT_WORKSPACE_ID;
+        const version = Math.max(1, Math.floor(Number(source.version) || 1));
+        const updatedBy = String(source.updatedBy || snapshot.fullName || 'Unknown collaborator').trim() || 'Unknown collaborator';
+        const updatedById = String(source.updatedById || '').trim();
+        const updatedByEmail = String(source.updatedByEmail || '').trim();
+        const lockOwnerRaw = (source.lockOwner && typeof source.lockOwner === 'object' && !Array.isArray(source.lockOwner))
+          ? source.lockOwner
+          : null;
+        const lockOwner = lockOwnerRaw
+          ? {
+              userId: String(lockOwnerRaw.userId || '').trim(),
+              name: String(lockOwnerRaw.name || '').trim(),
+              email: String(lockOwnerRaw.email || '').trim(),
+              sessionId: String(lockOwnerRaw.sessionId || '').trim()
+            }
+          : null;
+        const lockExpiresAt = Math.max(0, coerceTimestamp(source.lockExpiresAt));
+        const collaborators = normalizeCollaboratorList(source.collaborators);
+        const shareAccess = resolveShareAccess(source.shareAccess);
 
         return {
-          id: String(source.id || `record-${idx + 1}`),
+          id: normalizedId,
+          recordId: normalizedId,
+          workspaceId,
+          schemaVersion: RECORD_SCHEMA_VERSION,
+          version,
+          updatedBy,
+          updatedById,
+          updatedByEmail,
           company,
           stage: String(source.stage || 'Discovery'),
           completion: progress.completion,
@@ -3778,28 +4771,21 @@ const evidenceOpts = [
           updatedAt,
           priority: !!source.priority,
           archived: !!source.archived,
-          archivedAt: Number(source.archivedAt) || 0
+          archivedAt: Number(source.archivedAt) || 0,
+          collaborators,
+          shareAccess,
+          lockOwner,
+          lockExpiresAt
         };
       }
 
       function loadSavedThreadsFromStorage(){
-        try{
-          const raw = window.localStorage.getItem(THREAD_STORAGE_KEY);
-          if(!raw) return [];
-          const parsed = JSON.parse(raw);
-          if(!Array.isArray(parsed)) return [];
-          return parsed.map((thread, idx)=> normalizeThreadModel(thread, idx));
-        }catch(err){
-          return [];
-        }
+        const storedRows = recordStore.list();
+        return storedRows.map((thread, idx)=> normalizeThreadModel(thread, idx));
       }
 
       function persistSavedThreads(){
-        try{
-          window.localStorage.setItem(THREAD_STORAGE_KEY, JSON.stringify(state.savedThreads || []));
-        }catch(err){
-          // Ignore storage failures (private mode / blocked storage).
-        }
+        recordStore.saveAll(state.savedThreads || []);
       }
 
       function ensureSavedThreadsLoaded(){
@@ -3817,7 +4803,12 @@ const evidenceOpts = [
 
       function findSavedThread(threadId){
         ensureSavedThreadsLoaded();
-        return (state.savedThreads || []).find((thread)=> thread.id === threadId) || null;
+        const targetId = String(threadId || '').trim();
+        if(!targetId) return null;
+        const inMemory = (state.savedThreads || []).find((thread)=> thread.id === targetId);
+        if(inMemory) return inMemory;
+        const stored = recordStore.get(targetId);
+        return stored ? normalizeThreadModel(stored, 0) : null;
       }
 
       function nextSavedThreadId(){
@@ -3996,8 +4987,34 @@ const evidenceOpts = [
         const metaIn = (meta && typeof meta === 'object') ? meta : {};
         const now = Date.now();
         const existingCreatedAt = coerceTimestamp(metaIn.createdAt);
+        const actor = activeCollaboratorIdentity();
+        const resolvedId = String(threadId || nextSavedThreadId()).trim() || nextSavedThreadId();
+        const workspaceId = String(metaIn.workspaceId || DEFAULT_WORKSPACE_ID).trim() || DEFAULT_WORKSPACE_ID;
+        const version = Math.max(1, Math.floor(Number(metaIn.version) || 1));
+        const updatedBy = String(metaIn.updatedBy || actor.displayName || 'Unknown collaborator').trim() || 'Unknown collaborator';
+        const updatedById = String(metaIn.updatedById || actor.userId || '').trim();
+        const updatedByEmail = String(metaIn.updatedByEmail || actor.email || '').trim();
+        const lockOwnerRaw = (metaIn.lockOwner && typeof metaIn.lockOwner === 'object') ? metaIn.lockOwner : null;
+        const lockOwner = lockOwnerRaw
+          ? {
+              userId: String(lockOwnerRaw.userId || '').trim(),
+              name: String(lockOwnerRaw.name || '').trim(),
+              email: String(lockOwnerRaw.email || '').trim(),
+              sessionId: String(lockOwnerRaw.sessionId || '').trim()
+            }
+          : null;
+        const lockExpiresAt = Math.max(0, coerceTimestamp(metaIn.lockExpiresAt));
+        const collaborators = normalizeCollaboratorList(metaIn.collaborators);
+        const shareAccess = resolveShareAccess(metaIn.shareAccess);
         return normalizeThreadModel({
-          id: threadId || nextSavedThreadId(),
+          id: resolvedId,
+          recordId: resolvedId,
+          workspaceId,
+          schemaVersion: RECORD_SCHEMA_VERSION,
+          version,
+          updatedBy,
+          updatedById,
+          updatedByEmail,
           company: summary.company,
           stage: summary.stage,
           completion: summary.completion,
@@ -4013,7 +5030,11 @@ const evidenceOpts = [
           updatedAt: now,
           priority: !!metaIn.priority,
           archived: !!metaIn.archived,
-          archivedAt: Number(metaIn.archivedAt) || 0
+          archivedAt: Number(metaIn.archivedAt) || 0,
+          collaborators,
+          shareAccess,
+          lockOwner,
+          lockExpiresAt
         }, 0);
       }
 
@@ -4102,6 +5123,22 @@ const evidenceOpts = [
 
       function saveActiveRecord(opts){
         const cfg = Object.assign({ quiet:false, auto:false, thinkMs:560 }, opts || {});
+        const permissionThread = (state.activeThread && state.activeThread !== 'current')
+          ? findSavedThread(state.activeThread)
+          : null;
+        const permissions = actorPermissionsForThread(permissionThread);
+        if(!permissions.canEditRecord){
+          if(!cfg.quiet){
+            toast(`Your ${permissions.roleLabel.toLowerCase()} role cannot edit this record.`);
+          }
+          return false;
+        }
+        if(state.recordReadOnly){
+          if(!cfg.quiet){
+            toast('This record is read-only while another collaborator is editing.');
+          }
+          return false;
+        }
         if(state.saveIsThinking) return false;
         clearScheduledAutoSave();
 
@@ -4109,22 +5146,65 @@ const evidenceOpts = [
           ensureSavedThreadsLoaded();
           const existing = (state.activeThread && state.activeThread !== 'current') ? findSavedThread(state.activeThread) : null;
           const recordId = existing ? existing.id : nextSavedThreadId();
+          const actor = activeCollaboratorIdentity();
+          const actorRoleForThread = existing
+            ? effectiveActorRoleForThread(existing, { actor })
+            : resolveCollaboratorRole(actor.workspaceRole, 'owner');
+          const desiredActorRole = (actorRoleForThread === 'admin')
+            ? 'owner'
+            : resolveCollaboratorRole(actorRoleForThread, 'owner');
+          const collaborators = collaboratorsWithActor(existing && existing.collaborators, actor, {
+            desiredRole: desiredActorRole,
+            promote: false
+          });
+          const nextVersion = existing ? (Math.max(1, Number(existing.version) || 1) + 1) : 1;
           const nextThread = buildSavedThreadFromState(recordId, existing ? {
             createdAt: Number(existing.createdAt) || 0,
             priority: !!existing.priority,
             archived: !!existing.archived,
-            archivedAt: Number(existing.archivedAt) || 0
-          } : null);
+            archivedAt: Number(existing.archivedAt) || 0,
+            workspaceId: existing.workspaceId || DEFAULT_WORKSPACE_ID,
+            version: nextVersion,
+            updatedBy: actor.displayName,
+            updatedById: actor.userId,
+            updatedByEmail: actor.email,
+            collaborators,
+            shareAccess: resolveShareAccess(existing.shareAccess),
+            lockOwner: null,
+            lockExpiresAt: 0
+          } : {
+            workspaceId: DEFAULT_WORKSPACE_ID,
+            version: 1,
+            updatedBy: actor.displayName,
+            updatedById: actor.userId,
+            updatedByEmail: actor.email,
+            collaborators,
+            shareAccess: 'workspace-viewer',
+            lockOwner: null,
+            lockExpiresAt: 0
+          });
           const idx = state.savedThreads.findIndex((thread)=> thread.id === nextThread.id);
           if(idx >= 0){
             state.savedThreads[idx] = nextThread;
           }else{
             state.savedThreads.unshift(nextThread);
           }
+          recordStore.save(nextThread);
           state.activeThread = nextThread.id;
           state.saveIsThinking = false;
           state.savePulseUntil = Date.now() + 1600;
           persistSavedThreads();
+          clearRecordLockHeartbeat();
+          state.lockReacquirePending = true;
+          state.recordReadOnly = false;
+          state.recordSeenVersions[nextThread.id] = Math.max(1, Number(nextThread.version) || 1);
+          setCollaborationNotice(
+            'success',
+            'Changes saved',
+            `v${Math.max(1, Number(nextThread.version) || 1)} saved by ${nextThread.updatedBy || 'Unknown collaborator'} at ${formatDashboardDate(nextThread.updatedAt)}. Lock released until you continue editing.`,
+            nextThread.id,
+            7000
+          );
           update();
           window.setTimeout(()=>{
             if(Date.now() >= state.savePulseUntil) update();
@@ -4299,10 +5379,36 @@ const evidenceOpts = [
         }
       }
 
+      function formatTitleSavedMeta(ts){
+        const value = Number(ts || 0);
+        if(!Number.isFinite(value) || value <= 0) return 'Not saved yet';
+        try{
+          const date = new Date(value);
+          const dd = String(date.getDate()).padStart(2, '0');
+          const mm = String(date.getMonth() + 1).padStart(2, '0');
+          const yy = String(date.getFullYear()).slice(-2);
+          const hh = String(date.getHours()).padStart(2, '0');
+          const mi = String(date.getMinutes()).padStart(2, '0');
+          return `last saved ${dd} ${mm} ${yy} ${hh}:${mi}`;
+        }catch(err){
+          return 'Not saved yet';
+        }
+      }
+
       function dashboardDateValueForMode(row){
         const mode = sanitizeDashboardDateMode(state.dashboardDateMode);
         if(mode === 'created') return Number(row && row.createdAt || 0);
         return Number(row && row.updatedAt || 0);
+      }
+
+      function threadHasUnseenUpdate(thread){
+        const source = (thread && typeof thread === 'object') ? thread : {};
+        const threadId = String((source.id || source.recordId) || '').trim();
+        if(!threadId) return false;
+        const currentVersion = Math.max(1, Number(source.version) || 1);
+        const seenVersion = Math.max(0, Number(state.recordSeenVersions[threadId]) || 0);
+        if(seenVersion <= 0) return false;
+        return currentVersion > seenVersion;
       }
 
       function dashboardRowsModel(){
@@ -4319,7 +5425,12 @@ const evidenceOpts = [
           tier: thread.tier,
           outcomes: thread.outcomesText,
           gaps: progress.gapSummary,
+          collaborators: normalizeCollaboratorList(thread.collaborators),
+          shareAccess: resolveShareAccess(thread.shareAccess),
+          lockOwner: thread.lockOwner || null,
+          lockExpiresAt: Number(thread.lockExpiresAt) || 0,
           priority: !!thread.priority,
+          hasUnseenUpdate: threadHasUnseenUpdate(thread),
           openLabel: 'Open overview'
         });
         });
@@ -4339,6 +5450,11 @@ const evidenceOpts = [
           tier: thread.tier,
           outcomes: thread.outcomesText,
           gaps: progress.gapSummary,
+          collaborators: normalizeCollaboratorList(thread.collaborators),
+          shareAccess: resolveShareAccess(thread.shareAccess),
+          lockOwner: thread.lockOwner || null,
+          lockExpiresAt: Number(thread.lockExpiresAt) || 0,
+          hasUnseenUpdate: threadHasUnseenUpdate(thread),
           openLabel: 'Open overview'
         });
         });
@@ -4407,6 +5523,11 @@ const evidenceOpts = [
       function toggleThreadPriority(threadId){
         const thread = findSavedThread(threadId);
         if(!thread) return;
+        const perms = actorPermissionsForThread(thread);
+        if(!perms.canEditRecord){
+          toast(`Your ${perms.roleLabel.toLowerCase()} role cannot change record priority.`);
+          return;
+        }
         thread.priority = !thread.priority;
         if(thread.priority){
           if(!(state.starPulseQueue instanceof Set)) state.starPulseQueue = new Set();
@@ -4466,10 +5587,23 @@ const evidenceOpts = [
         const uniq = Array.from(new Set((ids || []).map((id)=> String(id || '').trim()).filter(Boolean)));
         const validIds = uniq.filter((id)=> !!findSavedThread(id));
         if(!validIds.length) return;
+        const manageableIds = validIds.filter((id)=>{
+          const thread = findSavedThread(id);
+          if(!thread) return false;
+          const perms = actorPermissionsForThread(thread);
+          return perms.role === 'admin' || perms.role === 'owner';
+        });
+        if(!manageableIds.length){
+          toast('Only owner or admin can archive or delete records.');
+          return;
+        }
+        if(manageableIds.length !== validIds.length){
+          toast('Some selected records were skipped because your role does not allow archive/delete.');
+        }
 
         archivePromptMode = (mode === 'restore' || mode === 'delete') ? mode : 'archive';
-        archivePromptIds = validIds;
-        const count = validIds.length;
+        archivePromptIds = manageableIds;
+        const count = manageableIds.length;
         const verb = archivePromptMode === 'restore'
           ? 'Restore'
           : (archivePromptMode === 'delete' ? 'Delete' : 'Archive');
@@ -4558,12 +5692,484 @@ const evidenceOpts = [
         }
       }
 
+      function shareRecordIdFromContext(preferredThreadId){
+        const preferred = String(preferredThreadId || '').trim();
+        if(preferred && preferred !== 'current'){
+          const thread = findSavedThread(preferred);
+          if(thread && !thread.archived) return thread.id;
+        }
+        const view = state.currentView || 'dashboard';
+        if(view === 'recommendations'){
+          const thread = resolveRecommendationThread(state.recommendationsThreadId || state.activeThread || 'current');
+          if(thread && thread.id && thread.id !== 'current' && !thread.archived) return thread.id;
+        }
+        const activeId = String(state.activeThread || '').trim();
+        if((view === 'configurator' || view === 'interstitial') && activeId && activeId !== 'current'){
+          const thread = findSavedThread(activeId);
+          if(thread && !thread.archived) return thread.id;
+        }
+        return '';
+      }
+
+      function shareRecordUrl(recordId){
+        const targetId = String(recordId || '').trim();
+        if(!targetId) return '';
+        const hash = `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(targetId)}/overview`;
+        return `${window.location.origin}${window.location.pathname}${window.location.search}${hash}`;
+      }
+
+      function shareDisplayNameFromEmail(email){
+        const source = String(email || '').trim().toLowerCase();
+        if(!source.includes('@')) return source;
+        const local = source.split('@')[0];
+        const parts = local.replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+        if(!parts.length) return source;
+        return parts.slice(0, 2).map((part)=> part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+      }
+
+      function loadAccessRequests(){
+        try{
+          const raw = window.localStorage.getItem(ACCESS_REQUESTS_STORAGE_KEY);
+          if(!raw) return [];
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        }catch(err){
+          return [];
+        }
+      }
+
+      function persistAccessRequests(rows){
+        try{
+          const safeRows = Array.isArray(rows) ? rows : [];
+          window.localStorage.setItem(ACCESS_REQUESTS_STORAGE_KEY, JSON.stringify(safeRows));
+        }catch(err){
+          // Ignore storage failures.
+        }
+      }
+
+      function appendAccessRequest(entry){
+        const rows = loadAccessRequests();
+        rows.unshift(entry);
+        if(rows.length > 250){
+          rows.length = 250;
+        }
+        persistAccessRequests(rows);
+      }
+
+      function persistThreadCollaborationState(thread){
+        if(!thread || !thread.id || thread.id === 'current') return null;
+        const actor = activeCollaboratorIdentity();
+        const normalized = normalizeThreadModel(Object.assign({}, thread, {
+          updatedAt: Date.now(),
+          updatedBy: actor.displayName,
+          updatedById: actor.userId,
+          updatedByEmail: actor.email,
+          collaborators: normalizeCollaboratorList(thread.collaborators),
+          shareAccess: resolveShareAccess(thread.shareAccess)
+        }), 0);
+        syncSavedThreadInMemory(normalized);
+        recordStore.save(normalized);
+        persistSavedThreads();
+        return normalized;
+      }
+
+      function shareModalThreadModel(){
+        const targetId = String(shareModalRecordId || '').trim();
+        if(!targetId || targetId === 'current') return null;
+        return findSavedThread(targetId);
+      }
+
+      function collaboratorKey(row){
+        return String((row && (row.userId || row.email || row.name)) || '').trim();
+      }
+
+      function countPrivilegedCollaborators(rows){
+        return (Array.isArray(rows) ? rows : []).filter((row)=> {
+          const role = resolveCollaboratorRole(row && row.role, 'viewer');
+          return role === 'owner' || role === 'admin';
+        }).length;
+      }
+
+      function shareRoleHintByPermissions(perms){
+        if(!perms) return 'Add collaborators, set general access, and copy the link.';
+        if(perms.role === 'admin'){
+          return 'Admin mode: full sharing control (add/remove users, set any role, and change access).';
+        }
+        if(perms.role === 'owner'){
+          return 'Owner mode: full record sharing control (set roles/access and manage collaborators).';
+        }
+        if(perms.role === 'editor'){
+          return 'Editor mode: can edit the record and add viewers. Use Request access if you need owner/admin changes.';
+        }
+        return 'Viewer mode: read-only record access with ability to add viewers only. Use Request access to ask for edit rights.';
+      }
+
+      function syncShareModalGuardControls(thread){
+        const perms = actorPermissionsForThread(thread);
+        const inviteRoleSelect = $('#shareInviteRole');
+        const addBtn = $('#shareAddCollaboratorBtn');
+        const generalAccess = $('#shareGeneralAccess');
+        const saveBtn = $('#shareSaveBtn');
+        const requestBtn = $('#shareRequestAccessBtn');
+        const body = $('#shareModalBody');
+        if(body){
+          body.textContent = shareRoleHintByPermissions(perms);
+        }
+        if(inviteRoleSelect){
+          const allowed = Array.from(perms.assignableRoles || ['viewer']);
+          const current = resolveCollaboratorRole(inviteRoleSelect.value || allowed[0], allowed[0]);
+          inviteRoleSelect.innerHTML = allowed.map((role)=> (
+            `<option value="${escapeHtml(role)}">${escapeHtml(collaborationRoleLabel(role))}</option>`
+          )).join('');
+          inviteRoleSelect.value = allowed.includes(current) ? current : allowed[0];
+          inviteRoleSelect.disabled = allowed.length <= 1;
+          inviteRoleSelect.setAttribute('aria-disabled', inviteRoleSelect.disabled ? 'true' : 'false');
+        }
+        if(addBtn){
+          addBtn.disabled = !perms.canAddCollaborators;
+          addBtn.setAttribute('aria-disabled', addBtn.disabled ? 'true' : 'false');
+        }
+        if(generalAccess){
+          generalAccess.disabled = !perms.canSetGeneralAccess;
+          generalAccess.setAttribute('aria-disabled', generalAccess.disabled ? 'true' : 'false');
+        }
+        if(saveBtn){
+          saveBtn.disabled = !perms.canSetGeneralAccess;
+          saveBtn.setAttribute('aria-disabled', saveBtn.disabled ? 'true' : 'false');
+          saveBtn.title = perms.canSetGeneralAccess
+            ? 'Save sharing settings'
+            : 'Only owner or admin can change general access';
+        }
+        if(requestBtn){
+          const showRequest = !perms.canSetGeneralAccess;
+          requestBtn.hidden = !showRequest;
+          requestBtn.disabled = !showRequest;
+          requestBtn.setAttribute('aria-disabled', requestBtn.disabled ? 'true' : 'false');
+          requestBtn.title = showRequest
+            ? 'Request elevated access from an owner/admin'
+            : '';
+        }
+      }
+
+      function renderShareCollaboratorRows(thread){
+        const list = $('#shareCollaboratorList');
+        if(!list) return;
+        const collaborators = threadCollaborators(thread);
+        const perms = actorPermissionsForThread(thread);
+        const actor = activeCollaboratorIdentity();
+        const privilegedCount = countPrivilegedCollaborators(collaborators);
+        if(!collaborators.length){
+          list.innerHTML = '<p class="shareCollaboratorEmpty">No collaborators yet.</p>';
+          syncShareModalGuardControls(thread);
+          return;
+        }
+        list.innerHTML = collaborators.map((row)=>{
+          const key = collaboratorKey(row);
+          const rowRole = resolveCollaboratorRole(row && row.role, 'viewer');
+          const isActorRow = collaboratorMatchesActor(row, actor);
+          const canEditRole = (
+            perms.canSetCollaboratorRole
+            && !isActorRow
+            && !(rowRole === 'admin' && perms.role !== 'admin')
+          );
+          const allowedRoleChoices = canEditRole
+            ? Array.from(new Set([rowRole].concat(perms.assignableRoles || [])))
+            : [];
+          const roleControl = canEditRole
+            ? `<select class="shareCollaboratorRoleSelect" data-share-role="${escapeHtml(key)}">${allowedRoleChoices.map((role)=> `<option value="${escapeHtml(role)}"${role === rowRole ? ' selected' : ''}>${escapeHtml(collaborationRoleLabel(role))}</option>`).join('')}</select>`
+            : `<span class="shareCollaboratorRole">${escapeHtml(collaborationRoleLabel(rowRole))}</span>`;
+          const protectedOwner = (privilegedCount <= 1) && (rowRole === 'owner' || rowRole === 'admin');
+          const removeLocked = (
+            !perms.canRemoveCollaborators
+            || collaborators.length <= 1
+            || (isActorRow && perms.role !== 'admin')
+            || protectedOwner
+          );
+          let removeLabel = 'Locked';
+          if(!perms.canRemoveCollaborators) removeLabel = 'No access';
+          else if(protectedOwner || collaborators.length <= 1) removeLabel = 'Owner';
+          else if(isActorRow) removeLabel = 'You';
+          const removeBtn = removeLocked
+            ? `<span class="shareCollaboratorRemove" aria-hidden="true" style="opacity:.45; pointer-events:none;">${escapeHtml(removeLabel)}</span>`
+            : `<button type="button" class="shareCollaboratorRemove" data-share-remove="${escapeHtml(key)}" title="Remove collaborator">Remove</button>`;
+          return `
+            <div class="shareCollaboratorRow">
+              <span class="collabAvatar" style="background:${escapeHtml(row.color)};" title="${escapeHtml(row.name)}">${escapeHtml(row.initials)}</span>
+              <div class="shareCollaboratorMeta">
+                <span class="shareCollaboratorName">${escapeHtml(row.name)}</span>
+                <span class="shareCollaboratorEmail">${escapeHtml(row.email || row.userId || '')}</span>
+              </div>
+              ${roleControl}
+              ${removeBtn}
+            </div>
+          `;
+        }).join('');
+        syncShareModalGuardControls(thread);
+      }
+
+      function closeShareModal(){
+        shareModalRecordId = '';
+        const modal = $('#shareModal');
+        if(modal) modal.classList.remove('show');
+        const inviteInput = $('#shareInviteInput');
+        const messageInput = $('#shareInviteMessage');
+        if(inviteInput) inviteInput.value = '';
+        if(messageInput) messageInput.value = '';
+      }
+
+      function openShareModal(recordId){
+        const targetId = shareRecordIdFromContext(recordId);
+        if(!targetId){
+          toast('Save the record first, then share it.');
+          return false;
+        }
+        const thread = findSavedThread(targetId);
+        if(!thread){
+          toast('Record not found.');
+          return false;
+        }
+        const actor = activeCollaboratorIdentity();
+        const perms = actorPermissionsForThread(thread, { actor });
+        const ensuredCollaborators = collaboratorsWithActor(thread.collaborators, actor, {
+          desiredRole: perms.role === 'admin' ? 'owner' : perms.role,
+          promote: false
+        });
+        thread.collaborators = ensuredCollaborators;
+        thread.shareAccess = resolveShareAccess(thread.shareAccess);
+        const persisted = persistThreadCollaborationState(thread) || thread;
+        shareModalRecordId = targetId;
+        const title = $('#shareModalTitle');
+        const body = $('#shareModalBody');
+        const inviteInput = $('#shareInviteInput');
+        const messageInput = $('#shareInviteMessage');
+        const generalAccess = $('#shareGeneralAccess');
+        if(title) title.textContent = `Share “${persisted.company || targetId}”`;
+        if(body) body.textContent = shareRoleHintByPermissions(actorPermissionsForThread(persisted));
+        if(inviteInput) inviteInput.value = '';
+        if(messageInput) messageInput.value = '';
+        if(generalAccess) generalAccess.value = resolveShareAccess(persisted.shareAccess);
+        renderShareCollaboratorRows(persisted);
+        const modal = $('#shareModal');
+        if(modal) modal.classList.add('show');
+        update();
+        return true;
+      }
+
+      function addShareCollaboratorsFromInput(){
+        const thread = shareModalThreadModel();
+        const input = $('#shareInviteInput');
+        if(!thread || !input) return;
+        const perms = actorPermissionsForThread(thread);
+        if(!perms.canAddCollaborators){
+          toast('Your role cannot add collaborators.');
+          return;
+        }
+        const raw = String(input.value || '').trim();
+        if(!raw){
+          toast('Add at least one email address.');
+          return;
+        }
+        const tokens = raw.split(/[,\n;]+/).map((value)=> normalizeEmail(value)).filter(Boolean);
+        const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+        const validEmails = Array.from(new Set(tokens.filter((email)=> emailRe.test(email))));
+        if(!validEmails.length){
+          toast('Enter valid collaborator email addresses.');
+          return;
+        }
+        const inviteRoleSelect = $('#shareInviteRole');
+        let requestedRole = resolveCollaboratorRole(inviteRoleSelect ? inviteRoleSelect.value : 'viewer', 'viewer');
+        if(!(perms.assignableRoles || []).includes(requestedRole)){
+          requestedRole = 'viewer';
+        }
+        const existing = threadCollaborators(thread);
+        const existingKeys = new Set(existing.map((row)=> collaboratorKey(row).toLowerCase()));
+        const existingEmails = new Set(existing.map((row)=> normalizeEmail(row.email)).filter(Boolean));
+        const additions = [];
+        validEmails.forEach((email)=>{
+          const key = `email:${email}`.toLowerCase();
+          if(existingKeys.has(key) || existingEmails.has(email)) return;
+          additions.push({
+            userId: `email:${email}`,
+            email,
+            name: shareDisplayNameFromEmail(email),
+            role: requestedRole
+          });
+        });
+        if(!additions.length){
+          toast('Those collaborators already have access.');
+          return;
+        }
+        const next = existing.concat(additions);
+        thread.collaborators = normalizeCollaboratorList(next);
+        const saved = persistThreadCollaborationState(thread);
+        input.value = '';
+        renderShareCollaboratorRows(saved || thread);
+        update();
+        toast(`${additions.length} ${collaborationRoleLabel(requestedRole).toLowerCase()} collaborator${additions.length === 1 ? '' : 's'} added.`);
+      }
+
+      function removeShareCollaborator(collaboratorKey){
+        const key = String(collaboratorKey || '').trim().toLowerCase();
+        if(!key) return;
+        const thread = shareModalThreadModel();
+        if(!thread) return;
+        const perms = actorPermissionsForThread(thread);
+        if(!perms.canRemoveCollaborators){
+          toast('Only owner or admin can remove collaborators.');
+          return;
+        }
+        const actor = activeCollaboratorIdentity();
+        const rows = threadCollaborators(thread);
+        if(rows.length <= 1){
+          toast('At least one collaborator is required.');
+          return;
+        }
+        const target = rows.find((row)=> collaboratorKey(row).toLowerCase() === key);
+        if(!target) return;
+        if(collaboratorMatchesActor(target, actor) && perms.role !== 'admin'){
+          toast('You cannot remove yourself from this record.');
+          return;
+        }
+        const next = rows.filter((row)=> {
+          const rowKey = collaboratorKey(row).toLowerCase();
+          return rowKey !== key;
+        });
+        if(!next.length){
+          toast('At least one collaborator is required.');
+          return;
+        }
+        if(countPrivilegedCollaborators(next) < 1){
+          toast('At least one owner or admin is required.');
+          return;
+        }
+        thread.collaborators = normalizeCollaboratorList(next);
+        const saved = persistThreadCollaborationState(thread);
+        renderShareCollaboratorRows(saved || thread);
+        update();
+      }
+
+      function updateShareCollaboratorRole(collaboratorRowKey, roleValue){
+        const key = String(collaboratorRowKey || '').trim().toLowerCase();
+        if(!key) return;
+        const thread = shareModalThreadModel();
+        if(!thread) return;
+        const perms = actorPermissionsForThread(thread);
+        if(!perms.canSetCollaboratorRole){
+          toast('Only owner or admin can change collaborator roles.');
+          return;
+        }
+        const actor = activeCollaboratorIdentity();
+        const rows = threadCollaborators(thread);
+        const idx = rows.findIndex((row)=> collaboratorKey(row).toLowerCase() === key);
+        if(idx < 0) return;
+        const currentRole = resolveCollaboratorRole(rows[idx].role, 'viewer');
+        const nextRole = resolveCollaboratorRole(roleValue, currentRole);
+        if(nextRole === currentRole) return;
+        if(collaboratorMatchesActor(rows[idx], actor) && perms.role !== 'admin'){
+          toast('You cannot change your own role.');
+          return;
+        }
+        if(currentRole === 'admin' && perms.role !== 'admin'){
+          toast('Only admin can change admin role assignments.');
+          return;
+        }
+        if(!(perms.assignableRoles || []).includes(nextRole)){
+          toast('Your role cannot assign that permission level.');
+          return;
+        }
+        const next = rows.slice();
+        next[idx] = Object.assign({}, next[idx], { role: nextRole });
+        if(countPrivilegedCollaborators(next) < 1){
+          toast('At least one owner or admin is required.');
+          return;
+        }
+        thread.collaborators = normalizeCollaboratorList(next);
+        const saved = persistThreadCollaborationState(thread);
+        renderShareCollaboratorRows(saved || thread);
+        update();
+      }
+
+      function saveShareSettings(){
+        const thread = shareModalThreadModel();
+        if(!thread){
+          closeShareModal();
+          return;
+        }
+        const perms = actorPermissionsForThread(thread);
+        if(!perms.canSetGeneralAccess){
+          toast('Only owner or admin can change general access.');
+          return;
+        }
+        const generalAccess = $('#shareGeneralAccess');
+        thread.shareAccess = resolveShareAccess(generalAccess ? generalAccess.value : thread.shareAccess);
+        persistThreadCollaborationState(thread);
+        update();
+        closeShareModal();
+        toast('Sharing settings saved.');
+      }
+
+      function requestShareAccess(){
+        const thread = shareModalThreadModel();
+        if(!thread){
+          closeShareModal();
+          return;
+        }
+        const perms = actorPermissionsForThread(thread);
+        if(perms.canSetGeneralAccess){
+          toast('You already have owner/admin access on this record.');
+          return;
+        }
+        const actor = activeCollaboratorIdentity();
+        const noteInput = $('#shareInviteMessage');
+        const note = String(noteInput ? noteInput.value : '').trim();
+        const targets = threadCollaborators(thread).filter((row)=> {
+          const role = resolveCollaboratorRole(row && row.role, 'viewer');
+          return role === 'owner' || role === 'admin';
+        });
+        const request = {
+          id: `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: Date.now(),
+          recordId: String(thread.id || '').trim(),
+          company: String(thread.company || '').trim(),
+          requestedRole: 'editor',
+          message: note,
+          requestedBy: {
+            userId: actor.userId,
+            name: actor.displayName,
+            email: actor.email
+          },
+          targets: targets.map((row)=> ({
+            userId: row.userId,
+            name: row.name,
+            email: row.email,
+            role: resolveCollaboratorRole(row.role, 'owner')
+          }))
+        };
+        appendAccessRequest(request);
+        const targetNames = targets
+          .map((row)=> String(row.name || row.email || '').trim())
+          .filter(Boolean);
+        const targetLabel = targetNames.length
+          ? targetNames.slice(0, 2).join(', ') + (targetNames.length > 2 ? ` +${targetNames.length - 2} more` : '')
+          : 'record owner';
+        closeShareModal();
+        toast(`Access request sent to ${targetLabel}.`);
+      }
+
       function openThreadOverview(threadId){
+        const currentRecordId = currentEditableRecordId();
+        if(currentRecordId){
+          releaseRecordLock(currentRecordId, { force:false });
+          clearRecordLockHeartbeat();
+        }
         const target = threadId || 'current';
         state.activeThread = (target !== 'current' && !findSavedThread(target)) ? 'current' : target;
         if(state.activeThread !== 'current'){
           const thread = findSavedThread(state.activeThread);
           state.navPreviewThreadId = (thread && !thread.archived && !thread.priority) ? thread.id : null;
+          if(thread){
+            state.recordSeenVersions[thread.id] = Math.max(1, Number(thread.version) || 1);
+          }
         }else{
           state.navPreviewThreadId = null;
         }
@@ -4573,9 +6179,15 @@ const evidenceOpts = [
 
       function openThreadConfigurator(threadId, step){
         const target = threadId || state.activeThread || 'current';
+        const currentRecordId = currentEditableRecordId();
+        if(currentRecordId && currentRecordId !== String(target || '').trim()){
+          releaseRecordLock(currentRecordId, { force:false });
+          clearRecordLockHeartbeat();
+        }
         if(target !== 'current'){
           const thread = findSavedThread(target);
           if(thread){
+            const perms = actorPermissionsForThread(thread);
             const threadCompany = String((thread && thread.company) || '').trim();
             const snapshotSource = (thread.snapshot && typeof thread.snapshot === 'object')
               ? thread.snapshot
@@ -4589,12 +6201,29 @@ const evidenceOpts = [
               persistSavedThreads();
             }
             state.activeThread = target;
+            let lockResult = { ok:false, reason:'permission', thread };
+            if(perms.canEditRecord){
+              lockResult = acquireRecordLock(target, { quiet:false });
+            }
+            const liveThread = (lockResult && lockResult.thread) ? lockResult.thread : thread;
+            state.recordSeenVersions[target] = Math.max(1, Number(liveThread.version) || 1);
+            if(perms.canEditRecord && lockResult && lockResult.ok){
+              state.recordReadOnly = false;
+              ensureRecordLockHeartbeat();
+            }else{
+              state.recordReadOnly = true;
+              state.lockReacquirePending = !!(perms.canEditRecord && lockResult && lockResult.reason === 'held');
+              clearRecordLockHeartbeat();
+            }
             applyThreadSnapshot(nextSnapshot, {
-              step: Number(step) || dashboardFirstGapStep(thread)
+              step: Number(step) || dashboardFirstGapStep(liveThread)
             });
             return;
           }
         }
+        clearRecordLockHeartbeat();
+        state.lockReacquirePending = false;
+        state.recordReadOnly = false;
         state.activeThread = 'current';
         syncFormControlsFromState();
         setActiveStep(Number(step) || dashboardFirstGapStep(currentThreadModel()));
@@ -5065,11 +6694,20 @@ const evidenceOpts = [
         const pitch = buildInterstitialPitchModel(thread, progress, viz);
         const gaps = progress.gaps || [];
         const pkg = packageOverviewForTier(thread.tier);
+        const interPerms = actorPermissionsForThread(thread);
         const companyDisplay = String((thread && thread.company) || '').trim() || 'Untitled company';
         const canTogglePriority = !!(thread && thread.id && thread.id !== 'current' && !!findSavedThread(thread.id));
         const animateInterStar = canTogglePriority && !!state.starPulseQueue && state.starPulseQueue.has(thread.id);
         const interTitleStar = canTogglePriority
           ? `<button type="button" class="interTitleStarBtn${animateInterStar ? ' is-animate' : ''}" data-inter-star-id="${escapeHtml(thread.id)}" data-active="${thread.priority ? 'true' : 'false'}" aria-pressed="${thread.priority ? 'true' : 'false'}" title="${thread.priority ? 'Unstar company' : 'Star company'}">★</button>`
+          : '';
+        const interCollabStack = collaboratorStackHtml(thread, { maxVisible:4, size:'md', showSingle:false });
+        const renameActions = interPerms.canEditRecord
+          ? `
+                  <button type="button" class="interTitleIconBtn interTitleEditBtn" data-inter-rename-btn title="Rename company" aria-label="Rename company">&#9998;</button>
+                  <button type="button" class="interTitleIconBtn interTitleSaveBtn" data-inter-rename-save title="Save company name" aria-label="Save company name">&#10003;</button>
+                  <button type="button" class="interTitleIconBtn interTitleCancelBtn" data-inter-rename-cancel title="Cancel rename" aria-label="Cancel rename">&times;</button>
+            `
           : '';
         const outcomeRows = (viz.outcomeBreakdown || []).slice(0, 4).map((row, idx)=> {
           const pct = clamp(Number(row.pct) || 0, 0, 100);
@@ -5092,7 +6730,7 @@ const evidenceOpts = [
                 <p class="interGapTitle">${escapeHtml(gap.title)}</p>
                 <p class="interGapWhy">Why it matters: ${escapeHtml(gap.why || 'Required for confidence in recommendation and plan.')}</p>
                 <div class="interGapActions">
-                  <button type="button" class="interEditLink" data-inter-edit-step="${Number(gap.step) || 1}">Edit this section</button>
+                  <button type="button" class="interEditLink" data-inter-edit-step="${Number(gap.step) || 1}">${interPerms.canEditRecord ? 'Edit this section' : 'View this section'}</button>
                 </div>
               </div>
             `).join('')
@@ -5113,9 +6751,8 @@ const evidenceOpts = [
                     maxlength="120"
                     aria-label="Rename company"
                   />
-                  <button type="button" class="interTitleIconBtn interTitleEditBtn" data-inter-rename-btn title="Rename company" aria-label="Rename company">&#9998;</button>
-                  <button type="button" class="interTitleIconBtn interTitleSaveBtn" data-inter-rename-save title="Save company name" aria-label="Save company name">&#10003;</button>
-                  <button type="button" class="interTitleIconBtn interTitleCancelBtn" data-inter-rename-cancel title="Cancel rename" aria-label="Cancel rename">&times;</button>
+                  ${renameActions}
+                  ${interCollabStack ? `<span class="interTitleCollab">${interCollabStack}</span>` : ''}
                 </div>
                 <p class="interSub">Our understanding of your business. Use Edit to jump directly to incomplete sections.</p>
               </div>
@@ -5253,7 +6890,12 @@ const evidenceOpts = [
         const renameSaveBtn = $('#interstitialContent [data-inter-rename-save]');
         const renameCancelBtn = $('#interstitialContent [data-inter-rename-cancel]');
         const renameInput = $('#interCompanyTitleInput');
+        const canRenameThread = !!interPerms.canEditRecord;
         const commitRename = ()=>{
+          if(!canRenameThread){
+            toast('Your role cannot rename this record.');
+            return;
+          }
           if(!renameInput) return;
           const result = renameThreadCompany(thread.id, renameInput.value);
           if(result.changed){
@@ -5262,6 +6904,10 @@ const evidenceOpts = [
           update();
         };
         const openRename = ()=>{
+          if(!canRenameThread){
+            toast('Your role cannot rename this record.');
+            return;
+          }
           if(!titleMain || !renameInput) return;
           titleMain.classList.add('is-editing');
           renameInput.focus();
@@ -5364,11 +7010,21 @@ const evidenceOpts = [
             const dateValue = dashboardDateValueForMode(row);
             const createdLabel = formatDashboardDateCreated(dateValue);
             const createdTitle = formatDashboardDate(dateValue);
+            const hasUnseenUpdate = !!row.hasUnseenUpdate;
+            const showUnseenDot = hasUnseenUpdate && sanitizeDashboardDateMode(state.dashboardDateMode) === 'modified';
+            const createdTitleFull = showUnseenDot
+              ? `Updated since your last view • ${createdTitle}`
+              : createdTitle;
             const checked = state.dashboardSelectedIds.has(row.id) ? 'checked' : '';
             const animateStar = !!state.starPulseQueue && state.starPulseQueue.has(row.id);
             const shouldAnimateRing = !state.completionRingAnimatedIds.has(row.id);
             const rowAnimId = `active:${row.id}`;
             const shouldAnimateRow = !state.dashboardRowAnimatedIds.has(rowAnimId);
+            const collabHtml = collaboratorStackHtml({
+              collaborators: row.collaborators,
+              lockOwner: row.lockOwner,
+              lockExpiresAt: row.lockExpiresAt
+            }, { maxVisible:3, size:'sm', showSingle:false });
             if(shouldAnimateRow) newlyAnimatedRows.push(rowAnimId);
             const rowClasses = [
               animateStar ? 'is-star-pulse' : '',
@@ -5383,6 +7039,7 @@ const evidenceOpts = [
                   <div class="dashCompanyCell">
                     <button class="dashStarBtn${animateStar ? ' is-animate' : ''}" type="button" data-dashboard-star-id="${escapeHtml(row.id)}" data-active="${row.priority ? 'true' : 'false'}" title="Toggle priority for ${escapeHtml(row.company)}">★</button>
                     <span class="dash-company">${escapeHtml(row.company)}</span>
+                    ${collabHtml ? `<span class="dashCollabWrap">${collabHtml}</span>` : ''}
                   </div>
                 </td>
                 <td>
@@ -5393,7 +7050,12 @@ const evidenceOpts = [
                 <td><span class="dash-tier">${escapeHtml(row.tier)}</span></td>
                 <td><span class="dash-outcomes">${escapeHtml(row.outcomes)}</span></td>
                 <td><span class="dash-gaps">${escapeHtml(row.gaps)}</span></td>
-                <td><span class="dash-created" title="${escapeHtml(createdTitle)}">${escapeHtml(createdLabel)}</span></td>
+                <td>
+                  <span class="dash-created" data-unseen="${showUnseenDot ? 'true' : 'false'}" title="${escapeHtml(createdTitleFull)}">
+                    <span class="dash-createdDot" aria-hidden="true"></span>
+                    <span class="dash-createdLabel">${escapeHtml(createdLabel)}</span>
+                  </span>
+                </td>
               </tr>
             `;
           }).join('');
@@ -5430,8 +7092,17 @@ const evidenceOpts = [
 
         const archiveBtn = $('#dashArchiveSelected');
         if(archiveBtn){
-          archiveBtn.disabled = selectedCount === 0;
-          archiveBtn.textContent = 'Archive selected';
+          const selectedManageable = rows.filter((row)=> {
+            if(!state.dashboardSelectedIds.has(row.id)) return false;
+            const thread = findSavedThread(row.id);
+            if(!thread) return false;
+            const perms = actorPermissionsForThread(thread);
+            return perms.role === 'admin' || perms.role === 'owner';
+          }).length;
+          archiveBtn.disabled = selectedManageable === 0;
+          archiveBtn.textContent = selectedManageable === selectedCount
+            ? 'Archive selected'
+            : 'Archive selected (owner/admin only)';
         }
       }
 
@@ -5474,18 +7145,28 @@ const evidenceOpts = [
             const dateValue = dashboardDateValueForMode(row);
             const createdLabel = formatDashboardDateCreated(dateValue);
             const createdTitle = formatDashboardDate(dateValue);
+            const hasUnseenUpdate = !!row.hasUnseenUpdate;
+            const showUnseenDot = hasUnseenUpdate && sanitizeDashboardDateMode(state.dashboardDateMode) === 'modified';
+            const createdTitleFull = showUnseenDot
+              ? `Updated since your last view • ${createdTitle}`
+              : createdTitle;
             const checked = state.archivedSelectedIds.has(row.id) ? 'checked' : '';
             const ringId = `archived:${row.id}`;
             const shouldAnimateRing = !state.completionRingAnimatedIds.has(ringId);
             const rowAnimId = `archived-row:${row.id}`;
             const shouldAnimateRow = !state.dashboardRowAnimatedIds.has(rowAnimId);
+            const collabHtml = collaboratorStackHtml({
+              collaborators: row.collaborators,
+              lockOwner: row.lockOwner,
+              lockExpiresAt: row.lockExpiresAt
+            }, { maxVisible:3, size:'sm', showSingle:false });
             if(shouldAnimateRow) newlyAnimatedRows.push(rowAnimId);
             return `
               <tr class="${shouldAnimateRow ? 'is-enter' : ''}" style="--row-enter-delay:${Math.min(idx, 14) * 34}ms;" data-archived-row-id="${escapeHtml(row.id)}" data-selected="${checked ? 'true' : 'false'}">
                 <td class="dashSelectCol">
                   <input class="dashRowCheck" type="checkbox" data-archived-select-id="${escapeHtml(row.id)}" aria-label="Select ${escapeHtml(row.company)}" ${checked} />
                 </td>
-                <td><span class="dash-company">${escapeHtml(row.company)}</span></td>
+                <td><div class="dashCompanyCell"><span class="dash-company">${escapeHtml(row.company)}</span>${collabHtml ? `<span class="dashCollabWrap">${collabHtml}</span>` : ''}</div></td>
                 <td>
                   <div class="dashCompletion" title="${escapeHtml(row.completion)}">
                     <span class="dashCompletionRing${shouldAnimateRing ? ' is-enter' : ''}" data-ring-id="${escapeHtml(ringId)}" data-target-pct="${pct}" data-animate="${shouldAnimateRing ? 'true' : 'false'}" style="--pct:${shouldAnimateRing ? 0 : pct};"><span>${shouldAnimateRing ? '0%' : `${pct}%`}</span></span>
@@ -5494,7 +7175,12 @@ const evidenceOpts = [
                 <td><span class="dash-tier">${escapeHtml(row.tier)}</span></td>
                 <td><span class="dash-outcomes">${escapeHtml(row.outcomes)}</span></td>
                 <td><span class="dash-gaps">${escapeHtml(row.gaps)}</span></td>
-                <td><span class="dash-created" title="${escapeHtml(createdTitle)}">${escapeHtml(createdLabel)}</span></td>
+                <td>
+                  <span class="dash-created" data-unseen="${showUnseenDot ? 'true' : 'false'}" title="${escapeHtml(createdTitleFull)}">
+                    <span class="dash-createdDot" aria-hidden="true"></span>
+                    <span class="dash-createdLabel">${escapeHtml(createdLabel)}</span>
+                  </span>
+                </td>
               </tr>
             `;
           }).join('');
@@ -5520,8 +7206,17 @@ const evidenceOpts = [
 
         const restoreBtn = $('#archivedRestoreSelected');
         if(restoreBtn){
-          restoreBtn.disabled = selectedCount === 0;
-          restoreBtn.textContent = 'Unarchive selected';
+          const selectedManageable = rows.filter((row)=> {
+            if(!state.archivedSelectedIds.has(row.id)) return false;
+            const thread = findSavedThread(row.id);
+            if(!thread) return false;
+            const perms = actorPermissionsForThread(thread);
+            return perms.role === 'admin' || perms.role === 'owner';
+          }).length;
+          restoreBtn.disabled = selectedManageable === 0;
+          restoreBtn.textContent = selectedManageable === selectedCount
+            ? 'Unarchive selected'
+            : 'Unarchive selected (owner/admin only)';
         }
       }
 
@@ -9363,6 +11058,191 @@ const evidenceOpts = [
         return `~${yrs.toFixed(1).replace(/\.0$/,'')} yrs`;
       }
 
+      function activeCollaborationThreadModel(){
+        const view = state.currentView || 'configurator';
+        if(view === 'recommendations'){
+          const target = resolveRecommendationThread(state.recommendationsThreadId || state.activeThread || 'current');
+          return (target && target.id !== 'current') ? target : null;
+        }
+        if(state.activeThread && state.activeThread !== 'current'){
+          return findSavedThread(state.activeThread);
+        }
+        return null;
+      }
+
+      function threadLockOwner(thread){
+        const owner = (thread && thread.lockOwner && typeof thread.lockOwner === 'object') ? thread.lockOwner : null;
+        if(!owner) return null;
+        const userId = String(owner.userId || '').trim();
+        const name = String(owner.name || owner.email || userId || '').trim();
+        const sessionId = String(owner.sessionId || '').trim();
+        if(!name && !userId && !sessionId) return null;
+        return {
+          userId,
+          name: name || 'another collaborator',
+          sessionId
+        };
+      }
+
+      function isThreadReadOnlyForActor(thread){
+        const owner = threadLockOwner(thread);
+        if(!owner) return false;
+        const lockExpiresAt = Number(thread && thread.lockExpiresAt) || 0;
+        if(lockExpiresAt <= Date.now()) return false;
+        const actor = activeCollaboratorIdentity();
+        const actorId = String(actor.userId || '').trim();
+        if(owner.sessionId && owner.sessionId === LOCAL_TAB_SESSION_ID) return false;
+        if(owner.userId && actorId && owner.userId === actorId) return false;
+        return true;
+      }
+
+      function setReadOnlyControls(readOnly){
+        const next = !!readOnly;
+        state.recordReadOnly = next;
+        document.body.classList.toggle('is-record-readonly', next);
+        const host = $('#configuratorEditor');
+        if(!host) return;
+        const controls = $$(
+          '.step button, .step input, .step select, .step textarea, #saveRecordBtn, [data-jump-next-incomplete]',
+          host
+        );
+        controls.forEach((el)=>{
+          if(!(el instanceof HTMLElement)) return;
+          if(next){
+            if(!el.hasAttribute('data-readonly-orig-disabled')){
+              el.setAttribute('data-readonly-orig-disabled', el.disabled ? 'true' : 'false');
+            }
+            el.disabled = true;
+            el.setAttribute('aria-disabled', 'true');
+          }else{
+            const orig = el.getAttribute('data-readonly-orig-disabled');
+            if(orig !== null){
+              el.disabled = orig === 'true';
+              el.removeAttribute('data-readonly-orig-disabled');
+            }
+            el.removeAttribute('aria-disabled');
+          }
+        });
+      }
+
+      function renderCollaborationStatus(){
+        const wrap = $('#collabStatus');
+        const titleEl = $('#collabStatusTitle');
+        const bodyEl = $('#collabStatusBody');
+        if(!wrap || !titleEl || !bodyEl) return;
+
+        const view = state.currentView || 'dashboard';
+        const targetThread = activeCollaborationThreadModel();
+        const unsupportedView = (view === 'dashboard' || view === 'archived' || view === 'account');
+        if(unsupportedView){
+          wrap.hidden = true;
+          setReadOnlyControls(false);
+          return;
+        }
+        if(!targetThread){
+          const draftPerms = actorPermissionsForThread(null);
+          wrap.hidden = true;
+          setReadOnlyControls(!draftPerms.canEditRecord);
+          return;
+        }
+
+        const threadId = String((targetThread.recordId || targetThread.id) || '').trim();
+        const version = Math.max(1, Number(targetThread.version) || 1);
+        const updatedBy = String(targetThread.updatedBy || 'Unknown collaborator').trim() || 'Unknown collaborator';
+        const updatedAtText = formatDashboardDate(targetThread.updatedAt);
+        const permissions = actorPermissionsForThread(targetThread);
+        let tone = 'info';
+        let title = '';
+        let body = '';
+        const lockReadOnly = isThreadReadOnlyForActor(targetThread);
+        const permissionReadOnly = !permissions.canEditRecord;
+        const readOnly = permissionReadOnly || lockReadOnly;
+        let showStatus = false;
+        if(permissionReadOnly){
+          state.lockReacquirePending = false;
+          if(threadId){
+            releaseRecordLock(threadId, { force:false });
+          }
+          clearRecordLockHeartbeat();
+        }else if(lockReadOnly){
+          const owner = threadLockOwner(targetThread);
+          tone = 'warning';
+          title = 'Read-only mode';
+          body = `${owner ? owner.name : 'Another collaborator'} is editing this record. Editing is locked until they save or release the lock.`;
+          state.lockReacquirePending = true;
+          showStatus = true;
+        }else{
+          state.lockReacquirePending = false;
+        }
+
+        const hasNotice = (
+          state.collaborationNoticeUntil > Date.now()
+          && threadId
+          && threadId === String(state.collaborationNoticeRecordId || '').trim()
+          && String(state.collaborationNoticeTitle || '').trim()
+        );
+        if(hasNotice){
+          tone = state.collaborationNoticeTone || tone;
+          title = state.collaborationNoticeTitle;
+          body = state.collaborationNoticeBody || `Role: ${permissions.roleLabel} • v${version} • Updated by ${updatedBy} • ${updatedAtText}`;
+          showStatus = true;
+        }
+
+        if(threadId){
+          state.recordSeenVersions[threadId] = version;
+        }
+        if(showStatus){
+          wrap.dataset.tone = tone;
+          titleEl.textContent = title || 'Shared record';
+          bodyEl.textContent = body || `Role: ${permissions.roleLabel} • v${version} • Updated by ${updatedBy} • ${updatedAtText}`;
+          wrap.hidden = false;
+        }else{
+          wrap.hidden = true;
+        }
+        setReadOnlyControls(readOnly);
+      }
+
+      function renderConfiguratorCollaboratorAvatars(){
+        const host = $('#configuratorCollabAvatars');
+        const collabTools = $('#configuratorCollabTools');
+        const shareBtns = collabTools
+          ? $$('[data-action="openShareRecord"]', collabTools)
+          : [$('#configuratorShareRecordBtn')].filter(Boolean);
+        const applyShareEnabled = (enabled, title)=>{
+          shareBtns.forEach((btn)=>{
+            if(!(btn instanceof HTMLElement)) return;
+            const on = !!enabled;
+            btn.disabled = !on;
+            btn.setAttribute('aria-disabled', on ? 'false' : 'true');
+            if(typeof title === 'string'){
+              btn.title = title;
+            }
+          });
+        };
+        if(!host){
+          applyShareEnabled(false, 'Save the record before adding collaborators');
+          return;
+        }
+        const isConfigurator = (state.currentView || '') === 'configurator';
+        const thread = isConfigurator ? activeCollaborationThreadModel() : null;
+        if(!thread || thread.id === 'current'){
+          host.hidden = true;
+          host.innerHTML = '';
+          applyShareEnabled(false, 'Save the record before adding collaborators');
+          return;
+        }
+        const perms = actorPermissionsForThread(thread);
+        const html = collaboratorStackHtml(thread, { maxVisible:4, size:'md', showSingle:false });
+        host.innerHTML = html;
+        host.hidden = !html;
+        applyShareEnabled(
+          perms.canShareRecord,
+          perms.canShareRecord
+            ? 'Manage sharing for this record'
+            : 'Sharing is not available for this role'
+        );
+      }
+
       // ---------- Update UI ----------
       function update(){
         const setText = (sel, val) => {
@@ -9417,13 +11297,23 @@ const evidenceOpts = [
         const saveBtn = $('#saveRecordBtn');
         const saveLabel = $('#saveRecordBtnLabel');
         if(saveBtn){
+          const canSaveByRole = !!activeRecordPermissionSnapshot().canEditRecord;
+          const isReadOnly = state.recordReadOnly || !canSaveByRole;
           const isThinking = !!state.saveIsThinking;
           const justSaved = !isThinking && Date.now() < (state.savePulseUntil || 0);
           saveBtn.dataset.saved = justSaved ? 'true' : 'false';
           saveBtn.dataset.thinking = isThinking ? 'true' : 'false';
+          saveBtn.dataset.readonly = isReadOnly ? 'true' : 'false';
           saveBtn.setAttribute('aria-busy', isThinking ? 'true' : 'false');
           if(saveLabel){
-            saveLabel.textContent = isThinking ? 'Saving...' : (justSaved ? 'Saved' : 'Save record');
+            saveLabel.textContent = isThinking
+              ? 'Saving...'
+              : (isReadOnly ? 'Read-only' : (justSaved ? 'Saved' : 'Save record'));
+          }
+          if(isReadOnly && !isThinking){
+            saveBtn.title = 'Your role cannot save edits on this record.';
+          }else{
+            saveBtn.title = '';
           }
         }
 
@@ -9435,6 +11325,19 @@ const evidenceOpts = [
 
         const regionLabels = { NA:'North America', UKI:'UK & Ireland', EU:'Europe (EU)', APAC:'APAC', Other:'Other / Global' };
         const hasUnsavedEditsOnSavedThread = activeSavedThreadHasUnsavedState();
+        const savedMetaEl = $('#recordSavedMeta');
+        if(savedMetaEl){
+          const activeId = String(state.activeThread || '').trim();
+          const activeSavedThread = (activeId && activeId !== 'current') ? findSavedThread(activeId) : null;
+          const hasSavedTs = !!(activeSavedThread && Number(activeSavedThread.updatedAt) > 0);
+          let savedMetaText = hasSavedTs
+            ? formatTitleSavedMeta(activeSavedThread.updatedAt)
+            : 'Not saved yet';
+          if(hasUnsavedEditsOnSavedThread){
+            savedMetaText = 'Unsaved changes';
+          }
+          savedMetaEl.textContent = savedMetaText;
+        }
         const savedProgressForConfigurator = (
           state.currentView === 'configurator'
           && state.activeThread
@@ -9966,6 +11869,9 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         if(state.emailBuilderOpen){
           renderRecommendationEmailBuilder(state.emailBuilderThreadId || state.recommendationsThreadId || state.activeThread || 'current');
         }
+
+        renderConfiguratorCollaboratorAvatars();
+        renderCollaborationStatus();
 
         snapshotMotionReady = true;
       }
@@ -10675,7 +12581,6 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const customerTemplateEditorPanel = $('#customerTemplateEditorPanel');
       const closeCustomerTemplateEditorBtn = $('#closeCustomerTemplateEditor');
       const workspaceBreadcrumb = $('#workspaceBreadcrumb');
-      const accountOpenSettings = $('#accountOpenSettings');
       const jumpNextIncompleteBtns = $$('[data-jump-next-incomplete]');
       const saveRecordBtn = $('#saveRecordBtn');
       const workspaceCompaniesList = $('#workspaceCompaniesList');
@@ -10974,23 +12879,27 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           saveActiveRecord();
         });
       }
-      if(accountOpenSettings){
-        accountOpenSettings.addEventListener('click', ()=>{
-          toggleSettings(true);
-        });
-      }
-
-      const settings = $('#settings');
       const openSettingsPanelNav = $('#openSettingsNav');
-      const closeSettings = $('#closeSettings');
       const accountFullNameInput = $('#accountFullName');
       const accountEmailInput = $('#accountEmail');
       const accountPhoneInput = $('#accountPhone');
       const accountRoleSelect = $('#accountRole');
+      const accountWorkspaceRoleSelect = $('#accountWorkspaceRole');
+      const accountPermissionTestModeSelect = $('#accountPermissionTestMode');
+      const accountPermissionSummary = $('#accountPermissionSummary');
       const accountCountrySelect = $('#accountCountry');
       const accountRegionSelect = $('#accountRegion');
       const accountFieldModeSelect = $('#accountFieldMode');
+      const accountLandingViewSelect = $('#accountLandingView');
+      const accountDashboardDateModeSelect = $('#accountDashboardDateMode');
       const accountPrefillOptions = $$('#accountPrefillOptions [data-prefill]');
+      const accountNotificationOptions = $$('#accountNotificationOptions [data-account-notify]');
+      const accountLhnButtons = $$('#accountLhn [data-account-nav-target]');
+      const accountLhnMode = $('#accountLhnMode');
+      const accountLhnPrefill = $('#accountLhnPrefill');
+      const accountLhnNotifications = $('#accountLhnNotifications');
+      const accountSaveChangesBtn = $('#accountSaveChanges');
+      const accountSaveState = $('#accountSaveState');
       const accountApplyNowBtn = $('#accountApplyNow');
       const accountResetBtn = $('#accountReset');
       const accountLoadProfileAeBtn = $('#accountLoadProfileAe');
@@ -11005,6 +12914,20 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const resetLayoutWidthsBtn = $('#resetLayoutWidths');
       const ACCOUNT_PROFILE_STORAGE_KEY = 'cfg_shell_account_profile_v1';
 
+      accountLhnButtons.forEach((btn)=>{
+        btn.addEventListener('click', ()=>{
+          const targetId = String(btn.getAttribute('data-account-nav-target') || '').trim();
+          if(!targetId) return;
+          const target = document.getElementById(targetId);
+          if(!target) return;
+          setActiveAccountNavTarget(targetId);
+          if(state.currentView !== 'account'){
+            setView('account');
+          }
+          target.scrollIntoView({ behavior:'smooth', block:'start' });
+        });
+      });
+
       hydrateStaticSelectSchemas();
 
       const settingsState = {
@@ -11017,12 +12940,21 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           email: '',
           phone: '',
           defaultRole: '',
+          workspaceRole: 'owner',
+          permissionTestMode: 'live',
           defaultCountry: '',
           defaultRegion: '',
           fieldMode: 'guided',
-          prefillMode: 'on'
+          prefillMode: 'on',
+          landingView: 'dashboard',
+          dashboardDateMode: 'modified',
+          notifyRecordUpdates: true,
+          notifyLockAvailability: true,
+          notifyDailyDigest: false
         }
       };
+      let accountChangesDirty = false;
+      let accountLastSavedAt = 0;
 
       function resolveFontScale(next){
         const allowed = [0.9, 1, 1.1];
@@ -11039,10 +12971,74 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         return String(next || '').toLowerCase() === 'advanced' ? 'advanced' : 'guided';
       }
 
+      function resolveAccountWorkspaceRole(next){
+        return resolveCollaboratorRole(next, 'owner');
+      }
+
+      function resolveAccountPermissionTestMode(next){
+        return resolvePermissionTestMode(next);
+      }
+
       function resolveAccountPrefillMode(next){
         if(next === false) return 'off';
         if(next === true) return 'on';
         return String(next || '').toLowerCase() === 'off' ? 'off' : 'on';
+      }
+
+      function resolveAccountLandingView(next){
+        const value = String(next || '').trim().toLowerCase();
+        if(value === 'account') return 'account';
+        return 'dashboard';
+      }
+
+      function resolveAccountNotifyFlag(next, fallback){
+        if(next === false) return false;
+        if(next === true) return true;
+        const value = String(next || '').trim().toLowerCase();
+        if(value === 'false' || value === 'off' || value === '0') return false;
+        if(value === 'true' || value === 'on' || value === '1') return true;
+        return !!fallback;
+      }
+
+      function formatShortTime(ts){
+        const value = Number(ts || 0);
+        if(!Number.isFinite(value) || value <= 0) return '';
+        try{
+          return new Date(value).toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' });
+        }catch(err){
+          return '';
+        }
+      }
+
+      function accountPermissionSummaryText(profile){
+        const acc = normalizeAccountProfile(profile || settingsState.account || {});
+        const workspaceRole = resolveAccountWorkspaceRole(acc.workspaceRole);
+        const mode = resolveAccountPermissionTestMode(acc.permissionTestMode);
+        const forcedRole = forcedRoleFromTestMode(mode);
+        const effectiveRole = forcedRole || workspaceRole;
+        const matrix = COLLAB_PERMISSION_MATRIX[effectiveRole] || COLLAB_PERMISSION_MATRIX.viewer;
+        const addMode = (matrix.assignableRoles || ['viewer']).map((role)=> collaborationRoleLabel(role)).join(', ');
+        const modeLabel = forcedRole
+          ? `Testing as ${collaborationRoleLabel(forcedRole)}`
+          : `Live role: ${collaborationRoleLabel(workspaceRole)}`;
+        const scopeLabel = matrix.canSetGeneralAccess ? 'Can set record access levels.' : 'Cannot set record access levels.';
+        return `${modeLabel}. Can add: ${addMode}. ${scopeLabel}`;
+      }
+
+      function readAccountPrefillModeFromUI(){
+        const onBtn = accountPrefillOptions.find((btn)=> btn && btn.getAttribute('data-prefill') === 'on');
+        if(onBtn){
+          return onBtn.getAttribute('aria-pressed') === 'true' ? 'on' : 'off';
+        }
+        return resolveAccountPrefillMode(settingsState.account && settingsState.account.prefillMode);
+      }
+
+      function readAccountNotifyFlagFromUI(key, fallback){
+        const btn = accountNotificationOptions.find((row)=> row && row.getAttribute('data-account-notify') === key);
+        if(btn){
+          return btn.getAttribute('aria-pressed') === 'true';
+        }
+        return resolveAccountNotifyFlag(fallback, fallback);
       }
 
       function pickSelectValue(raw, sourceSel){
@@ -11063,24 +13059,128 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           email: String(src.email || '').trim(),
           phone: String(src.phone || ''),
           defaultRole: roleOk ? roleId : '',
+          workspaceRole: resolveAccountWorkspaceRole(src.workspaceRole),
+          permissionTestMode: resolveAccountPermissionTestMode(src.permissionTestMode),
           defaultCountry: pickSelectValue(src.defaultCountry, '#operatingCountry'),
           defaultRegion: pickSelectValue(src.defaultRegion, '#region'),
           fieldMode: resolveAccountFieldMode(src.fieldMode),
-          prefillMode: resolveAccountPrefillMode(src.prefillMode)
+          prefillMode: resolveAccountPrefillMode(src.prefillMode),
+          landingView: resolveAccountLandingView(src.landingView),
+          dashboardDateMode: sanitizeDashboardDateMode(src.dashboardDateMode),
+          notifyRecordUpdates: resolveAccountNotifyFlag(src.notifyRecordUpdates, true),
+          notifyLockAvailability: resolveAccountNotifyFlag(src.notifyLockAvailability, true),
+          notifyDailyDigest: resolveAccountNotifyFlag(src.notifyDailyDigest, false)
         };
       }
 
+      function accountProfilesEqual(left, right){
+        const a = normalizeAccountProfile(left || {});
+        const b = normalizeAccountProfile(right || {});
+        return (
+          a.fullName === b.fullName
+          && a.email === b.email
+          && a.phone === b.phone
+          && a.defaultRole === b.defaultRole
+          && a.workspaceRole === b.workspaceRole
+          && a.permissionTestMode === b.permissionTestMode
+          && a.defaultCountry === b.defaultCountry
+          && a.defaultRegion === b.defaultRegion
+          && a.fieldMode === b.fieldMode
+          && a.prefillMode === b.prefillMode
+          && a.landingView === b.landingView
+          && a.dashboardDateMode === b.dashboardDateMode
+          && a.notifyRecordUpdates === b.notifyRecordUpdates
+          && a.notifyLockAvailability === b.notifyLockAvailability
+          && a.notifyDailyDigest === b.notifyDailyDigest
+        );
+      }
+
+      function setAccountDirtyState(isDirty, opts){
+        const cfg = Object.assign({ saved:false }, opts || {});
+        accountChangesDirty = !!isDirty;
+        if(cfg.saved){
+          accountLastSavedAt = Date.now();
+        }
+        if(accountSaveChangesBtn){
+          accountSaveChangesBtn.disabled = !accountChangesDirty;
+        }
+        if(accountSaveState){
+          if(accountChangesDirty){
+            accountSaveState.dataset.state = 'dirty';
+            accountSaveState.textContent = 'Unsaved changes';
+          }else{
+            accountSaveState.dataset.state = 'saved';
+            const savedLabel = formatShortTime(accountLastSavedAt);
+            accountSaveState.textContent = savedLabel ? `Saved ${savedLabel}` : 'Saved';
+          }
+        }
+      }
+
       function readAccountProfileFromSettingsUI(){
+        const existing = settingsState.account || {};
         return normalizeAccountProfile({
           fullName: accountFullNameInput ? accountFullNameInput.value : '',
           email: accountEmailInput ? accountEmailInput.value : '',
           phone: accountPhoneInput ? accountPhoneInput.value : '',
           defaultRole: accountRoleSelect ? accountRoleSelect.value : '',
+          workspaceRole: accountWorkspaceRoleSelect ? accountWorkspaceRoleSelect.value : existing.workspaceRole,
+          permissionTestMode: accountPermissionTestModeSelect ? accountPermissionTestModeSelect.value : existing.permissionTestMode,
           defaultCountry: accountCountrySelect ? accountCountrySelect.value : '',
           defaultRegion: accountRegionSelect ? accountRegionSelect.value : '',
           fieldMode: accountFieldModeSelect ? accountFieldModeSelect.value : '',
-          prefillMode: (settingsState.account && settingsState.account.prefillMode) || 'on'
+          prefillMode: readAccountPrefillModeFromUI(),
+          landingView: accountLandingViewSelect ? accountLandingViewSelect.value : existing.landingView,
+          dashboardDateMode: accountDashboardDateModeSelect ? accountDashboardDateModeSelect.value : existing.dashboardDateMode,
+          notifyRecordUpdates: readAccountNotifyFlagFromUI('recordUpdates', existing.notifyRecordUpdates),
+          notifyLockAvailability: readAccountNotifyFlagFromUI('lockAvailability', existing.notifyLockAvailability),
+          notifyDailyDigest: readAccountNotifyFlagFromUI('dailyDigest', existing.notifyDailyDigest)
         });
+      }
+
+      function updateAccountLeftNavSummary(profile){
+        const acc = normalizeAccountProfile(profile || settingsState.account || {});
+        if(accountLhnMode){
+          accountLhnMode.textContent = `Mode: ${resolveAccountFieldMode(acc.fieldMode) === 'advanced' ? 'Advanced' : 'Guided'}`;
+        }
+        if(accountLhnPrefill){
+          accountLhnPrefill.textContent = `Prefill: ${resolveAccountPrefillMode(acc.prefillMode) === 'off' ? 'Off' : 'On'}`;
+        }
+        if(accountLhnNotifications){
+          const enabled = [
+            resolveAccountNotifyFlag(acc.notifyRecordUpdates, true),
+            resolveAccountNotifyFlag(acc.notifyLockAvailability, true),
+            resolveAccountNotifyFlag(acc.notifyDailyDigest, false)
+          ].filter(Boolean).length;
+          accountLhnNotifications.textContent = `Alerts: ${enabled} enabled`;
+        }
+      }
+
+      function markAccountChangesDirty(){
+        const draft = readAccountProfileFromSettingsUI();
+        const dirty = !accountProfilesEqual(draft, settingsState.account || {});
+        setAccountDirtyState(dirty, { saved:false });
+        updateAccountLeftNavSummary(draft);
+        if(accountPermissionSummary){
+          accountPermissionSummary.textContent = accountPermissionSummaryText(draft);
+        }
+        document.documentElement.setAttribute('data-config-profile-depth', resolveAccountFieldMode(draft.fieldMode));
+      }
+
+      function setActiveAccountNavTarget(targetId){
+        const next = String(targetId || 'accountProfileDefaults').trim() || 'accountProfileDefaults';
+        accountLhnButtons.forEach((btn)=>{
+          const btnTarget = String(btn.getAttribute('data-account-nav-target') || '').trim();
+          btn.dataset.active = btnTarget === next ? 'true' : 'false';
+        });
+      }
+
+      function applyAccountPreferencesToWorkspace(){
+        const acc = settingsState.account || {};
+        const preferredDateMode = sanitizeDashboardDateMode(acc.dashboardDateMode);
+        if(preferredDateMode !== sanitizeDashboardDateMode(state.dashboardDateMode)){
+          state.dashboardDateMode = preferredDateMode;
+          persistDashboardDateMode();
+        }
       }
 
       function syncAccountSettingsUI(){
@@ -11089,14 +13189,32 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         if(accountEmailInput) accountEmailInput.value = acc.email || '';
         if(accountPhoneInput) accountPhoneInput.value = acc.phone || '';
         if(accountRoleSelect) accountRoleSelect.value = acc.defaultRole || '';
+        if(accountWorkspaceRoleSelect) accountWorkspaceRoleSelect.value = resolveAccountWorkspaceRole(acc.workspaceRole);
+        if(accountPermissionTestModeSelect) accountPermissionTestModeSelect.value = resolveAccountPermissionTestMode(acc.permissionTestMode);
+        if(accountPermissionSummary) accountPermissionSummary.textContent = accountPermissionSummaryText(acc);
         if(accountCountrySelect) accountCountrySelect.value = acc.defaultCountry || '';
         if(accountRegionSelect) accountRegionSelect.value = acc.defaultRegion || '';
         if(accountFieldModeSelect) accountFieldModeSelect.value = resolveAccountFieldMode(acc.fieldMode);
+        if(accountLandingViewSelect) accountLandingViewSelect.value = resolveAccountLandingView(acc.landingView);
+        if(accountDashboardDateModeSelect) accountDashboardDateModeSelect.value = sanitizeDashboardDateMode(acc.dashboardDateMode);
         const prefill = resolveAccountPrefillMode(acc.prefillMode);
         accountPrefillOptions.forEach((btn)=>{
           btn.setAttribute('aria-pressed', btn.getAttribute('data-prefill') === prefill ? 'true' : 'false');
         });
+        accountNotificationOptions.forEach((btn)=>{
+          const key = btn.getAttribute('data-account-notify') || '';
+          let enabled = false;
+          if(key === 'recordUpdates'){
+            enabled = resolveAccountNotifyFlag(acc.notifyRecordUpdates, true);
+          }else if(key === 'lockAvailability'){
+            enabled = resolveAccountNotifyFlag(acc.notifyLockAvailability, true);
+          }else if(key === 'dailyDigest'){
+            enabled = resolveAccountNotifyFlag(acc.notifyDailyDigest, false);
+          }
+          btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        });
         document.documentElement.setAttribute('data-config-profile-depth', resolveAccountFieldMode(acc.fieldMode));
+        updateAccountLeftNavSummary();
       }
 
       function persistAccountProfile(){
@@ -11109,8 +13227,21 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
 
       function applyAccountProfile(next, persist){
         settingsState.account = normalizeAccountProfile(next);
-        if(persist !== false) persistAccountProfile();
+        const shouldPersist = persist !== false;
+        if(shouldPersist) persistAccountProfile();
         syncAccountSettingsUI();
+        applyAccountPreferencesToWorkspace();
+        setAccountDirtyState(false, { saved: shouldPersist });
+      }
+
+      function commitAccountChanges(opts){
+        const cfg = Object.assign({ toastMessage:'Account changes saved.' }, opts || {});
+        const nextProfile = readAccountProfileFromSettingsUI();
+        applyAccountProfile(nextProfile, true);
+        update();
+        if(cfg.toastMessage){
+          toast(cfg.toastMessage);
+        }
       }
 
       function copySelectOptions(sourceSel, targetEl){
@@ -11242,13 +13373,23 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       }
 
       function toggleSettings(force){
-        if(!settings) return;
-        const open = (typeof force === 'boolean') ? force : !settings.classList.contains('open');
-        settings.classList.toggle('open', open);
-        settings.setAttribute('aria-hidden', open ? 'false' : 'true');
-        if(open){
-          syncAccountChoiceSources();
+        const open = (typeof force === 'boolean') ? force : true;
+        if(!open) return;
+        const targetId = 'accountWorkspaceSettings';
+        const target = document.getElementById(targetId);
+        setActiveAccountNavTarget(targetId);
+        if(state.currentView !== 'account'){
+          setView('account');
+          window.setTimeout(()=>{
+            const delayedTarget = document.getElementById(targetId);
+            if(delayedTarget){
+              delayedTarget.scrollIntoView({ behavior:'smooth', block:'start' });
+            }
+          }, 16);
+        }else if(target){
+          target.scrollIntoView({ behavior:'smooth', block:'start' });
         }
+        syncAccountChoiceSources();
       }
 
       (function initSettingsPrefs(){
@@ -11344,14 +13485,6 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       if(openSettingsPanelNav){
         openSettingsPanelNav.addEventListener('click', ()=> toggleSettings(true));
       }
-      if(closeSettings){
-        closeSettings.addEventListener('click', ()=> toggleSettings(false));
-      }
-      if(settings){
-        settings.addEventListener('click', (e)=>{
-          if(e.target === settings) toggleSettings(false);
-        });
-      }
       let shellResizeTimer = null;
       window.addEventListener('resize', ()=>{
         window.clearTimeout(shellResizeTimer);
@@ -11362,9 +13495,6 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       });
       document.addEventListener('keydown', (e)=>{
         if(e.key !== 'Escape') return;
-        if(settings && settings.classList.contains('open')){
-          toggleSettings(false);
-        }
         if(state.consultationOpen){
           toggleConsultation(false);
         }
@@ -11374,34 +13504,49 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         if(state.customerTemplateEditorOpen){
           toggleCustomerTemplateEditor(false);
         }
+        if($('#shareModal')?.classList.contains('show')) closeShareModal();
         if($('#archiveModal')?.classList.contains('show')) closeArchivePrompt();
         if($('#modal')?.classList.contains('show')) $('#modal').classList.remove('show');
       });
       const persistAccountFromInputs = ()=>{
-        applyAccountProfile(readAccountProfileFromSettingsUI(), true);
+        markAccountChangesDirty();
       };
       [accountFullNameInput, accountEmailInput, accountPhoneInput].forEach((el)=>{
         if(!el) return;
         el.addEventListener('input', persistAccountFromInputs);
       });
-      [accountRoleSelect, accountCountrySelect, accountRegionSelect, accountFieldModeSelect].forEach((el)=>{
+      [accountRoleSelect, accountWorkspaceRoleSelect, accountPermissionTestModeSelect, accountCountrySelect, accountRegionSelect, accountFieldModeSelect, accountLandingViewSelect, accountDashboardDateModeSelect].forEach((el)=>{
         if(!el) return;
         el.addEventListener('change', persistAccountFromInputs);
       });
       accountPrefillOptions.forEach((btn)=>{
         btn.addEventListener('click', ()=>{
           const next = resolveAccountPrefillMode(btn.getAttribute('data-prefill') || 'on');
-          const profile = Object.assign({}, settingsState.account || {}, { prefillMode: next });
-          applyAccountProfile(profile, true);
+          accountPrefillOptions.forEach((row)=>{
+            row.setAttribute('aria-pressed', row.getAttribute('data-prefill') === next ? 'true' : 'false');
+          });
+          markAccountChangesDirty();
         });
       });
+      accountNotificationOptions.forEach((btn)=>{
+        btn.addEventListener('click', ()=>{
+          btn.setAttribute('aria-pressed', btn.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+          markAccountChangesDirty();
+        });
+      });
+      if(accountSaveChangesBtn){
+        accountSaveChangesBtn.addEventListener('click', ()=>{
+          commitAccountChanges();
+        });
+      }
       if(accountApplyNowBtn){
         accountApplyNowBtn.addEventListener('click', ()=>{
-          persistAccountFromInputs();
+          const nextProfile = readAccountProfileFromSettingsUI();
+          applyAccountProfile(nextProfile, true);
           applyAccountDefaultsToState({ emptyOnly:false });
           syncFormControlsFromState();
           update();
-          toast('Applied account defaults to this record.');
+          toast('Saved and applied account defaults to this record.');
         });
       }
       if(accountResetBtn){
@@ -11411,10 +13556,17 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
             email: '',
             phone: '',
             defaultRole: '',
+            workspaceRole: 'owner',
+            permissionTestMode: 'live',
             defaultCountry: '',
             defaultRegion: '',
             fieldMode: 'guided',
-            prefillMode: 'on'
+            prefillMode: 'on',
+            landingView: 'dashboard',
+            dashboardDateMode: 'modified',
+            notifyRecordUpdates: true,
+            notifyLockAvailability: true,
+            notifyDailyDigest: false
           }, true);
           toast('Account defaults reset.');
         });
@@ -11468,7 +13620,6 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       if(resetLayoutWidthsBtn){
         resetLayoutWidthsBtn.addEventListener('click', ()=>{
           resetShellLayoutWidths();
-          toggleSettings(false);
           toast('Layout widths reset.');
         });
       }
@@ -11731,11 +13882,23 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       }
 
       function createNewRecord(){
+        const currentRecordId = currentEditableRecordId();
+        if(currentRecordId){
+          releaseRecordLock(currentRecordId, { force:false });
+          clearRecordLockHeartbeat();
+        }
         const account = settingsState.account || {};
         const useAccountDefaults = resolveAccountPrefillMode(account.prefillMode) !== 'off';
         state.activeThread = 'current';
         state.savePulseUntil = 0;
         state.saveIsThinking = false;
+        state.collaborationNoticeTitle = '';
+        state.collaborationNoticeBody = '';
+        state.collaborationNoticeTone = 'info';
+        state.collaborationNoticeRecordId = '';
+        state.collaborationNoticeUntil = 0;
+        state.recordReadOnly = false;
+        state.lockReacquirePending = false;
         clearScheduledAutoSave();
 
         // Identity + context
@@ -12102,6 +14265,9 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       document.addEventListener('click', (e)=>{
         const btn = e.target.closest('[data-action]');
         if(!btn) return;
+        if(state.lockReacquirePending && !state.recordReadOnly){
+          attemptPendingRecordLock({ showNotice:true, render:true });
+        }
         const action = btn.dataset.action;
 
         if(action === 'next'){
@@ -12250,6 +14416,12 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         if(action === 'confirmArchiveModal'){
           applyArchivePrompt();
         }
+        if(action === 'openShareRecord'){
+          openShareModal(btn.getAttribute('data-record-id'));
+        }
+        if(action === 'closeShareModal'){
+          closeShareModal();
+        }
       });
 
       // Close modal on backdrop click
@@ -12258,6 +14430,73 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       });
       $('#archiveModal')?.addEventListener('click', (e)=>{
         if(e.target.id === 'archiveModal') closeArchivePrompt();
+      });
+      $('#shareModal')?.addEventListener('click', (e)=>{
+        if(e.target.id === 'shareModal') closeShareModal();
+      });
+      $('#shareAddCollaboratorBtn')?.addEventListener('click', ()=>{
+        addShareCollaboratorsFromInput();
+      });
+      $('#shareSaveBtn')?.addEventListener('click', ()=>{
+        saveShareSettings();
+      });
+      $('#shareRequestAccessBtn')?.addEventListener('click', ()=>{
+        requestShareAccess();
+      });
+      $('#shareCopyLinkBtn')?.addEventListener('click', ()=>{
+        const recordId = shareRecordIdFromContext(shareModalRecordId || state.activeThread || '');
+        const url = shareRecordUrl(recordId);
+        if(!url){
+          toast('Save the record first, then copy the link.');
+          return;
+        }
+        copyToClipboard(url, 'Share link copied.');
+      });
+      $('#shareInviteInput')?.addEventListener('keydown', (e)=>{
+        if(e.key !== 'Enter' || e.shiftKey) return;
+        e.preventDefault();
+        addShareCollaboratorsFromInput();
+      });
+      $('#shareCollaboratorList')?.addEventListener('click', (e)=>{
+        const target = (e.target instanceof Element) ? e.target : null;
+        const removeBtn = target ? target.closest('[data-share-remove]') : null;
+        if(!removeBtn) return;
+        removeShareCollaborator(removeBtn.getAttribute('data-share-remove'));
+      });
+      $('#shareCollaboratorList')?.addEventListener('change', (e)=>{
+        const target = (e.target instanceof Element) ? e.target : null;
+        const roleSelect = target ? target.closest('[data-share-role]') : null;
+        if(!roleSelect) return;
+        updateShareCollaboratorRole(
+          roleSelect.getAttribute('data-share-role'),
+          roleSelect.value
+        );
+      });
+
+      const configuratorEditor = $('#configuratorEditor');
+      if(configuratorEditor){
+        const maybeReacquireLock = ()=>{
+          if(!state.lockReacquirePending || state.recordReadOnly) return;
+          attemptPendingRecordLock({ showNotice:true, render:true });
+        };
+        configuratorEditor.addEventListener('pointerdown', maybeReacquireLock, true);
+        configuratorEditor.addEventListener('input', maybeReacquireLock, true);
+        configuratorEditor.addEventListener('change', maybeReacquireLock, true);
+      }
+
+      const releaseLockOnPageExit = ()=>{
+        const currentRecordId = currentEditableRecordId();
+        if(currentRecordId){
+          releaseRecordLock(currentRecordId, { force:false });
+        }
+        clearRecordLockHeartbeat();
+      };
+      window.addEventListener('beforeunload', releaseLockOnPageExit);
+      window.addEventListener('pagehide', releaseLockOnPageExit);
+
+      window.addEventListener('storage', (e)=>{
+        if(!e || e.key !== THREAD_STORAGE_KEY) return;
+        refreshSavedThreadsFromStore({ external:true, render:true });
       });
 
       // Boot: align suggested sizing
@@ -12277,6 +14516,18 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         applyDummyAccountProfile({ preserveActiveStep:true, silent:true });
       }else{
         update();
+      }
+
+      ensureRouteSyncListeners();
+      const routeApplied = applyRouteFromLocation();
+      if(!routeApplied){
+        const preferredLanding = resolveAccountLandingView((settingsState.account && settingsState.account.landingView) || 'dashboard');
+        if(preferredLanding === 'account'){
+          setView('account', { render:false, syncRoute:false });
+        }else{
+          setView('dashboard', { render:false, syncRoute:false });
+        }
+        syncRouteWithState({ replace:true });
       }
     })();
   

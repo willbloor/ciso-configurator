@@ -94,7 +94,7 @@ const idx = Object.create(null);
 cols.forEach((col, i)=> { idx[col] = i; });
 
 const requiredCols = [
-  'id','key','step','group','group_label','title','why','order',
+  'id','key','step','step_label','group','group_label','title','why','order',
   'required_guided','required_advanced','required_sdr_lite','enabled'
 ];
 requiredCols.forEach((col)=> {
@@ -111,6 +111,7 @@ const rows = body
       id: read('id'),
       key: read('key'),
       step: toInt(read('step'), 1),
+      stepLabel: read('step_label'),
       group: read('group'),
       groupLabel: read('group_label'),
       title: read('title'),

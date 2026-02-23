@@ -94,10 +94,12 @@ Current section order in generated output:
 
 - `Create new` opens directly into configurator Step 0 (form-first flow), not the interstitial overview.
 - Draft records remain `current` until first save.
-- Header and step save labels are now compact:
-  - `Save`
+- Header and step save labels:
+  - `Save & return`
   - `Saving...`
   - `Saved`
+- Manual save actions from configurator now return to the record overview after a successful save.
+- Review step no longer shows a direct `Book my consultation` CTA in the step header.
 
 ### Roles and permission matrix (frontend guards)
 
@@ -183,6 +185,9 @@ Permission constants and guards are in:
   - Explicit `Save changes` button
   - Dirty/saved state pill (`Unsaved changes` / `Saved HH:MM`)
   - `Apply to current record` action
+- Configurator mode control:
+  - mode select includes `SDR`, `Guided`, `Advanced`
+  - dedicated `SDR mode` on/off toggle maps directly to mode selection in My account
 - Account-level settings persisted in:
   - `ACCOUNT_PROFILE_STORAGE_KEY = cfg_shell_account_profile_v1`
 - Shell settings persisted in:
@@ -202,14 +207,22 @@ Permission constants and guards are in:
   - source: `/Users/will.bloor/Documents/Configurator/assets/data/question-bank.v1.csv`
   - generated runtime file: `/Users/will.bloor/Documents/Configurator/assets/js/question-bank.js`
   - generator script: `/Users/will.bloor/Documents/Configurator/scripts/generate_question_bank_js.mjs`
+  - step rail label field: `step_label` (in the source CSV)
 - Supported configurator modes:
-  - `sdr-lite`
+  - `sdr-lite` (labelled as `SDR` in UI)
   - `guided`
   - `advanced`
 - Mode behavior currently implemented:
   - requirement/gap/completion engine uses mode-filtered requirement rows
   - mode is persisted per record snapshot as `snapshot.fieldMode`
   - CSV export/import includes `config_mode`
+  - SDR mode requires 7 of 22 question requirements (~31.8%)
+- Step rail behavior currently implemented:
+  - progress chips are rendered from question-bank step metadata (not static HTML)
+  - `step_label` drives the visible chip labels after regenerating `assets/js/question-bank.js`
+  - in SDR mode, non-required steps are grouped under an `Optional` rail heading
+  - optional steps are shown as optional (not auto-marked complete), using neutral hollow-circle markers
+  - current content-step skeleton remains `1..5` plus `Review` (UI section structure is still fixed)
 - Current intentional constraint:
   - question UI remains fully visible for now; mode changes required-question logic and progress math first (safe migration path before full dynamic rendering)
 
@@ -387,6 +400,7 @@ No build step required.
 Open directly:
 
 - `/Users/will.bloor/Documents/Configurator/index.html`
+- `file:///Users/will.bloor/Documents/Configurator/index.html#/dashboard` (no local server required)
 
 Or run a static server:
 

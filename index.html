@@ -72,14 +72,7 @@
             </span>
           </button>
         </div>
-        <nav class="progress" aria-label="Progress">
-          <button type="button" class="chip" data-chip="1" data-step="1" data-active="true"><strong>0</strong> About</button>
-          <button type="button" class="chip" data-chip="2" data-step="2" data-active="false"><strong>1</strong> Coverage</button>
-          <button type="button" class="chip" data-chip="3" data-step="3" data-active="false"><strong>2</strong> Package fit</button>
-          <button type="button" class="chip" data-chip="4" data-step="4" data-active="false"><strong>3</strong> Context</button>
-          <button type="button" class="chip" data-chip="5" data-step="5" data-active="false"><strong>4</strong> ROI estimate</button>
-          <button type="button" class="chip" data-chip="6" data-step="6" data-active="false"><strong>5</strong> Review</button>
-        </nav>
+        <nav class="progress" id="configProgressNav" aria-label="Progress"></nav>
       </div>
       <div class="nav-settingsDock">
         <button type="button" class="nav-settings nav-settings--archive" id="workspaceArchive" data-workspace="archived" data-active="false" aria-label="Open archived accounts">
@@ -365,11 +358,16 @@
               <label class="settingsField">
                 <span class="settingsFieldLabel">Configurator mode</span>
                 <select id="accountFieldMode">
-                  <option value="sdr-lite">SDR-lite</option>
+                  <option value="sdr-lite">SDR</option>
                   <option value="guided">Guided</option>
                   <option value="advanced">Advanced</option>
                 </select>
-                <p class="settingsFieldNote">SDR-lite keeps required inputs minimal. Guided keeps the flow lean. Advanced exposes full depth.</p>
+                <p class="settingsFieldNote">SDR keeps required inputs minimal. Guided keeps the flow lean. Advanced exposes full depth.</p>
+                <div class="settingsOptions settingsInlineOptions" id="accountSdrModeToggle">
+                  <button class="settingsOption" type="button" data-sdr-toggle="off" aria-pressed="true">SDR mode off</button>
+                  <button class="settingsOption" type="button" data-sdr-toggle="on" aria-pressed="false">SDR mode on</button>
+                </div>
+                <p class="settingsFieldNote">SDR mode requires only 7 of 22 core questions (~32%).</p>
               </label>
             </div>
             <div class="settingsOptions settingsInlineOptions" id="accountPrefillOptions">
@@ -528,7 +526,7 @@
               </button>
               <button class="btn primary small saveRecordBtn" type="button" id="saveRecordBtn" data-saved="false" aria-live="polite">
                 <span class="saveSpinner" aria-hidden="true"></span>
-                <span id="saveRecordBtnLabel">Save</span>
+                <span id="saveRecordBtnLabel">Save &amp; return</span>
                   <span class="saveCheck" aria-hidden="true">✓</span>
                 </button>
               </div>
@@ -662,7 +660,7 @@
 
             <div class="actions">
               <button class="btn ghost" type="button" disabled>Back</button>
-              <button class="btn secondaryBlue" type="button" data-action="save">Save</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save &amp; return</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -750,7 +748,7 @@
 
             <div class="actions">
               <button class="btn" type="button" data-action="back">Back</button>
-              <button class="btn secondaryBlue" type="button" data-action="save">Save</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save &amp; return</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -830,7 +828,7 @@
 
             <div class="actions">
               <button class="btn" type="button" data-action="back">Back</button>
-              <button class="btn secondaryBlue" type="button" data-action="save">Save</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save &amp; return</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -935,7 +933,7 @@
 
             <div class="actions">
               <button class="btn" type="button" data-action="back">Back</button>
-              <button class="btn secondaryBlue" type="button" data-action="save">Save</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save &amp; return</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -1129,7 +1127,7 @@
 
             <div class="actions">
               <button class="btn" type="button" data-action="back">Back</button>
-              <button class="btn secondaryBlue" type="button" data-action="save">Save</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save &amp; return</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -1139,11 +1137,10 @@
             <div class="stepHead">
               <div>
                 <h2>Step 5 — Review</h2>
-                <div class="hint">Confirm our understanding of your business. If anything looks off, jump back to edit — then book a consultation.</div>
+                <div class="hint">Confirm our understanding of your business. If anything looks off, jump back to edit before sharing.</div>
                 <div class="reviewCtaBar">
                   <button class="btn secondaryBlue small" type="button" data-action="printReport">Print / Save PDF</button>
                   <button class="btn small" type="button" data-action="downloadCSV">Download CSV</button>
-                  <button class="btn primary small" type="button" data-action="openConsultation">Book my consultation</button>
                 </div>
               </div>
             </div>

@@ -1765,6 +1765,15 @@
         'guided',
         'advanced'
       ]));
+      const CONFIGURATOR_CONTENT_STEP_ORDER = Object.freeze([1, 2, 3, 4, 5]);
+      const CONFIGURATOR_STEP_LABEL_DEFAULTS = Object.freeze({
+        1: 'About',
+        2: 'Coverage',
+        3: 'Package fit',
+        4: 'Context',
+        5: 'ROI estimate',
+        6: 'Review'
+      });
       const FALLBACK_QUESTION_REQUIREMENT_ROWS = Object.freeze([
         { id:'rq_role', key:'role', step:1, group:'about_identity', groupLabel:'About identity', title:'Role not confirmed', why:'Role anchors ownership for outcomes and follow-up.', order:10, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
         { id:'rq_full_name', key:'fullName', step:1, group:'about_identity', groupLabel:'About identity', title:'Name not captured', why:'Contact ownership is required for follow-up and handoff.', order:20, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
@@ -1773,18 +1782,18 @@
         { id:'rq_operating_country', key:'operatingCountry', step:1, group:'about_identity', groupLabel:'About identity', title:'Operating country missing', why:'Country informs the likely regulatory evidence path.', order:50, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
         { id:'rq_pressure_sources', key:'pressureSources', step:1, group:'trigger_urgency', groupLabel:'Trigger and urgency', title:'Pressure sources not selected', why:'Pressure signals help prioritize the right outcomes.', order:60, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
         { id:'rq_urgent_win', key:'urgentWin', step:1, group:'trigger_urgency', groupLabel:'Trigger and urgency', title:'Urgent 90-day win not set', why:'Urgency clarifies what success must look like first.', order:70, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
-        { id:'rq_risk_envs', key:'riskEnvs', step:1, group:'risk_environment', groupLabel:'Risk environment', title:'Risk environment not selected', why:'Risk environment helps focus the right simulation scope.', order:80, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_risk_envs', key:'riskEnvs', step:1, group:'risk_environment', groupLabel:'Risk environment', title:'Risk environment not selected', why:'Risk environment helps focus the right simulation scope.', order:80, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_measured_on', key:'measuredOn', step:1, group:'baseline_measurement', groupLabel:'Baseline and measurement', title:'Current measurement baseline missing', why:'Baseline metrics are required to quantify uplift.', order:90, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
-        { id:'rq_org_pain', key:'orgPain', step:1, group:'trigger_urgency', groupLabel:'Trigger and urgency', title:'Current organisation challenge unclear', why:'Current challenge shapes where value shows up fastest.', order:100, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_org_pain', key:'orgPain', step:1, group:'trigger_urgency', groupLabel:'Trigger and urgency', title:'Current organisation challenge unclear', why:'Current challenge shapes where value shows up fastest.', order:100, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_groups', key:'groups', step:2, group:'coverage_scope', groupLabel:'Coverage and scope', title:'Coverage groups not selected', why:'Coverage determines program scope and rollout design.', order:110, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
         { id:'rq_rhythm', key:'rhythm', step:2, group:'baseline_measurement', groupLabel:'Baseline and measurement', title:'Cadence not selected', why:'Cadence impacts operating model and package fit.', order:120, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_measure', key:'measure', step:2, group:'baseline_measurement', groupLabel:'Baseline and measurement', title:'Measurement model not selected', why:'Measurement model drives reporting and evidence quality.', order:130, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_fit_realism', key:'fitRealism', step:3, group:'package_fit', groupLabel:'Package fit', title:'Realism requirement unanswered', why:'Realism changes effort and content structure.', order:140, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
-        { id:'rq_fit_scope', key:'fitScope', step:3, group:'package_fit', groupLabel:'Package fit', title:'Scope requirement unanswered', why:'Scope alters expected delivery footprint.', order:150, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_fit_scope', key:'fitScope', step:3, group:'package_fit', groupLabel:'Package fit', title:'Scope requirement unanswered', why:'Scope alters expected delivery footprint.', order:150, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_fit_today', key:'fitToday', step:3, group:'package_fit', groupLabel:'Package fit', title:'Current state unanswered', why:'Current state helps calibrate the starting package.', order:160, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_fit_services', key:'fitServices', step:3, group:'package_fit', groupLabel:'Package fit', title:'Delivery support unanswered', why:'Support model affects implementation recommendations.', order:170, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_fit_risk_frame', key:'fitRiskFrame', step:3, group:'package_fit', groupLabel:'Package fit', title:'Risk frame unanswered', why:'Risk framing helps position the narrative for stakeholders.', order:180, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
-        { id:'rq_industry', key:'industry', step:4, group:'context_regulatory', groupLabel:'Context and regulatory', title:'Industry not selected', why:'Industry context changes suggested standards and language.', order:190, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_industry', key:'industry', step:4, group:'context_regulatory', groupLabel:'Context and regulatory', title:'Industry not selected', why:'Industry context changes suggested standards and language.', order:190, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_region', key:'region', step:4, group:'context_regulatory', groupLabel:'Context and regulatory', title:'Region not selected', why:'Region influences evidence and audit expectations.', order:200, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_regs', key:'regs', step:4, group:'context_regulatory', groupLabel:'Context and regulatory', title:'Regulatory references not selected', why:'References improve the evidence narrative for stakeholders.', order:210, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_roi_visited', key:'roiVisited', step:5, group:'roi_business_case', groupLabel:'ROI and business case', title:'ROI estimate not reviewed', why:'ROI inputs are needed for investment and timing decisions.', order:220, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true }
@@ -1822,6 +1831,127 @@
           });
       }
 
+      function maxQuestionStep(){
+        return CONFIGURATOR_CONTENT_STEP_ORDER[CONFIGURATOR_CONTENT_STEP_ORDER.length - 1] || 5;
+      }
+
+      function reviewStepNumber(){
+        return maxQuestionStep() + 1;
+      }
+
+      function maxConfiguratorStep(){
+        return reviewStepNumber();
+      }
+
+      function clampQuestionStep(value){
+        return clamp(Number(value) || 1, CONFIGURATOR_CONTENT_STEP_ORDER[0] || 1, maxQuestionStep());
+      }
+
+      function clampConfiguratorStep(value){
+        return clamp(Number(value) || 1, CONFIGURATOR_CONTENT_STEP_ORDER[0] || 1, maxConfiguratorStep());
+      }
+
+      function questionStepLabel(step){
+        const targetStep = clampQuestionStep(step);
+        const row = questionRequirementRows().find((item)=>{
+          if(!item || typeof item !== 'object') return false;
+          if(clampQuestionStep(item.step) !== targetStep) return false;
+          return String(item.stepLabel || item.step_label || '').trim().length > 0;
+        });
+        if(row){
+          const explicit = String(row.stepLabel || row.step_label || '').trim();
+          if(explicit) return explicit;
+        }
+        return CONFIGURATOR_STEP_LABEL_DEFAULTS[targetStep] || `Step ${targetStep}`;
+      }
+
+      function configuratorQuestionSteps(){
+        return CONFIGURATOR_CONTENT_STEP_ORDER.map((step)=> ({
+          step,
+          label: questionStepLabel(step),
+          review: false
+        }));
+      }
+
+      function configuratorStepModel(){
+        const steps = configuratorQuestionSteps();
+        steps.push({
+          step: reviewStepNumber(),
+          label: CONFIGURATOR_STEP_LABEL_DEFAULTS[reviewStepNumber()] || 'Review',
+          review: true
+        });
+        return steps;
+      }
+
+      function configuratorStepLabel(step){
+        const target = clampConfiguratorStep(step);
+        const match = configuratorStepModel().find((item)=> item.step === target);
+        if(match && String(match.label || '').trim()){
+          return String(match.label).trim();
+        }
+        return CONFIGURATOR_STEP_LABEL_DEFAULTS[target] || `Step ${target}`;
+      }
+
+      function configuratorStepDisplayIndex(step){
+        const target = clampConfiguratorStep(step);
+        const model = configuratorStepModel();
+        const idx = model.findIndex((item)=> item.step === target);
+        return idx >= 0 ? idx : Math.max(0, target - 1);
+      }
+
+      function allConfiguratorStepNumbers(){
+        return configuratorStepModel().map((item)=> item.step);
+      }
+
+      function requiredQuestionStepSetForMode(mode){
+        const targetMode = resolveConfiguratorFieldMode(mode);
+        const steps = new Set();
+        questionRequirementRows().forEach((requirement)=>{
+          if(!requirementEnabledForMode(requirement, targetMode)) return;
+          steps.add(clampQuestionStep(requirement.step));
+        });
+        return steps;
+      }
+
+      function renderConfiguratorProgressRail(){
+        const nav = $('#configProgressNav') || $('.progress');
+        if(!nav) return;
+        const mode = resolveConfiguratorFieldMode(state.fieldMode || accountFieldModeValue());
+        const questionSteps = configuratorQuestionSteps();
+        const requiredSteps = requiredQuestionStepSetForMode(mode);
+        const requiredQuestionSteps = questionSteps.filter((item)=> requiredSteps.has(item.step));
+        const optionalQuestionSteps = questionSteps.filter((item)=> !requiredSteps.has(item.step));
+        const review = {
+          step: reviewStepNumber(),
+          label: CONFIGURATOR_STEP_LABEL_DEFAULTS[reviewStepNumber()] || 'Review'
+        };
+
+        const buildChip = (item, optional)=>{
+          const isOptional = !!optional;
+          return `<button type="button" class="chip" data-chip="${item.step}" data-step="${item.step}" data-optional="${isOptional ? 'true' : 'false'}" data-active="false"><strong>${isOptional ? '' : configuratorStepDisplayIndex(item.step)}</strong> ${escapeHtml(item.label)}</button>`;
+        };
+
+        const parts = [];
+        requiredQuestionSteps.forEach((item)=>{ parts.push(buildChip(item, false)); });
+        if(mode === 'sdr-lite' && optionalQuestionSteps.length){
+          parts.push('<div class="progressSectionLabel" data-progress-section="optional">Optional</div>');
+          optionalQuestionSteps.forEach((item)=>{ parts.push(buildChip(item, true)); });
+        }else{
+          optionalQuestionSteps.forEach((item)=>{ parts.push(buildChip(item, false)); });
+        }
+        parts.push(buildChip(review, false));
+
+        const sig = `${mode}|${requiredQuestionSteps.map((item)=> item.step).join(',')}|${optionalQuestionSteps.map((item)=> item.step).join(',')}|${parts.length}`;
+        if(nav.dataset.modelSig !== sig){
+          nav.innerHTML = parts.join('');
+          nav.dataset.modelSig = sig;
+        }
+        const activeStep = clampConfiguratorStep(state.activeStep);
+        $$('.chip', nav).forEach((chip)=>{
+          chip.dataset.active = (Number(chip.dataset.step) === activeStep) ? 'true' : 'false';
+        });
+      }
+
       function requirementEnabledForMode(requirement, mode){
         const targetMode = resolveConfiguratorFieldMode(mode);
         if(targetMode === 'advanced'){
@@ -1856,7 +1986,7 @@
           case 'industry': return !!ctx.industry;
           case 'region': return !!ctx.region;
           case 'regs': return ctx.regs.size > 0 && !!ctx.regsTouched;
-          case 'roiVisited': return ctx.visited.has(5);
+          case 'roiVisited': return ctx.visited.has(maxQuestionStep());
           default: return false;
         }
       }
@@ -2727,7 +2857,7 @@ const evidenceOpts = [
           const recThreadId = String(state.recommendationsThreadId || recordId).trim() || recordId;
           return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recThreadId)}/recommendations`;
         }
-        return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recordId)}/configure?step=${clamp(Number(state.activeStep) || 1, 1, 6)}`;
+        return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recordId)}/configure?step=${clampConfiguratorStep(state.activeStep)}`;
       }
 
       function syncRouteWithState(opts){
@@ -2763,7 +2893,7 @@ const evidenceOpts = [
         if(mode === 'overview') return { view:'interstitial', recordId };
         if(mode === 'recommendations') return { view:'recommendations', recordId };
         if(mode === 'configure'){
-          const step = clamp(Number(query.get('step')) || 1, 1, 6);
+          const step = clampConfiguratorStep(Number(query.get('step')) || 1);
           return { view:'configurator', recordId, step };
         }
         return null;
@@ -2794,7 +2924,7 @@ const evidenceOpts = [
             return true;
           }
           if(route.view === 'configurator'){
-            openThreadConfigurator(route.recordId || 'current', clamp(Number(route.step) || 1, 1, 6));
+            openThreadConfigurator(route.recordId || 'current', clampConfiguratorStep(Number(route.step) || 1));
             return true;
           }
           return false;
@@ -3010,10 +3140,11 @@ const evidenceOpts = [
       }
 
       function setActiveStep(n){
-        const nn = clamp(Number(n)||1, 1, 6);
+        const nn = clampConfiguratorStep(Number(n) || 1);
         setView('configurator', { render:false, syncRoute:false });
         state.activeStep = nn;
         state.visited.add(nn);
+        renderConfiguratorProgressRail();
 
         $$('.step').forEach(s => s.dataset.active = (s.dataset.step === String(nn)) ? 'true' : 'false');
         $$('.chip').forEach(c => c.dataset.active = (c.dataset.chip === String(nn)) ? 'true' : 'false');
@@ -3158,16 +3289,16 @@ const evidenceOpts = [
       function dashboardFirstGapStep(thread){
         const progress = threadReadinessProgress(thread);
         const gapStep = Number(progress && progress.gaps && progress.gaps[0] && progress.gaps[0].step);
-        if(Number.isFinite(gapStep)) return clamp(gapStep, 1, 6);
+        if(Number.isFinite(gapStep)) return clampQuestionStep(gapStep);
         const snapStep = Number(thread && thread.snapshot && thread.snapshot.activeStep);
-        if(Number.isFinite(snapStep)) return clamp(snapStep, 1, 6);
+        if(Number.isFinite(snapStep)) return clampConfiguratorStep(snapStep);
         return 1;
       }
 
       function incompleteStepsFromState(){
         const steps = Array.from(new Set(
           dashboardCurrentGaps()
-            .map((gap)=> clamp(Number(gap && gap.step) || 1, 1, 6))
+            .map((gap)=> clampQuestionStep(Number(gap && gap.step) || 1))
         )).sort((a,b)=> a - b);
         return steps;
       }
@@ -3175,7 +3306,7 @@ const evidenceOpts = [
       function nextIncompleteStepFrom(currentStep){
         const steps = incompleteStepsFromState();
         if(!steps.length) return null;
-        const cur = clamp(Number(currentStep) || 1, 1, 6);
+        const cur = clampQuestionStep(Number(currentStep) || 1);
         return steps.find((step)=> step > cur) || steps[0];
       }
 
@@ -3241,12 +3372,7 @@ const evidenceOpts = [
       }
 
       function dashboardStage(){
-        if(state.activeStep >= 6) return 'Review';
-        if(state.activeStep >= 5) return 'ROI estimate';
-        if(state.activeStep >= 4) return 'Context';
-        if(state.activeStep >= 3) return 'Package fit';
-        if(state.activeStep >= 2) return 'Coverage';
-        return 'About';
+        return configuratorStepLabel(state.activeStep);
       }
 
       function dashboardCompletionSummary(){
@@ -3321,7 +3447,7 @@ const evidenceOpts = [
           .map((requirement)=> ({
             id: String(requirement.id || '').trim(),
             key: String(requirement.key || '').trim(),
-            step: clamp(Number(requirement.step) || 1, 1, 6),
+            step: clampQuestionStep(Number(requirement.step) || 1),
             group: String(requirement.group || '').trim(),
             groupLabel: String(requirement.groupLabel || '').trim(),
             done: requirementDoneForContext(requirement.key, ctx),
@@ -3504,8 +3630,8 @@ const evidenceOpts = [
           region: 'NA',
           regs: ['nistscf', 'iso27001', 'soc2'],
           regsTouched: true,
-          activeStep: 6,
-          visited: [1, 2, 3, 4, 5, 6]
+          activeStep: reviewStepNumber(),
+          visited: allConfiguratorStepNumbers()
         },
         cedar: {
           role: 'secMgr',
@@ -3530,8 +3656,8 @@ const evidenceOpts = [
           region: 'NA',
           regs: ['hipaa', 'hitrust', 'iso27001'],
           regsTouched: true,
-          activeStep: 6,
-          visited: [1, 2, 3, 4, 5, 6]
+          activeStep: reviewStepNumber(),
+          visited: allConfiguratorStepNumbers()
         },
         arclight: {
           role: 'practitioner',
@@ -3714,7 +3840,7 @@ const evidenceOpts = [
             }
           });
           if(!Number.isFinite(Number(snapshot.activeStep)) && Number.isFinite(Number(seed.activeStep))){
-            snapshot.activeStep = clamp(Number(seed.activeStep) || 1, 1, 6);
+            snapshot.activeStep = clampConfiguratorStep(Number(seed.activeStep) || 1);
           }
           if(typeof snapshot.regsTouched !== 'boolean' && typeof seed.regsTouched === 'boolean'){
             snapshot.regsTouched = seed.regsTouched;
@@ -3981,8 +4107,8 @@ const evidenceOpts = [
 	              fullName: 'Will Bloor',
 	              company: 'Pioneer Cloud',
 	              role: 'ciso',
-	              activeStep: 6,
-	              visited: [1,2,3,4,5,6]
+	              activeStep: reviewStepNumber(),
+	              visited: allConfiguratorStepNumbers()
 	            }
 	          },
 	          {
@@ -4035,8 +4161,8 @@ const evidenceOpts = [
 	              fullName: 'Will Bloor',
 	              company: 'Cedar Health',
 	              role: 'secMgr',
-	              activeStep: 6,
-	              visited: [1,2,3,4,5,6]
+	              activeStep: reviewStepNumber(),
+	              visited: allConfiguratorStepNumbers()
 	            }
 	          },
 	          {
@@ -4856,7 +4982,7 @@ const evidenceOpts = [
           return fromJson.map((gap)=> ({
             title: String((gap && gap.title) || 'Gap'),
             why: String((gap && gap.why) || ''),
-            step: clamp(Number(gap && gap.step) || 1, 1, 6)
+            step: clampQuestionStep(Number(gap && gap.step) || 1)
           }));
         }
 
@@ -5071,7 +5197,7 @@ const evidenceOpts = [
           fullName: '',
           company: (thread && thread.company) ? String(thread.company) : 'Record',
           role: '',
-          activeStep: clamp(Number.isFinite(firstGap) ? firstGap : 1, 1, 6),
+          activeStep: clampQuestionStep(Number.isFinite(firstGap) ? firstGap : 1),
           visited: [1]
         };
       }
@@ -5088,7 +5214,7 @@ const evidenceOpts = [
           ? source.gaps.map((gap)=> ({
               title: String((gap && gap.title) || 'Gap'),
               why: String((gap && gap.why) || ''),
-              step: clamp(Number(gap && gap.step) || 1, 1, 6)
+              step: clampQuestionStep(Number(gap && gap.step) || 1)
             }))
           : [];
         const vizIn = (source.viz && typeof source.viz === 'object') ? source.viz : {};
@@ -5264,7 +5390,7 @@ const evidenceOpts = [
           phone: state.phone,
           notes: state.notes,
           optin: !!state.optin,
-          activeStep: clamp(Number(state.activeStep) || 1, 1, 6),
+          activeStep: clampConfiguratorStep(state.activeStep),
           visited: Array.from(state.visited || [1])
         };
       }
@@ -5279,7 +5405,7 @@ const evidenceOpts = [
         const toSortedNumList = (value)=> (
           Array.isArray(value)
             ? value
-                .map((item)=> clamp(Number(item) || 1, 1, 6))
+                .map((item)=> clampConfiguratorStep(item))
                 .sort((a, b)=> a - b)
             : []
         );
@@ -5509,11 +5635,11 @@ const evidenceOpts = [
         const visitedRaw = Array.isArray(snap.visited) ? snap.visited : [1];
         state.visited = new Set(
           visitedRaw
-            .map((v)=> clamp(Number(v) || 1, 1, 6))
+            .map((v)=> clampConfiguratorStep(v))
         );
         if(!state.visited.size) state.visited.add(1);
 
-        const nextStep = clamp(Number(cfg.step || snap.activeStep) || 1, 1, 6);
+        const nextStep = clampConfiguratorStep(Number(cfg.step || snap.activeStep) || 1);
         state.activeStep = nextStep;
 
         syncFormControlsFromState();
@@ -5521,7 +5647,7 @@ const evidenceOpts = [
       }
 
       function saveActiveRecord(opts){
-        const cfg = Object.assign({ quiet:false, auto:false, thinkMs:560 }, opts || {});
+        const cfg = Object.assign({ quiet:false, auto:false, thinkMs:560, returnToOverview:false }, opts || {});
         const permissionThread = (state.activeThread && state.activeThread !== 'current')
           ? findSavedThread(state.activeThread)
           : null;
@@ -5612,7 +5738,9 @@ const evidenceOpts = [
           if(!cfg.quiet){
             toast('Record saved.');
           }
-          if(state.currentView === 'configurator'){
+          if(cfg.returnToOverview){
+            openThreadOverview(nextThread.id);
+          }else if(state.currentView === 'configurator'){
             requestAutoSave(AUTO_SAVE_BASE_MS);
           }
         };
@@ -11795,6 +11923,7 @@ const evidenceOpts = [
         };
 
         setView(state.currentView, { render:false });
+        renderConfiguratorProgressRail();
         renderDashboardRows();
         renderArchivedRows();
         updateDashboardSortControls();
@@ -11815,9 +11944,10 @@ const evidenceOpts = [
             });
             jumpLabels.forEach((jumpLabel)=>{ jumpLabel.textContent = 'All complete'; });
           }else{
+            const nextLabel = configuratorStepLabel(nextIncomplete);
             jumpBtns.forEach((jumpBtn)=>{
               jumpBtn.disabled = false;
-              jumpBtn.title = `Jump to next incomplete section (Step ${nextIncomplete})`;
+              jumpBtn.title = `Jump to next incomplete section (${nextLabel})`;
             });
             jumpLabels.forEach((jumpLabel)=>{ jumpLabel.textContent = 'Next incomplete'; });
           }
@@ -11836,7 +11966,7 @@ const evidenceOpts = [
           if(saveLabel){
             saveLabel.textContent = isThinking
               ? 'Saving...'
-              : (isReadOnly ? 'Read-only' : (justSaved ? 'Saved' : 'Save'));
+              : (isReadOnly ? 'Read-only' : (justSaved ? 'Saved' : 'Save & return'));
           }
           if(isReadOnly && !isThinking){
             saveBtn.title = 'Your role cannot save edits on this record.';
@@ -11884,7 +12014,7 @@ const evidenceOpts = [
             .map((req)=> req.key)
         );
         const gapSteps = new Set(
-          liveGaps.map((gap)=> clamp(Number(gap && gap.step) || 1, 1, 6))
+          liveGaps.map((gap)=> clampQuestionStep(Number(gap && gap.step) || 1))
         );
 
         syncMilestoneFromSignals();
@@ -11983,7 +12113,7 @@ const evidenceOpts = [
           }
         };
         autoOpen(sideWhy, false);
-        autoOpen(sideRoi, state.activeStep >= 5 || state.visited.has(5));
+        autoOpen(sideRoi, state.activeStep >= maxQuestionStep() || state.visited.has(maxQuestionStep()));
         autoOpen(sideAnswers, true);
 
         const sideAnswersBody = sideAnswers ? sideAnswers.querySelector('.sideAnswersBody') : null;
@@ -12055,7 +12185,7 @@ const evidenceOpts = [
         const npvTxt = fmtMoneyCompactUSD(npvVal, { signed:true, sig:3 });
         const paybackTxt = fmtPayback(paybackMonths);
         const spendTxt = fmtMoneyCompactUSD(spendVal, { sig:3 }) + '/yr';
-        const showROI = state.visited.has(5);
+        const showROI = state.visited.has(maxQuestionStep());
 
         const moneyFmtSig = `cur:${state.currency}`;
         tweenMetricText($('#roiOut'), roiPctVal, (v)=> `${Math.round(v)}%`, { duration: 320, formatSig: 'pct' });
@@ -12219,45 +12349,38 @@ const evidenceOpts = [
           ((state.industry || state.region) ? 1 : 0) +
           (state.regs.size ? 1 : 0) +
           ((state.stack.size || state.stackOther) ? 1 : 0) +
-          (state.visited.has(5) ? 1 : 0) +
+          (state.visited.has(maxQuestionStep()) ? 1 : 0) +
           (topOutcomes.length ? 1 : 0) +
           (Object.keys(state.outcomeDrilldowns || {}).length ? 1 : 0);
 
         setText('#selPill', `${selDone}/${selTotal} captured`);
 
         // Step completion + incomplete highlighting
-        const done1 = !gapSteps.has(1);
-        const done2 = !gapSteps.has(2);
-        const done3 = !gapSteps.has(3);
-        const done4 = !gapSteps.has(4);
-        const done5 = !gapSteps.has(5);
-        const done6 = false;
-        const chipLabel = { 1:'0', 2:'1', 3:'2', 4:'3', 5:'4', 6:'5' };
+        const activeMode = resolveConfiguratorFieldMode(state.fieldMode || accountFieldModeValue());
+        const requiredQuestionSteps = requiredQuestionStepSetForMode(activeMode);
+        const questionSteps = new Set(configuratorQuestionSteps().map((row)=> row.step));
 
         $$('.chip').forEach(ch=>{
           const step = Number(ch.dataset.chip);
           const strong = ch.querySelector('strong');
           const wasDone = ch.dataset.done === 'true';
-          const isDone =
-            (step===1 && done1) ||
-            (step===2 && done2) ||
-            (step===3 && done3) ||
-            (step===4 && done4) ||
-            (step===5 && done5) ||
-            (step===6 && done6);
+          const isQuestionStep = questionSteps.has(step);
+          const isOptionalStep = isQuestionStep && !requiredQuestionSteps.has(step);
+          const isDone = (isQuestionStep && !isOptionalStep) ? !gapSteps.has(step) : false;
 
           ch.dataset.done = isDone ? 'true' : 'false';
-          ch.dataset.incomplete = (!isDone && gapSteps.has(step)) ? 'true' : 'false';
+          ch.dataset.optional = isOptionalStep ? 'true' : 'false';
+          ch.dataset.incomplete = (!isOptionalStep && isQuestionStep && !isDone && gapSteps.has(step)) ? 'true' : 'false';
           if(strong){
-            strong.textContent = isDone ? '✔' : (chipLabel[step] || String(step));
+            strong.textContent = isDone ? '✔' : (isOptionalStep ? '' : String(configuratorStepDisplayIndex(step)));
             if(!wasDone && isDone){
               replayMotionClass(strong, 'tick-pop', 300);
             }
           }
         });
         $$('.step').forEach((stepEl)=>{
-          const stepNo = clamp(Number(stepEl.dataset.step) || 1, 1, 6);
-          const hasGap = gapSteps.has(stepNo);
+          const stepNo = clampConfiguratorStep(Number(stepEl.dataset.step) || 1);
+          const hasGap = questionSteps.has(stepNo) && requiredQuestionSteps.has(stepNo) && gapSteps.has(stepNo);
           stepEl.dataset.incomplete = hasGap ? 'true' : 'false';
         });
         applyRequiredFieldHighlights(missingRequirementKeys);
@@ -12801,7 +12924,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           },
 
           roi: {
-            visited: !!state.visited.has(5),
+            visited: !!state.visited.has(maxQuestionStep()),
             scenario: (state.realization === 'expected')
               ? 'Expected'
               : (state.realization === 'conservative')
@@ -13089,9 +13212,14 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       }
 // ---------- init UI ----------
       // progress chip click
-      $$('.chip').forEach(ch=>{
-        ch.addEventListener('click', ()=> setActiveStep(Number(ch.dataset.step)));
-      });
+      const configProgressNav = $('#configProgressNav') || $('.progress');
+      if(configProgressNav){
+        configProgressNav.addEventListener('click', (e)=>{
+          const chip = e.target.closest('.chip[data-step]');
+          if(!chip) return;
+          setActiveStep(Number(chip.dataset.step) || 1);
+        });
+      }
       const brandHome = $('#brandHome');
       const workspaceArchive = $('#workspaceArchive');
       const workspaceAccount = $('#workspaceAccount');
@@ -13419,7 +13547,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       });
       if(saveRecordBtn){
         saveRecordBtn.addEventListener('click', ()=>{
-          saveActiveRecord();
+          saveActiveRecord({ returnToOverview:true });
         });
       }
       const openSettingsPanelNav = $('#openSettingsNav');
@@ -13433,6 +13561,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const accountCountrySelect = $('#accountCountry');
       const accountRegionSelect = $('#accountRegion');
       const accountFieldModeSelect = $('#accountFieldMode');
+      const accountSdrModeToggleOptions = $$('#accountSdrModeToggle [data-sdr-toggle]');
       const accountLandingViewSelect = $('#accountLandingView');
       const accountDashboardDateModeSelect = $('#accountDashboardDateMode');
       const accountPrefillOptions = $$('#accountPrefillOptions [data-prefill]');
@@ -13512,6 +13641,17 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
 
       function resolveAccountFieldMode(next){
         return resolveConfiguratorFieldMode(next);
+      }
+
+      function resolveAccountSdrToggleState(mode){
+        return resolveAccountFieldMode(mode) === 'sdr-lite' ? 'on' : 'off';
+      }
+
+      function syncAccountSdrToggleUI(mode){
+        const active = resolveAccountSdrToggleState(mode);
+        accountSdrModeToggleOptions.forEach((btn)=>{
+          btn.setAttribute('aria-pressed', btn.getAttribute('data-sdr-toggle') === active ? 'true' : 'false');
+        });
       }
 
       function resolveAccountWorkspaceRole(next){
@@ -13684,7 +13824,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         const acc = normalizeAccountProfile(profile || settingsState.account || {});
         if(accountLhnMode){
           const mode = resolveAccountFieldMode(acc.fieldMode);
-          const modeLabel = mode === 'advanced' ? 'Advanced' : (mode === 'sdr-lite' ? 'SDR-lite' : 'Guided');
+          const modeLabel = mode === 'advanced' ? 'Advanced' : (mode === 'sdr-lite' ? 'SDR' : 'Guided');
           accountLhnMode.textContent = `Mode: ${modeLabel}`;
         }
         if(accountLhnPrefill){
@@ -13708,6 +13848,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         if(accountPermissionSummary){
           accountPermissionSummary.textContent = accountPermissionSummaryText(draft);
         }
+        syncAccountSdrToggleUI(draft.fieldMode);
         document.documentElement.setAttribute('data-config-profile-depth', resolveAccountFieldMode(draft.fieldMode));
       }
 
@@ -13740,6 +13881,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         if(accountCountrySelect) accountCountrySelect.value = acc.defaultCountry || '';
         if(accountRegionSelect) accountRegionSelect.value = acc.defaultRegion || '';
         if(accountFieldModeSelect) accountFieldModeSelect.value = resolveAccountFieldMode(acc.fieldMode);
+        syncAccountSdrToggleUI(acc.fieldMode);
         if(accountLandingViewSelect) accountLandingViewSelect.value = resolveAccountLandingView(acc.landingView);
         if(accountDashboardDateModeSelect) accountDashboardDateModeSelect.value = sanitizeDashboardDateMode(acc.dashboardDateMode);
         const prefill = resolveAccountPrefillMode(acc.prefillMode);
@@ -14074,6 +14216,20 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           accountPrefillOptions.forEach((row)=>{
             row.setAttribute('aria-pressed', row.getAttribute('data-prefill') === next ? 'true' : 'false');
           });
+          markAccountChangesDirty();
+        });
+      });
+      accountSdrModeToggleOptions.forEach((btn)=>{
+        btn.addEventListener('click', ()=>{
+          const next = btn.getAttribute('data-sdr-toggle') === 'on' ? 'on' : 'off';
+          if(accountFieldModeSelect){
+            const current = resolveAccountFieldMode(accountFieldModeSelect.value);
+            if(next === 'on'){
+              accountFieldModeSelect.value = 'sdr-lite';
+            }else if(current === 'sdr-lite'){
+              accountFieldModeSelect.value = 'guided';
+            }
+          }
           markAccountChangesDirty();
         });
       });
@@ -14424,6 +14580,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         renderOptionButtons($('#optStackDevops'), stackDevopsOpts, state.stack);
         renderOptionButtons($('#optStackDomains'), stackDomainOpts, state.stack);
 
+        renderConfiguratorProgressRail();
         $$('.step').forEach((s)=> s.dataset.active = (s.dataset.step === String(state.activeStep)) ? 'true' : 'false');
         $$('.chip').forEach((c)=> c.dataset.active = (c.dataset.chip === String(state.activeStep)) ? 'true' : 'false');
 
@@ -14525,7 +14682,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
 
       function applyDummyAccountProfile(opts){
         const cfg = opts || {};
-        const keepStep = clamp(Number(state.activeStep) || 1, 1, 6);
+        const keepStep = clampConfiguratorStep(Number(state.activeStep) || 1);
 
         // Identity + context
         state.fieldMode = 'guided';
@@ -14597,8 +14754,8 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         state.optin = true;
 
         // Mark all steps visited so snapshot/review/ROI render fully.
-        state.visited = new Set([1, 2, 3, 4, 5, 6]);
-        state.activeStep = cfg.preserveActiveStep === false ? 6 : keepStep;
+        state.visited = new Set(allConfiguratorStepNumbers());
+        state.activeStep = cfg.preserveActiveStep === false ? reviewStepNumber() : keepStep;
 
         syncFormControlsFromState();
         update();
@@ -14824,7 +14981,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           requestAutoSave(AUTO_SAVE_FAST_MS);
         }
         if(action === 'save'){
-          saveActiveRecord();
+          saveActiveRecord({ returnToOverview:true });
         }
         if(action === 'back'){
           setActiveStep(state.activeStep - 1);
@@ -14896,7 +15053,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           if(state.recommendationsReturnView === 'interstitial'){
             openThreadOverview(state.recommendationsThreadId || state.activeThread || 'current');
           }else{
-            setActiveStep(6);
+            setActiveStep(reviewStepNumber());
           }
         }
         if(action === 'downloadCSV'){

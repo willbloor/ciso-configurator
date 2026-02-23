@@ -721,9 +721,44 @@
         return rows;
       }
 
+      function collaboratorStackRows(thread, opts){
+        const cfg = Object.assign({ includeActor:true }, opts || {});
+        const actor = cfg.actor || activeCollaboratorIdentity();
+        const baseRows = threadCollaborators(thread);
+        let rows = baseRows.slice();
+        let actorInjected = false;
+
+        if(cfg.includeActor && actor){
+          const perms = actorPermissionsForThread(thread, { actor });
+          if(perms.canViewRecord){
+            const actorIdx = rows.findIndex((row)=> collaboratorMatchesActor(row, actor));
+            if(actorIdx < 0){
+              const actorEmail = normalizeEmail(actor.email);
+              const actorId = String(actor.userId || (actorEmail ? `email:${actorEmail}` : '')).trim();
+              const actorName = String(actor.displayName || actorEmail || actorId || 'You').trim();
+              const actorRole = effectiveActorRoleForThread(thread, { actor });
+              const actorRow = normalizeCollaboratorEntry({
+                userId: actorId,
+                email: actorEmail,
+                name: actorName,
+                role: actorRole
+              }, rows.length);
+              rows.unshift(Object.assign({}, actorRow, { _inferredActor:true }));
+              actorInjected = true;
+            }else if(actorIdx > 0){
+              const [actorRow] = rows.splice(actorIdx, 1);
+              rows.unshift(actorRow);
+            }
+          }
+        }
+
+        return { rows, actor, actorInjected };
+      }
+
       function collaboratorStackHtml(thread, opts){
         const cfg = Object.assign({ maxVisible:3, size:'sm', showSingle:false }, opts || {});
-        const rows = threadCollaborators(thread);
+        const stack = collaboratorStackRows(thread, cfg);
+        const rows = stack.rows;
         if(!rows.length) return '';
         if(!cfg.showSingle && rows.length < 2) return '';
         const visible = rows.slice(0, Math.max(1, Number(cfg.maxVisible) || 3));
@@ -734,11 +769,18 @@
         const lockOwnerName = String(lockOwner && lockOwner.name || '').trim().toLowerCase();
         const itemHtml = visible.map((row)=> {
           const key = String(row.userId || row.email || row.name || '').trim();
+          const isActor = stack.actor && collaboratorMatchesActor(row, stack.actor);
+          const rowName = String(row.name || '').trim();
           const isLockedOwner = lockActive && (
             (lockOwnerId && key && key === lockOwnerId)
             || (!lockOwnerId && lockOwnerName && String(row.name || '').trim().toLowerCase() === lockOwnerName)
           );
-          const titleParts = [String(row.name || '').trim()];
+          const titleParts = [];
+          if(isActor){
+            titleParts.push('You');
+            if(stack.actorInjected && row._inferredActor) titleParts.push('workspace access');
+          }
+          if(rowName) titleParts.push(rowName);
           if(row.email) titleParts.push(row.email);
           if(isLockedOwner) titleParts.push('editing now');
           return `<span class="collabAvatar" style="background:${escapeHtml(row.color)};" title="${escapeHtml(titleParts.filter(Boolean).join(' · '))}" data-locked="${isLockedOwner ? 'true' : 'false'}">${escapeHtml(row.initials)}</span>`;
@@ -5816,7 +5858,6 @@ const evidenceOpts = [
         host.innerHTML = rows.map((thread, idx)=>{
           const progress = threadReadinessProgress(thread);
           const pct = completionPctFromSummary(progress.completion);
-          const collabHtml = collaboratorStackHtml(thread, { maxVisible:3, size:'sm', showSingle:false });
           const active = (state.activeThread === thread.id && (state.currentView === 'interstitial' || state.currentView === 'configurator'));
           const isStarred = !!thread.priority;
           const animateStar = isStarred && !!state.starPulseQueue && state.starPulseQueue.has(thread.id);
@@ -5827,7 +5868,7 @@ const evidenceOpts = [
             : '';
           return `
             <button type="button" class="workspaceCompanyBtn${shouldAnimateEntry ? ' is-enter' : ''}" style="--nav-enter-delay:${Math.min(idx, 10) * 34}ms;" data-company-open="${escapeHtml(thread.id)}" data-active="${active ? 'true' : 'false'}" title="Open ${escapeHtml(thread.company)} overview">
-              <span class="workspaceCompanyName">${star}<span class="workspaceCompanyNameLabel">${escapeHtml(thread.company)}</span>${collabHtml ? `<span class="workspaceCompanyCollab">${collabHtml}</span>` : ''}</span>
+              <span class="workspaceCompanyName">${star}<span class="workspaceCompanyNameLabel">${escapeHtml(thread.company)}</span></span>
               <span class="workspaceCompanyMeta">${pct}% complete · ${escapeHtml(thread.tier)}</span>
             </button>
           `;

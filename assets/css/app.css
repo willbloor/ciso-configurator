@@ -430,10 +430,6 @@
       overflow:hidden;
       text-overflow:ellipsis;
     }
-    .workspaceCompanyCollab{
-      flex:0 0 auto;
-      margin-left:2px;
-    }
     .workspacePriorityStar{
       flex:0 0 auto;
       display:inline-grid;

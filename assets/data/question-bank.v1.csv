@@ -13,7 +13,7 @@ rq_groups,groups,2,Coverage,coverage_scope,Coverage and scope,Coverage groups no
 rq_rhythm,rhythm,2,Coverage,baseline_measurement,Baseline and measurement,Cadence not selected,Cadence impacts operating model and package fit.,120,true,true,false,true
 rq_measure,measure,2,Coverage,baseline_measurement,Baseline and measurement,Measurement model not selected,Measurement model drives reporting and evidence quality.,130,true,true,false,true
 rq_fit_realism,fitRealism,3,Package fit,package_fit,Package fit,Realism requirement unanswered,Realism changes effort and content structure.,140,true,true,false,true
-rq_fit_scope,fitScope,3,Package fit,package_fit,Package fit,Scope requirement unanswered,Scope alters expected delivery footprint.,150,true,true,false,true
+rq_fit_scope,fitScope,3,Package fit,package_fit,Package fit,Scope requirement unanswered,Scope alters expected delivery footprint.,150,true,true,true,true
 rq_fit_today,fitToday,3,Package fit,package_fit,Package fit,Current state unanswered,Current state helps calibrate the starting package.,160,true,true,false,true
 rq_fit_services,fitServices,3,Package fit,package_fit,Package fit,Delivery support unanswered,Support model affects implementation recommendations.,170,true,true,false,true
 rq_fit_risk_frame,fitRiskFrame,3,Package fit,package_fit,Package fit,Risk frame unanswered,Risk framing helps position the narrative for stakeholders.,180,true,true,false,true

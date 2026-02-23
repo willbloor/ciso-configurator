@@ -123,7 +123,11 @@ Roles currently enforced in UI guards (backend enforcement deferred):
    - Can edit records
    - Can add viewers
    - Cannot remove collaborators or elevate roles
-4. `viewer`
+4. `sdr`
+   - Can edit records
+   - Can add viewers
+   - Cannot remove collaborators or elevate roles
+5. `viewer`
    - Read-only for record editing
    - Can add viewers
    - Cannot change access levels
@@ -166,7 +170,7 @@ Permission constants and guards are in:
 
 - Share modal includes:
   - Add collaborators by email
-  - Per-user role assignment
+  - Per-user role assignment (`viewer` / `sdr` / `editor` / `owner` / `admin`, permission-gated by actor role)
   - General access level (`workspace-viewer` / `workspace-editor`)
   - Copy-link action
   - Save sharing action
@@ -185,6 +189,7 @@ Permission constants and guards are in:
   - `Workspace profiles`
   - `Settings` (theme/display/test data + layout reset)
 - Workspace left-nav account entry (`My account`) now shows an explicit active highlight when account view is open.
+- Desktop left-nav active state now fills the full row without cropped/gapped highlight seams.
 - Save model:
   - Explicit `Save changes` button
   - Save button animation now mirrors record save UX (`Saving...` -> `Saved` -> `Save changes`)
@@ -194,7 +199,12 @@ Permission constants and guards are in:
   - `90%`, `100%`, `110%`, `120%`, `130%`, `140%`, `150%`
 - Configurator mode control:
   - mode select includes `SDR`, `Guided`, `Advanced`
-  - dedicated `SDR mode` on/off toggle maps directly to mode selection in My account
+  - dedicated `SDR mode` on/off toggle maps directly to mode selection and now lives in `Settings > Test data`
+- Test data controls now include:
+  - `Dummy account on/off`
+  - `SDR mode on/off`
+  - `Prefill new records` / `Manual start for new records`
+  - `ROI estimate visibility` on/off for side snapshot summary blocks
 - Account-level settings persisted in:
   - `ACCOUNT_PROFILE_STORAGE_KEY = cfg_shell_account_profile_v1`
 - Shell settings persisted in:
@@ -224,7 +234,7 @@ Permission constants and guards are in:
   - account `SDR` mode is now session-authoritative for required-question logic and progress rail rendering, including existing saved records
   - mode is persisted per record snapshot as `snapshot.fieldMode`
   - CSV export/import includes `config_mode`
-  - SDR mode requires 7 of 22 question requirements (~31.8%)
+  - SDR mode requires 8 of 22 question requirements (~36.4%) via `rq_fit_scope` now required in SDR
 - Step rail behavior currently implemented:
   - progress chips are rendered from question-bank step metadata (not static HTML)
   - `step_label` drives the visible chip labels after regenerating `assets/js/question-bank.js`
@@ -279,6 +289,7 @@ Available account test modes:
 - `force-admin`
 - `force-owner`
 - `force-editor`
+- `force-sdr`
 - `force-viewer`
 
 These modes alter effective UI role for guard testing without backend changes.
@@ -300,6 +311,12 @@ Hash routes supported for major states:
 - Collaborator avatars remain in:
   - configurator header
   - dashboard/archived table company cell
+- Configurator right-side snapshot now includes a dedicated top bar:
+  - top-right collaborator controls (add-user + avatar stack)
+  - right-aligned profile summary (`Role`, `Name`, `Company`, `Country`, `Size`)
+- The `About` accordion in `YOUR ANSWERS` now starts at `Outcome discovery`; organisation/profile rows were moved into the new top bar.
+- Side snapshot header label `Your snapshot` was removed; captured count pill now sits in the `Package` card header for denser vertical layout.
+- Side `YOUR ANSWERS` no longer uses an internal fixed-height scroll viewport. Nested max-height/overflow locking was removed so the panel scrolls naturally with the page.
 - Collaborator stack ordering:
   - active user appears first
   - if the active user has access through general/workspace sharing (but is not explicitly listed in `collaborators[]`), the UI injects the active user avatar in first position for clarity

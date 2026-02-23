@@ -1,4 +1,4 @@
-/* Auto-generated from assets/data/question-bank.v1.csv on 2026-02-23T18:11:44.068Z. */
+/* Auto-generated from assets/data/question-bank.v1.csv on 2026-02-23T19:12:04.443Z. */
 /* eslint-disable */
 (function(){
   const rows = [
@@ -224,7 +224,7 @@
     "order": 150,
     "requiredGuided": true,
     "requiredAdvanced": true,
-    "requiredSdrLite": false,
+    "requiredSdrLite": true,
     "enabled": true
   },
   {

@@ -497,14 +497,16 @@
       ]);
       const COLLAB_ROLE_ORDER = Object.freeze({
         viewer: 0,
-        editor: 1,
-        owner: 2,
-        admin: 3
+        sdr: 1,
+        editor: 2,
+        owner: 3,
+        admin: 4
       });
       const COLLAB_ROLE_LABELS = Object.freeze({
         admin: 'Admin',
         owner: 'Owner',
         editor: 'Editor',
+        sdr: 'SDR',
         viewer: 'Viewer'
       });
       const WORKSPACE_OWNER_FALLBACK = Object.freeze({
@@ -518,6 +520,7 @@
         'force-admin',
         'force-owner',
         'force-editor',
+        'force-sdr',
         'force-viewer'
       ]));
       const COLLAB_PERMISSION_MATRIX = Object.freeze({
@@ -529,7 +532,7 @@
           canSetCollaboratorRole: true,
           canSetGeneralAccess: true,
           canManageWorkspaceUsers: true,
-          assignableRoles: Object.freeze(['admin', 'owner', 'editor', 'viewer'])
+          assignableRoles: Object.freeze(['admin', 'owner', 'editor', 'sdr', 'viewer'])
         }),
         owner: Object.freeze({
           canViewRecord: true,
@@ -539,9 +542,19 @@
           canSetCollaboratorRole: true,
           canSetGeneralAccess: true,
           canManageWorkspaceUsers: false,
-          assignableRoles: Object.freeze(['owner', 'editor', 'viewer'])
+          assignableRoles: Object.freeze(['owner', 'editor', 'sdr', 'viewer'])
         }),
         editor: Object.freeze({
+          canViewRecord: true,
+          canEditRecord: true,
+          canAddCollaborators: true,
+          canRemoveCollaborators: false,
+          canSetCollaboratorRole: false,
+          canSetGeneralAccess: false,
+          canManageWorkspaceUsers: false,
+          assignableRoles: Object.freeze(['viewer'])
+        }),
+        sdr: Object.freeze({
           canViewRecord: true,
           canEditRecord: true,
           canAddCollaborators: true,
@@ -568,6 +581,7 @@
         if(raw === 'admin') return 'admin';
         if(raw === 'owner') return 'owner';
         if(raw === 'editor' || raw === 'collaborator') return 'editor';
+        if(raw === 'sdr') return 'sdr';
         if(raw === 'viewer') return 'viewer';
         return resolveCollaboratorRole(fallback || 'editor', 'editor');
       }
@@ -1789,7 +1803,7 @@
         { id:'rq_rhythm', key:'rhythm', step:2, group:'baseline_measurement', groupLabel:'Baseline and measurement', title:'Cadence not selected', why:'Cadence impacts operating model and package fit.', order:120, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_measure', key:'measure', step:2, group:'baseline_measurement', groupLabel:'Baseline and measurement', title:'Measurement model not selected', why:'Measurement model drives reporting and evidence quality.', order:130, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_fit_realism', key:'fitRealism', step:3, group:'package_fit', groupLabel:'Package fit', title:'Realism requirement unanswered', why:'Realism changes effort and content structure.', order:140, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
-        { id:'rq_fit_scope', key:'fitScope', step:3, group:'package_fit', groupLabel:'Package fit', title:'Scope requirement unanswered', why:'Scope alters expected delivery footprint.', order:150, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
+        { id:'rq_fit_scope', key:'fitScope', step:3, group:'package_fit', groupLabel:'Package fit', title:'Scope requirement unanswered', why:'Scope alters expected delivery footprint.', order:150, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
         { id:'rq_fit_today', key:'fitToday', step:3, group:'package_fit', groupLabel:'Package fit', title:'Current state unanswered', why:'Current state helps calibrate the starting package.', order:160, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_fit_services', key:'fitServices', step:3, group:'package_fit', groupLabel:'Package fit', title:'Delivery support unanswered', why:'Support model affects implementation recommendations.', order:170, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_fit_risk_frame', key:'fitRiskFrame', step:3, group:'package_fit', groupLabel:'Package fit', title:'Risk frame unanswered', why:'Risk framing helps position the narrative for stakeholders.', order:180, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
@@ -1820,6 +1834,14 @@
           ? settingsState.account
           : {};
         return resolveConfiguratorFieldMode(account.fieldMode);
+      }
+
+      function accountRoiEstimateEnabled(){
+        const account = (typeof settingsState !== 'undefined' && settingsState && settingsState.account)
+          ? settingsState.account
+          : {};
+        const raw = String(account.roiEstimateMode || 'on').trim().toLowerCase();
+        return raw !== 'off';
       }
 
       function questionRequirementRows(){
@@ -1994,7 +2016,7 @@
           case 'industry': return !!ctx.industry;
           case 'region': return !!ctx.region;
           case 'regs': return ctx.regs.size > 0 && !!ctx.regsTouched;
-          case 'roiVisited': return ctx.visited.has(maxQuestionStep());
+          case 'roiVisited': return !accountRoiEstimateEnabled() || ctx.visited.has(maxQuestionStep());
           default: return false;
         }
       }
@@ -5837,12 +5859,20 @@ const evidenceOpts = [
             sortRank: 2
           };
         }
+        if(role === 'sdr'){
+          return {
+            key: 'sdr',
+            label: 'SDR',
+            tone: 'sdr',
+            sortRank: 3
+          };
+        }
         if(role === 'editor'){
           return {
             key: 'editor',
             label: 'Editor',
             tone: 'editor',
-            sortRank: 3
+            sortRank: 4
           };
         }
         if(role === 'owner'){
@@ -5850,14 +5880,14 @@ const evidenceOpts = [
             key: 'owner',
             label: 'Owner',
             tone: 'owner',
-            sortRank: 4
+            sortRank: 5
           };
         }
         return {
           key: 'admin',
           label: 'Admin',
           tone: 'admin',
-          sortRank: 5
+          sortRank: 6
         };
       }
 
@@ -6433,6 +6463,9 @@ const evidenceOpts = [
         }
         if(perms.role === 'editor'){
           return 'Editor mode: can edit the record and add viewers. Use Request access if you need owner/admin changes.';
+        }
+        if(perms.role === 'sdr'){
+          return 'SDR mode: can edit the record and add viewers. Use Request access if you need owner/admin changes.';
         }
         return 'Viewer mode: read-only record access with ability to add viewers only. Use Request access to ask for edit rights.';
       }
@@ -11906,11 +11939,17 @@ const evidenceOpts = [
       }
 
       function renderConfiguratorCollaboratorAvatars(){
-        const host = $('#configuratorCollabAvatars');
-        const collabTools = $('#configuratorCollabTools');
-        const shareBtns = collabTools
-          ? $$('[data-action="openShareRecord"]', collabTools)
-          : [$('#configuratorShareRecordBtn')].filter(Boolean);
+        const hosts = [
+          $('#configuratorCollabAvatars'),
+          $('#snapshotCollabAvatars')
+        ].filter(Boolean);
+        const collabTools = [
+          $('#configuratorCollabTools'),
+          $('#snapshotCollabTools')
+        ].filter(Boolean);
+        const shareBtns = collabTools.length
+          ? collabTools.flatMap((tools)=> $$('[data-action="openShareRecord"]', tools))
+          : [$('#configuratorShareRecordBtn'), $('#snapshotShareRecordBtn')].filter(Boolean);
         const applyShareEnabled = (enabled, title)=>{
           shareBtns.forEach((btn)=>{
             if(!(btn instanceof HTMLElement)) return;
@@ -11922,22 +11961,26 @@ const evidenceOpts = [
             }
           });
         };
-        if(!host){
+        if(!hosts.length){
           applyShareEnabled(false, 'Save the record before adding collaborators');
           return;
         }
         const isConfigurator = (state.currentView || '') === 'configurator';
         const thread = isConfigurator ? activeCollaborationThreadModel() : null;
         if(!thread || thread.id === 'current'){
-          host.hidden = true;
-          host.innerHTML = '';
+          hosts.forEach((host)=>{
+            host.hidden = true;
+            host.innerHTML = '';
+          });
           applyShareEnabled(false, 'Save the record before adding collaborators');
           return;
         }
         const perms = actorPermissionsForThread(thread);
         const html = collaboratorStackHtml(thread, { maxVisible:4, size:'md', showSingle:false });
-        host.innerHTML = html;
-        host.hidden = !html;
+        hosts.forEach((host)=>{
+          host.innerHTML = html;
+          host.hidden = !html;
+        });
         applyShareEnabled(
           perms.canShareRecord,
           perms.canShareRecord
@@ -12171,18 +12214,6 @@ const evidenceOpts = [
         autoOpen(sideRoi, state.activeStep >= maxQuestionStep() || state.visited.has(maxQuestionStep()));
         autoOpen(sideAnswers, true);
 
-        const sideAnswersBody = sideAnswers ? sideAnswers.querySelector('.sideAnswersBody') : null;
-        if(sideAnswers && sideAnswersBody){
-          if(sideAnswers.open){
-            const sideAnswersSummary = sideAnswers.querySelector('summary');
-            const summaryH = sideAnswersSummary ? sideAnswersSummary.offsetHeight : 0;
-            const availableH = Math.max(120, sideAnswers.clientHeight - summaryH);
-            sideAnswersBody.style.maxHeight = `${availableH}px`;
-          }else{
-            sideAnswersBody.style.maxHeight = '';
-          }
-        }
-
         const inputAccByStep = {
           1: ['inputAccAbout'],
           2: ['inputAccCoverage'],
@@ -12240,7 +12271,22 @@ const evidenceOpts = [
         const npvTxt = fmtMoneyCompactUSD(npvVal, { signed:true, sig:3 });
         const paybackTxt = fmtPayback(paybackMonths);
         const spendTxt = fmtMoneyCompactUSD(spendVal, { sig:3 }) + '/yr';
-        const showROI = state.visited.has(maxQuestionStep());
+        const roiEstimateEnabled = accountRoiEstimateEnabled();
+        const showROI = roiEstimateEnabled && state.visited.has(maxQuestionStep());
+        const sideRoiBlock = $('#sideRoiBlock');
+        if(sideRoiBlock){
+          sideRoiBlock.hidden = !roiEstimateEnabled;
+          if(!roiEstimateEnabled){
+            sideRoiBlock.open = false;
+          }
+        }
+        const inputAccRoi = $('#inputAccRoi');
+        if(inputAccRoi){
+          inputAccRoi.hidden = !roiEstimateEnabled;
+          if(!roiEstimateEnabled){
+            inputAccRoi.open = false;
+          }
+        }
 
         const moneyFmtSig = `cur:${state.currency}`;
         tweenMetricText($('#roiOut'), roiPctVal, (v)=> `${Math.round(v)}%`, { duration: 320, formatSig: 'pct' });
@@ -12383,7 +12429,7 @@ const evidenceOpts = [
         setHTML('#snapReviewOutcomes', chipsHTML(topOutcomes.map(o => o.short || o.label), 99));
 
         // captured count
-        const selTotal = 14;
+        const selTotal = roiEstimateEnabled ? 14 : 13;
         const fitAnsweredCount = ['fitRealism','fitScope','fitToday','fitServices','fitRiskFrame'].filter(k => !!state[k]).length;
         const discoveryDone =
           (state.pressureSources || []).length > 0 &&
@@ -12404,7 +12450,7 @@ const evidenceOpts = [
           ((state.industry || state.region) ? 1 : 0) +
           (state.regs.size ? 1 : 0) +
           ((state.stack.size || state.stackOther) ? 1 : 0) +
-          (state.visited.has(maxQuestionStep()) ? 1 : 0) +
+          ((roiEstimateEnabled && state.visited.has(maxQuestionStep())) ? 1 : 0) +
           (topOutcomes.length ? 1 : 0) +
           (Object.keys(state.outcomeDrilldowns || {}).length ? 1 : 0);
 
@@ -13648,12 +13694,14 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const accountLandingViewSelect = $('#accountLandingView');
       const accountDashboardDateModeSelect = $('#accountDashboardDateMode');
       const accountPrefillOptions = $$('#accountPrefillOptions [data-prefill]');
+      const accountRoiEstimateOptions = $$('#accountRoiEstimateOptions [data-roi-estimate]');
       const accountNotificationOptions = $$('#accountNotificationOptions [data-account-notify]');
       const accountLhnButtons = $$('#accountLhn [data-account-nav-target]');
       const accountLhnMode = $('#accountLhnMode');
       const accountLhnPrefill = $('#accountLhnPrefill');
       const accountLhnNotifications = $('#accountLhnNotifications');
       const accountSaveChangesBtn = $('#accountSaveChanges');
+      const accountSaveChangesLabel = $('#accountSaveChangesLabel');
       const accountSaveState = $('#accountSaveState');
       const accountApplyNowBtn = $('#accountApplyNow');
       const accountResetBtn = $('#accountReset');
@@ -13701,6 +13749,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           defaultRegion: '',
           fieldMode: 'guided',
           prefillMode: 'on',
+          roiEstimateMode: 'on',
           landingView: 'dashboard',
           dashboardDateMode: 'modified',
           notifyRecordUpdates: true,
@@ -13753,6 +13802,12 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         return String(next || '').toLowerCase() === 'off' ? 'off' : 'on';
       }
 
+      function resolveAccountRoiEstimateMode(next){
+        if(next === false) return 'off';
+        if(next === true) return 'on';
+        return String(next || '').toLowerCase() === 'off' ? 'off' : 'on';
+      }
+
       function resolveAccountLandingView(next){
         const value = String(next || '').trim().toLowerCase();
         if(value === 'account') return 'account';
@@ -13785,9 +13840,14 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         accountSaveChangesBtn.dataset.saved = justSaved ? 'true' : 'false';
         accountSaveChangesBtn.dataset.thinking = accountSaveIsThinking ? 'true' : 'false';
         accountSaveChangesBtn.setAttribute('aria-busy', accountSaveIsThinking ? 'true' : 'false');
-        accountSaveChangesBtn.textContent = accountSaveIsThinking
+        const label = accountSaveIsThinking
           ? 'Saving...'
           : (justSaved ? 'Saved' : 'Save changes');
+        if(accountSaveChangesLabel){
+          accountSaveChangesLabel.textContent = label;
+        }else{
+          accountSaveChangesBtn.textContent = label;
+        }
       }
 
       function accountPermissionSummaryText(profile){
@@ -13811,6 +13871,14 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           return onBtn.getAttribute('aria-pressed') === 'true' ? 'on' : 'off';
         }
         return resolveAccountPrefillMode(settingsState.account && settingsState.account.prefillMode);
+      }
+
+      function readAccountRoiEstimateModeFromUI(){
+        const onBtn = accountRoiEstimateOptions.find((btn)=> btn && btn.getAttribute('data-roi-estimate') === 'on');
+        if(onBtn){
+          return onBtn.getAttribute('aria-pressed') === 'true' ? 'on' : 'off';
+        }
+        return resolveAccountRoiEstimateMode(settingsState.account && settingsState.account.roiEstimateMode);
       }
 
       function readAccountNotifyFlagFromUI(key, fallback){
@@ -13845,6 +13913,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           defaultRegion: pickSelectValue(src.defaultRegion, '#region'),
           fieldMode: resolveAccountFieldMode(src.fieldMode),
           prefillMode: resolveAccountPrefillMode(src.prefillMode),
+          roiEstimateMode: resolveAccountRoiEstimateMode(src.roiEstimateMode),
           landingView: resolveAccountLandingView(src.landingView),
           dashboardDateMode: sanitizeDashboardDateMode(src.dashboardDateMode),
           notifyRecordUpdates: resolveAccountNotifyFlag(src.notifyRecordUpdates, true),
@@ -13867,6 +13936,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           && a.defaultRegion === b.defaultRegion
           && a.fieldMode === b.fieldMode
           && a.prefillMode === b.prefillMode
+          && a.roiEstimateMode === b.roiEstimateMode
           && a.landingView === b.landingView
           && a.dashboardDateMode === b.dashboardDateMode
           && a.notifyRecordUpdates === b.notifyRecordUpdates
@@ -13914,6 +13984,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           defaultRegion: accountRegionSelect ? accountRegionSelect.value : '',
           fieldMode: accountFieldModeSelect ? accountFieldModeSelect.value : '',
           prefillMode: readAccountPrefillModeFromUI(),
+          roiEstimateMode: readAccountRoiEstimateModeFromUI(),
           landingView: accountLandingViewSelect ? accountLandingViewSelect.value : existing.landingView,
           dashboardDateMode: accountDashboardDateModeSelect ? accountDashboardDateModeSelect.value : existing.dashboardDateMode,
           notifyRecordUpdates: readAccountNotifyFlagFromUI('recordUpdates', existing.notifyRecordUpdates),
@@ -13989,6 +14060,10 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         const prefill = resolveAccountPrefillMode(acc.prefillMode);
         accountPrefillOptions.forEach((btn)=>{
           btn.setAttribute('aria-pressed', btn.getAttribute('data-prefill') === prefill ? 'true' : 'false');
+        });
+        const roiMode = resolveAccountRoiEstimateMode(acc.roiEstimateMode);
+        accountRoiEstimateOptions.forEach((btn)=>{
+          btn.setAttribute('aria-pressed', btn.getAttribute('data-roi-estimate') === roiMode ? 'true' : 'false');
         });
         accountNotificationOptions.forEach((btn)=>{
           const key = btn.getAttribute('data-account-notify') || '';
@@ -14321,6 +14396,15 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           markAccountChangesDirty();
         });
       });
+      accountRoiEstimateOptions.forEach((btn)=>{
+        btn.addEventListener('click', ()=>{
+          const next = resolveAccountRoiEstimateMode(btn.getAttribute('data-roi-estimate') || 'on');
+          accountRoiEstimateOptions.forEach((row)=>{
+            row.setAttribute('aria-pressed', row.getAttribute('data-roi-estimate') === next ? 'true' : 'false');
+          });
+          markAccountChangesDirty();
+        });
+      });
       accountSdrModeToggleOptions.forEach((btn)=>{
         btn.addEventListener('click', ()=>{
           const next = btn.getAttribute('data-sdr-toggle') === 'on' ? 'on' : 'off';
@@ -14388,6 +14472,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
             defaultRegion: '',
             fieldMode: 'guided',
             prefillMode: 'on',
+            roiEstimateMode: 'on',
             landingView: 'dashboard',
             dashboardDateMode: 'modified',
             notifyRecordUpdates: true,

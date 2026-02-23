@@ -1400,6 +1400,11 @@
       background: color-mix(in srgb, var(--lime) 14%, var(--surface));
       color: color-mix(in srgb, var(--lime) 80%, var(--text));
     }
+    .dash-status[data-tone="sdr"]{
+      border-color: color-mix(in srgb, var(--azure) 42%, var(--border));
+      background: color-mix(in srgb, var(--azure) 10%, var(--surface));
+      color: color-mix(in srgb, var(--azure) 78%, var(--text));
+    }
     .dash-status[data-tone="viewer"]{
       border-color: color-mix(in srgb, var(--muted) 56%, var(--border));
       background: color-mix(in srgb, var(--muted) 12%, var(--surface));
@@ -2211,6 +2216,9 @@
       border-color: var(--azure);
       color:#fff;
       transition: background .22s ease, border-color .22s ease, color .22s ease, box-shadow .22s ease;
+    }
+    .accountSaveBtn{
+      min-width: 146px;
     }
     .saveRecordBtn[data-thinking="true"]{
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--azure) 20%, transparent);
@@ -3415,12 +3423,76 @@
       gap:10px;
       align-content:start;
     }
+    .snapshotTopBar{
+      border-bottom: 1px solid var(--border);
+      padding: 10px 14px;
+      background: transparent;
+    }
+    .snapshotTopBarRight{
+      display:flex;
+      align-items:flex-start;
+      justify-content:flex-end;
+      gap:14px;
+      width:100%;
+      margin-left:auto;
+      flex-wrap:wrap;
+    }
+    .snapshotTopProfile{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap:8px 16px;
+      min-width:min(360px, 100%);
+    }
+    .snapshotTopProfileItem{
+      display:grid;
+      gap:2px;
+      min-width:0;
+    }
+    .snapshotTopProfileLabel{
+      font-size:.66rem;
+      letter-spacing:.11em;
+      text-transform:uppercase;
+      font-weight:700;
+      color: color-mix(in srgb, var(--muted) 84%, var(--text) 16%);
+      line-height:1.2;
+    }
+    .snapshotTopProfileValue{
+      font-size:.86rem;
+      color: var(--text);
+      font-weight:650;
+      line-height:1.3;
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .snapshotTopCollabTools{
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap:8px;
+      min-height:42px;
+    }
+    .snapshotAddUserIconBtn{
+      width:42px;
+      height:42px;
+      border-radius:999px;
+    }
+    .snapshotTopCollabTools .collabAvatarStack{
+      min-height:34px;
+    }
 
     .decisionCard{
       border:1px solid var(--border);
       border-radius: var(--radius-sm);
       background: var(--surface);
       padding:12px;
+    }
+    .decisionPackageHead{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
     }
     .decisionPackageCard .recTitle{
       margin:8px 0 0;
@@ -3623,6 +3695,10 @@
     @media (max-width: 460px){
       .basketLine{ grid-template-columns: 1fr; }
       .basketK:after{ content:""; }
+      .snapshotTopProfile{
+        grid-template-columns: 1fr;
+        min-width:0;
+      }
     }
 
     .dot{
@@ -4163,6 +4239,14 @@
     }
     .settingsInlineOptions{
       margin-top:10px;
+    }
+    .settingsSubgroup{
+      display:grid;
+      gap:8px;
+      margin-top:12px;
+    }
+    .settingsSubgroup .settingsInlineOptions{
+      margin-top:0;
     }
     .settingsRowActions{
       display:flex;
@@ -6635,25 +6719,29 @@
         width:100%;
         border-top: 1px solid var(--border);
         background: var(--bg);
-        padding: 12px 0;
+        padding: 0;
         flex: 0 0 auto;
       }
       .nav-settings{
         width:100%;
         border:0;
+        border-top: 1px solid var(--border);
         background: transparent;
         display:grid;
         grid-template-columns: 34px minmax(0, 1fr);
         align-items:center;
         gap: 10px;
-        padding: 0 10px 0 20px;
+        min-height: 70px;
+        padding: 10px 10px 10px 20px;
         text-align:left;
         cursor:pointer;
       }
+      .nav-settings:first-child{
+        border-top: 0;
+      }
       .nav-settings + .nav-settings{
-        border-top: 1px solid var(--border);
-        margin-top: 8px;
-        padding-top: 8px;
+        margin-top: 0;
+        padding-top: 10px;
       }
       .nav-settings:hover{
         background: color-mix(in srgb, var(--surface) 90%, var(--bg));
@@ -6796,24 +6884,47 @@
         position: sticky;
         top: 0;
         overflow: visible;
-        height: 100vh;
-        min-height: 100vh;
-        max-height: 100vh;
+        height: auto;
+        min-height: 0;
+        max-height: none;
         background: var(--surface) !important;
         border-radius: 0 !important;
         box-shadow: none !important;
       }
       aside.card.sticky .cardPad{
         display:grid;
-        grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
-        grid-template-rows: auto auto minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto;
         gap: 0;
         align-content:start;
-        height: 100%;
-        min-height: 0;
+        height: auto;
+        min-height: auto;
         overflow: visible;
         padding: 0;
         background: var(--surface);
+      }
+      .snapshotTopBar{
+        grid-column: 1 / -1;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+      }
+      .snapshotTopBarRight{
+        display:flex;
+        flex-direction:column;
+        align-items:flex-end;
+        justify-content:flex-end;
+        gap:10px;
+      }
+      .snapshotTopProfile{
+        min-width: 0;
+        max-width: 560px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .snapshotTopCollabTools{
+        flex: 0 0 auto;
+      }
+      .snapshotTopProfileValue{
+        font-size: .84rem;
       }
       aside.card.sticky .cardPad > .sideTitle{
         grid-column: 1 / -1;
@@ -6915,11 +7026,10 @@
         box-shadow: none !important;
         min-height: 0;
         height: auto;
-        max-height: 100%;
-        align-self: stretch;
-        overflow: hidden;
-        display: grid;
-        grid-template-rows: auto minmax(0, 1fr);
+        max-height: none;
+        align-self: auto;
+        overflow: visible;
+        display: block;
       }
       .sideAnswersBlock > summary{
         display:flex;
@@ -6932,13 +7042,10 @@
         border-bottom: 1px solid var(--border);
       }
       .sideAnswersBlock .sideAnswersBody{
-        min-height:0;
-        height: 100%;
-        max-height: 100%;
-        overflow-y:auto;
-        overflow-x:hidden;
-        overscroll-behavior: contain;
-        -webkit-overflow-scrolling: touch;
+        min-height:auto;
+        height: auto;
+        max-height: none;
+        overflow: visible;
         padding: 8px 14px 12px;
       }
       .snapshotInputs{

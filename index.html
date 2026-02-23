@@ -297,7 +297,11 @@
           </div>
           <div class="accountHeadActions">
             <span class="accountSaveState" id="accountSaveState" data-state="saved">Saved</span>
-            <button class="btn primary small" type="button" id="accountSaveChanges">Save changes</button>
+            <button class="btn primary small saveRecordBtn accountSaveBtn" type="button" id="accountSaveChanges" data-saved="false" aria-live="polite">
+              <span class="saveSpinner" aria-hidden="true"></span>
+              <span id="accountSaveChangesLabel">Save changes</span>
+              <span class="saveCheck" aria-hidden="true">✓</span>
+            </button>
           </div>
         </header>
         <div class="accountBody">
@@ -328,9 +332,10 @@
                   <option value="owner">Owner</option>
                   <option value="admin">Admin</option>
                   <option value="editor">Collaborator/editor</option>
+                  <option value="sdr">SDR</option>
                   <option value="viewer">Viewer</option>
                 </select>
-                <p class="settingsFieldNote">Admin can add/remove users. Owner can set sharing permissions. Editor and viewer can add viewers only.</p>
+                <p class="settingsFieldNote">Admin can add/remove users. Owner can set sharing permissions. Editor, SDR, and viewer can add viewers only.</p>
               </label>
               <label class="settingsField">
                 <span class="settingsFieldLabel">Permission mode (testing)</span>
@@ -339,6 +344,7 @@
                   <option value="force-admin">Force admin (test)</option>
                   <option value="force-owner">Force owner (test)</option>
                   <option value="force-editor">Force editor (test)</option>
+                  <option value="force-sdr">Force SDR (test)</option>
                   <option value="force-viewer">Force viewer (test)</option>
                 </select>
                 <p class="settingsFieldNote" id="accountPermissionSummary">Role matrix applies to sharing and edit controls.</p>
@@ -363,16 +369,7 @@
                   <option value="advanced">Advanced</option>
                 </select>
                 <p class="settingsFieldNote">SDR keeps required inputs minimal. Guided keeps the flow lean. Advanced exposes full depth.</p>
-                <div class="settingsOptions settingsInlineOptions" id="accountSdrModeToggle">
-                  <button class="settingsOption" type="button" data-sdr-toggle="off" aria-pressed="true">SDR mode off</button>
-                  <button class="settingsOption" type="button" data-sdr-toggle="on" aria-pressed="false">SDR mode on</button>
-                </div>
-                <p class="settingsFieldNote">SDR mode requires only 7 of 22 core questions (~32%).</p>
               </label>
-            </div>
-            <div class="settingsOptions settingsInlineOptions" id="accountPrefillOptions">
-              <button class="settingsOption" type="button" data-prefill="on" aria-pressed="true">Prefill new records</button>
-              <button class="settingsOption" type="button" data-prefill="off" aria-pressed="false">Manual start for new records</button>
             </div>
             <p class="settingsHint" style="margin-top:10px;">This role is your internal workspace role. Customer role/persona is still captured inside each record.</p>
             <div class="settingsRowActions">
@@ -456,6 +453,29 @@
               <div class="settingsOptions" id="dummyOptions">
                 <button class="settingsOption" type="button" data-dummy="off" aria-pressed="true">Dummy account off</button>
                 <button class="settingsOption" type="button" data-dummy="on" aria-pressed="false">Dummy account on</button>
+              </div>
+              <div class="settingsSubgroup">
+                <div class="settingsFieldLabel">SDR mode quick toggle</div>
+                <div class="settingsOptions settingsInlineOptions" id="accountSdrModeToggle">
+                  <button class="settingsOption" type="button" data-sdr-toggle="off" aria-pressed="true">SDR mode off</button>
+                  <button class="settingsOption" type="button" data-sdr-toggle="on" aria-pressed="false">SDR mode on</button>
+                </div>
+                <p class="settingsFieldNote">SDR mode requires 8 of 22 core questions (~36%).</p>
+              </div>
+              <div class="settingsSubgroup">
+                <div class="settingsFieldLabel">New record start mode</div>
+                <div class="settingsOptions settingsInlineOptions" id="accountPrefillOptions">
+                  <button class="settingsOption" type="button" data-prefill="on" aria-pressed="true">Prefill new records</button>
+                  <button class="settingsOption" type="button" data-prefill="off" aria-pressed="false">Manual start for new records</button>
+                </div>
+              </div>
+              <div class="settingsSubgroup">
+                <div class="settingsFieldLabel">ROI estimate visibility</div>
+                <div class="settingsOptions settingsInlineOptions" id="accountRoiEstimateOptions">
+                  <button class="settingsOption" type="button" data-roi-estimate="on" aria-pressed="true">ROI estimate on</button>
+                  <button class="settingsOption" type="button" data-roi-estimate="off" aria-pressed="false">ROI estimate off</button>
+                </div>
+                <p class="settingsFieldNote">Controls whether ROI estimate appears in the side snapshot summary.</p>
               </div>
             </div>
             <div class="settingsReset">
@@ -1260,14 +1280,44 @@
       <!-- SIDE -->
       <aside class="card sticky" aria-label="Your readiness snapshot">
         <div class="cardPad">
-          <div class="sideTitle">
-            <div class="sectionTitle">Your snapshot</div>
-            <div class="pill small" id="selPill">0/14 captured</div>
+          <div class="snapshotTopBar" aria-label="Profile and collaborators">
+            <div class="snapshotTopBarRight">
+              <div class="snapshotTopProfile" aria-label="Profile summary">
+                <div class="snapshotTopProfileItem">
+                  <span class="snapshotTopProfileLabel">Role</span>
+                  <span class="snapshotTopProfileValue" id="snapOrgRole">—</span>
+                </div>
+                <div class="snapshotTopProfileItem">
+                  <span class="snapshotTopProfileLabel">Name</span>
+                  <span class="snapshotTopProfileValue" id="snapOrgName">—</span>
+                </div>
+                <div class="snapshotTopProfileItem">
+                  <span class="snapshotTopProfileLabel">Company</span>
+                  <span class="snapshotTopProfileValue" id="snapOrgCompany">—</span>
+                </div>
+                <div class="snapshotTopProfileItem">
+                  <span class="snapshotTopProfileLabel">Country</span>
+                  <span class="snapshotTopProfileValue" id="snapOrgCountry">—</span>
+                </div>
+                <div class="snapshotTopProfileItem">
+                  <span class="snapshotTopProfileLabel">Size</span>
+                  <span class="snapshotTopProfileValue" id="snapOrgSize">—</span>
+                </div>
+              </div>
+              <div class="snapshotTopCollabTools" id="snapshotCollabTools">
+                <button class="titleAddUserIconBtn snapshotAddUserIconBtn" type="button" id="snapshotShareRecordBtn" data-action="openShareRecord" data-collab-add-trigger="true" aria-label="Add collaborator">
+                  <span aria-hidden="true">+</span>
+                </button>
+                <div class="collabAvatarStack collabAvatarStack--md" id="snapshotCollabAvatars" aria-label="Record collaborators" hidden></div>
+              </div>
+            </div>
           </div>
-
           <section class="snapshotDecision" id="decisionCol" aria-label="Decision summary">
             <div class="decisionCard decisionPackageCard">
-              <div class="sectionTitle">Package</div>
+              <div class="decisionPackageHead">
+                <div class="sectionTitle">Package</div>
+                <div class="pill small" id="selPill">0/14 captured</div>
+              </div>
               <div class="recTitle" id="recTitle">—</div>
               <div class="recDesc" id="recDesc">—</div>
             </div>
@@ -1327,12 +1377,6 @@
                 <span class="chev" aria-hidden="true">▾</span>
               </summary>
               <div class="inputAccBody">
-                <div class="inputSubhead">Organisation</div>
-                <div class="kvRow"><span class="kvLabel">Role</span><span class="kvValue" id="snapOrgRole">—</span></div>
-                <div class="kvRow"><span class="kvLabel">Name</span><span class="kvValue" id="snapOrgName">—</span></div>
-                <div class="kvRow"><span class="kvLabel">Company</span><span class="kvValue" id="snapOrgCompany">—</span></div>
-                <div class="kvRow"><span class="kvLabel">Country</span><span class="kvValue" id="snapOrgCountry">—</span></div>
-                <div class="kvRow"><span class="kvLabel">Size</span><span class="kvValue" id="snapOrgSize">—</span></div>
                 <div class="inputSubhead">Outcome discovery</div>
                 <div class="kvRow"><span class="kvLabel">Pressure</span><span class="kvValue" id="snapPressure">—</span></div>
                 <div class="kvRow"><span class="kvLabel">Urgent win</span><span class="kvValue" id="snapMilestone">—</span></div>
@@ -1467,6 +1511,7 @@
           <input id="shareInviteInput" type="text" placeholder="name@company.com, teammate@company.com" />
           <select id="shareInviteRole" aria-label="New collaborator role">
             <option value="viewer">Viewer</option>
+            <option value="sdr">SDR</option>
             <option value="editor">Editor</option>
             <option value="owner">Owner</option>
             <option value="admin">Admin</option>

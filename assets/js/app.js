@@ -6297,7 +6297,8 @@ const evidenceOpts = [
         if(messageInput) messageInput.value = '';
       }
 
-      function openShareModal(recordId){
+      function openShareModal(recordId, opts){
+        const cfg = Object.assign({ focusInvite:false }, opts || {});
         const targetId = shareRecordIdFromContext(recordId);
         if(!targetId){
           toast('Save the record first, then share it.');
@@ -6331,6 +6332,16 @@ const evidenceOpts = [
         renderShareCollaboratorRows(persisted);
         const modal = $('#shareModal');
         if(modal) modal.classList.add('show');
+        if(cfg.focusInvite && inviteInput && !inviteInput.disabled){
+          window.setTimeout(()=>{
+            try{
+              inviteInput.focus();
+              inviteInput.select();
+            }catch(err){
+              // Ignore focus errors.
+            }
+          }, 0);
+        }
         update();
         return true;
       }
@@ -7088,6 +7099,24 @@ const evidenceOpts = [
           ? `<button type="button" class="interTitleStarBtn${animateInterStar ? ' is-animate' : ''}" data-inter-star-id="${escapeHtml(thread.id)}" data-active="${thread.priority ? 'true' : 'false'}" aria-pressed="${thread.priority ? 'true' : 'false'}" title="${thread.priority ? 'Unstar company' : 'Star company'}">★</button>`
           : '';
         const interCollabStack = collaboratorStackHtml(thread, { maxVisible:4, size:'md', showSingle:false });
+        const canShareRecord = !!(thread && thread.id && thread.id !== 'current' && interPerms.canShareRecord);
+        const interCollabTools = (interCollabStack || canShareRecord)
+          ? `
+              <span class="interTitleCollabTools">
+                <button
+                  type="button"
+                  class="titleAddUserIconBtn interTitleAddUserBtn"
+                  data-action="openShareRecord"
+                  data-record-id="${escapeHtml(thread && thread.id || '')}"
+                  data-collab-add-trigger="true"
+                  aria-label="Add collaborator"
+                  title="${canShareRecord ? 'Add collaborator' : 'Save the record first, then share'}"
+                  ${canShareRecord ? '' : 'disabled aria-disabled="true"'}
+                >+</button>
+                ${interCollabStack ? `<span class="interTitleCollab">${interCollabStack}</span>` : ''}
+              </span>
+            `
+          : '';
         const renameActions = interPerms.canEditRecord
           ? `
                   <button type="button" class="interTitleIconBtn interTitleEditBtn" data-inter-rename-btn title="Rename company" aria-label="Rename company">&#9998;</button>
@@ -7138,7 +7167,7 @@ const evidenceOpts = [
                     aria-label="Rename company"
                   />
                   ${renameActions}
-                  ${interCollabStack ? `<span class="interTitleCollab">${interCollabStack}</span>` : ''}
+                  ${interCollabTools}
                 </div>
                 <p class="interSub">Our understanding of your business. Use Edit to jump directly to incomplete sections.</p>
               </div>
@@ -14827,7 +14856,11 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           applyArchivePrompt();
         }
         if(action === 'openShareRecord'){
-          openShareModal(btn.getAttribute('data-record-id'));
+          const focusInvite = (
+            String(btn.getAttribute('data-collab-add-trigger') || '').trim().toLowerCase() === 'true'
+            || String(btn.getAttribute('data-share-focus') || '').trim().toLowerCase() === 'invite'
+          );
+          openShareModal(btn.getAttribute('data-record-id'), { focusInvite });
         }
         if(action === 'closeShareModal'){
           closeShareModal();

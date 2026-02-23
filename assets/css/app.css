@@ -1573,6 +1573,17 @@
       display:inline-flex;
       align-items:center;
     }
+    .interTitleCollabTools{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      margin-left:2px;
+    }
+    .interTitleAddUserBtn{
+      width:30px;
+      height:30px;
+      font-size:1.26rem;
+    }
     .interTitleIconBtn{
       appearance:none;
       flex: 0 0 auto;

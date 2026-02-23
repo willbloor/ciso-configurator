@@ -424,10 +424,15 @@
       letter-spacing:-.01em;
     }
     .workspaceCompanyNameLabel{
+      flex:1 1 auto;
       min-width:0;
       white-space:nowrap;
       overflow:hidden;
       text-overflow:ellipsis;
+    }
+    .workspaceCompanyCollab{
+      flex:0 0 auto;
+      margin-left:2px;
     }
     .workspacePriorityStar{
       flex:0 0 auto;
@@ -808,9 +813,9 @@
       min-width:40px;
       height:40px;
       padding:0;
-      border-color: color-mix(in srgb, #ef4444 44%, var(--border));
-      background: color-mix(in srgb, #ef4444 8%, var(--surface));
-      color: color-mix(in srgb, #ef4444 62%, var(--text));
+      border-color: color-mix(in srgb, var(--azure) 44%, var(--border));
+      background: color-mix(in srgb, var(--azure) 8%, var(--surface));
+      color: color-mix(in srgb, var(--azure) 66%, var(--text));
     }
     .globalDeleteBtn svg{
       width:18px;
@@ -822,9 +827,9 @@
       stroke-linejoin: round;
     }
     .globalDeleteBtn:hover{
-      border-color: color-mix(in srgb, #ef4444 64%, var(--border));
-      background: color-mix(in srgb, #ef4444 16%, var(--surface));
-      color: color-mix(in srgb, #ef4444 78%, var(--text));
+      border-color: color-mix(in srgb, var(--azure) 64%, var(--border));
+      background: color-mix(in srgb, var(--azure) 16%, var(--surface));
+      color: color-mix(in srgb, var(--azure) 80%, var(--text));
     }
     .dashboardShell{
       border:1px solid var(--border);
@@ -900,9 +905,16 @@
     .dashArchiveSelectedBtn{
       margin-left:auto;
       white-space: nowrap;
+      transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+    }
+    .dashArchiveSelectedBtn[data-active="true"]{
+      background: var(--azure);
+      border-color: var(--azure);
+      color:#fff;
+      box-shadow: 0 6px 16px color-mix(in srgb, var(--azure) 24%, transparent);
     }
     .dashboardTableWrap{
-      padding: 0 14px 12px;
+      padding: 0 10px 10px;
       overflow-x:auto;
       overflow-y:hidden;
     }
@@ -912,35 +924,37 @@
       min-width: 0;
       table-layout: fixed;
       --dash-col-company: 17%;
-      --dash-col-completion: 13%;
-      --dash-col-tier: 10%;
-      --dash-col-outcomes: 26%;
-      --dash-col-gaps: 15%;
+      --dash-col-completion: 10%;
+      --dash-col-tier: 6%;
+      --dash-col-status: 10%;
+      --dash-col-outcomes: 25%;
+      --dash-col-gaps: 17%;
       --dash-col-actions: 11%;
     }
     .dashboardTable th,
     .dashboardTable td{
-      padding: 12px 10px;
+      padding: 10px 8px;
       border-bottom:1px solid var(--border);
       vertical-align: top;
       text-align:left;
     }
     .dashboardTable th.dashSelectCol,
     .dashboardTable td.dashSelectCol{
-      width: 34px !important;
-      min-width: 34px !important;
-      max-width: 34px !important;
+      width: 30px !important;
+      min-width: 30px !important;
+      max-width: 30px !important;
       text-align:center;
-      padding-left:2px;
-      padding-right:2px;
+      padding-left:1px;
+      padding-right:1px;
       box-sizing:border-box;
     }
     .dashboardTable th:nth-child(2), .dashboardTable td:nth-child(2){ width: var(--dash-col-company); }
     .dashboardTable th:nth-child(3), .dashboardTable td:nth-child(3){ width: var(--dash-col-completion); }
     .dashboardTable th:nth-child(4), .dashboardTable td:nth-child(4){ width: var(--dash-col-tier); }
-    .dashboardTable th:nth-child(5), .dashboardTable td:nth-child(5){ width: var(--dash-col-outcomes); }
-    .dashboardTable th:nth-child(6), .dashboardTable td:nth-child(6){ width: var(--dash-col-gaps); }
-    .dashboardTable th:nth-child(7), .dashboardTable td:nth-child(7){
+    .dashboardTable th:nth-child(5), .dashboardTable td:nth-child(5){ width: var(--dash-col-status); }
+    .dashboardTable th:nth-child(6), .dashboardTable td:nth-child(6){ width: var(--dash-col-outcomes); }
+    .dashboardTable th:nth-child(7), .dashboardTable td:nth-child(7){ width: var(--dash-col-gaps); }
+    .dashboardTable th:nth-child(8), .dashboardTable td:nth-child(8){
       width: var(--dash-col-actions);
       text-align:left;
       white-space: nowrap;
@@ -957,7 +971,7 @@
     }
     .dashColHeadLabel{
       display:inline-block;
-      padding-right: 14px;
+      padding-right: 11px;
     }
     .dashboardTable th[data-dash-sort-col] .dashColHeadLabel{
       padding-right: 0;
@@ -966,9 +980,9 @@
       appearance:none;
       border:0;
       background:transparent;
-      padding:0 14px 0 0;
+      padding:0 12px 0 0;
       margin:0;
-      width: calc(100% - 10px);
+      width: calc(100% - 8px);
       display:flex;
       align-items:center;
       justify-content:space-between;
@@ -1013,7 +1027,7 @@
       display:flex;
       align-items:center;
       justify-content:space-between;
-      gap:8px;
+      gap:6px;
       width:100%;
       min-width:0;
     }
@@ -1074,9 +1088,9 @@
     .dash-created{
       display:inline-flex;
       align-items:center;
-      gap:7px;
+      gap:6px;
       color: var(--muted);
-      font-size:.84rem;
+      font-size:.82rem;
       font-weight:620;
       white-space:nowrap;
     }
@@ -1146,7 +1160,7 @@
     .dashCompanyCell{
       display:flex;
       align-items:center;
-      gap:8px;
+      gap:6px;
       min-width:0;
     }
     .dashCollabWrap{
@@ -1308,12 +1322,54 @@
     }
     .dash-tier{
       display:inline-flex;
+      align-items:center;
+      justify-content:center;
       border:1px solid var(--border);
       border-radius: 999px;
-      padding: 5px 9px;
-      font-size: .8rem;
-      font-weight: 700;
+      min-width: 26px;
+      padding: 3px 7px;
+      font-size: .72rem;
+      font-weight: 800;
       background: color-mix(in srgb, var(--surface-2) 76%, var(--surface));
+      letter-spacing:.02em;
+    }
+    .dash-status{
+      display:inline-flex;
+      align-items:center;
+      border:1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-size: .7rem;
+      font-weight: 700;
+      line-height:1.2;
+      white-space:nowrap;
+      color: color-mix(in srgb, var(--text) 80%, var(--muted) 20%);
+      background: color-mix(in srgb, var(--surface-2) 74%, var(--surface));
+    }
+    .dash-status[data-tone="admin"]{
+      border-color: color-mix(in srgb, var(--azure) 54%, var(--border));
+      background: color-mix(in srgb, var(--azure) 14%, var(--surface));
+      color: color-mix(in srgb, var(--azure) 84%, var(--text));
+    }
+    .dash-status[data-tone="owner"]{
+      border-color: color-mix(in srgb, var(--lilac) 52%, var(--border));
+      background: color-mix(in srgb, var(--lilac) 14%, var(--surface));
+      color: color-mix(in srgb, var(--lilac) 78%, var(--text));
+    }
+    .dash-status[data-tone="editor"]{
+      border-color: color-mix(in srgb, var(--lime) 56%, var(--border));
+      background: color-mix(in srgb, var(--lime) 14%, var(--surface));
+      color: color-mix(in srgb, var(--lime) 80%, var(--text));
+    }
+    .dash-status[data-tone="viewer"]{
+      border-color: color-mix(in srgb, var(--muted) 56%, var(--border));
+      background: color-mix(in srgb, var(--muted) 12%, var(--surface));
+      color: color-mix(in srgb, var(--muted) 84%, var(--text));
+    }
+    .dash-status[data-tone="readonly"]{
+      border-color: color-mix(in srgb, var(--amber) 58%, var(--border));
+      background: color-mix(in srgb, var(--amber) 14%, var(--surface));
+      color: color-mix(in srgb, var(--amber) 84%, var(--text));
     }
     @property --pct{
       syntax: "<number>";
@@ -2057,26 +2113,6 @@
       align-items:center;
       gap:7px;
     }
-    .titleAddUserBtn{
-      appearance:none;
-      border:0;
-      background:transparent;
-      color: color-mix(in srgb, var(--azure) 90%, #1f4acc 10%);
-      font-size:.84rem;
-      letter-spacing:.02em;
-      font-weight:700;
-      line-height:1;
-      text-transform:uppercase;
-      padding:0;
-      cursor:pointer;
-    }
-    .titleAddUserBtn:hover{
-      color: color-mix(in srgb, var(--azure) 82%, var(--text) 18%);
-    }
-    .titleAddUserBtn:disabled{
-      opacity:.48;
-      cursor:default;
-    }
     .titleAddUserIconBtn{
       appearance:none;
       border:1px solid color-mix(in srgb, var(--border) 84%, transparent);
@@ -2110,40 +2146,6 @@
       --collab-size: 34px;
       margin-left:-10px;
       font-size:.76rem;
-    }
-    .collabStatus{
-      margin-top:10px;
-      border:1px solid var(--border);
-      border-radius:12px;
-      background: color-mix(in srgb, var(--soft) 72%, var(--surface));
-      color: var(--text);
-      padding:10px 12px;
-      display:flex;
-      flex-direction:column;
-      gap:4px;
-    }
-    .collabStatus strong{
-      font-size:.87rem;
-      line-height:1.25;
-      letter-spacing:-0.01em;
-      font-weight:700;
-    }
-    .collabStatus span{
-      font-size:.84rem;
-      line-height:1.45;
-      color: var(--muted);
-    }
-    .collabStatus[data-tone="success"]{
-      border-color: color-mix(in srgb, var(--lime) 50%, var(--border));
-      background: color-mix(in srgb, var(--lime) 13%, var(--surface));
-    }
-    .collabStatus[data-tone="warning"]{
-      border-color: color-mix(in srgb, var(--amber) 58%, var(--border));
-      background: color-mix(in srgb, var(--amber) 14%, var(--surface));
-    }
-    .collabStatus[data-tone="info"]{
-      border-color: color-mix(in srgb, var(--azure) 32%, var(--border));
-      background: color-mix(in srgb, var(--azure) 10%, var(--surface));
     }
     body.is-record-readonly #configuratorEditor{
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 50%, transparent), var(--shadow);
@@ -2890,13 +2892,6 @@
     }
     .actions .btn[data-action="save"]{
       margin-left:auto;
-    }
-    .configBottomActions{
-      display:flex;
-      justify-content:flex-end;
-      margin-top:18px;
-      padding-top:12px;
-      border-top:1px solid var(--border);
     }
     .btn{
       display:inline-flex; align-items:center; justify-content:center; gap:10px;
@@ -7170,9 +7165,6 @@
       grid-template-columns:minmax(0,1fr) auto !important;
       align-items:center !important;
       column-gap:12px !important;
-    }
-    section.card > .cardPad.title .collabStatus{
-      grid-column:1 / -1;
     }
     section.card > .cardPad.title .titleActions{
       margin-left:0 !important;

@@ -315,6 +315,7 @@
       const ROUTE_HASH_PREFIX = '#/';
       const AUTO_SAVE_FAST_MS = 30000;
       const AUTO_SAVE_BASE_MS = 60000;
+      const DEFAULT_UNREAD_TEST_RECORD_COUNT = 2;
       const RECORD_LOCK_TTL_MS = 45000;
       const RECORD_LOCK_HEARTBEAT_MS = 15000;
       const LOCAL_TAB_SESSION_ID = (()=> {
@@ -334,7 +335,7 @@
       let shareModalRecordId = '';
       let archivePromptMode = 'archive';
       let archivePromptIds = [];
-      const DASHBOARD_COL_STORAGE_KEY = 'cfg_dashboard_col_widths_v1';
+      const DASHBOARD_COL_STORAGE_KEY = 'cfg_dashboard_col_widths_v2';
       const DASHBOARD_SORT_STORAGE_KEY = 'cfg_dashboard_sort_v1';
       const DASHBOARD_DATE_MODE_STORAGE_KEY = 'cfg_dashboard_date_mode_v1';
       const DASHBOARD_SORT_MODES = Object.freeze(new Set([
@@ -358,7 +359,8 @@
       const DASHBOARD_SORT_COLUMN_TO_MODES = Object.freeze({
         company: Object.freeze({ asc:'name-asc', desc:'name-desc' }),
         completion: Object.freeze({ asc:'completion-asc', desc:'completion-desc' }),
-        tier: Object.freeze({ asc:'tier-asc', desc:'tier-desc' })
+        tier: Object.freeze({ asc:'tier-asc', desc:'tier-desc' }),
+        status: Object.freeze({ asc:'status-asc', desc:'status-desc' })
       });
       const DASHBOARD_SORT_MODE_TO_COLUMN = Object.freeze({
         'name-asc': Object.freeze({ column:'company', direction:'asc' }),
@@ -366,17 +368,35 @@
         'completion-asc': Object.freeze({ column:'completion', direction:'asc' }),
         'completion-desc': Object.freeze({ column:'completion', direction:'desc' }),
         'tier-asc': Object.freeze({ column:'tier', direction:'asc' }),
-        'tier-desc': Object.freeze({ column:'tier', direction:'desc' })
+        'tier-desc': Object.freeze({ column:'tier', direction:'desc' }),
+        'status-asc': Object.freeze({ column:'status', direction:'asc' }),
+        'status-desc': Object.freeze({ column:'status', direction:'desc' })
       });
       const DASHBOARD_COLS = {
         company: { css:'--dash-col-company', min:12, max:34, fallback:17 },
-        completion: { css:'--dash-col-completion', min:9, max:24, fallback:13 },
-        tier: { css:'--dash-col-tier', min:8, max:18, fallback:10 },
-        outcomes: { css:'--dash-col-outcomes', min:16, max:42, fallback:26 },
-        gaps: { css:'--dash-col-gaps', min:12, max:34, fallback:15 },
+        completion: { css:'--dash-col-completion', min:7, max:22, fallback:10 },
+        tier: { css:'--dash-col-tier', min:5, max:12, fallback:6 },
+        status: { css:'--dash-col-status', min:8, max:18, fallback:10 },
+        outcomes: { css:'--dash-col-outcomes', min:14, max:42, fallback:25 },
+        gaps: { css:'--dash-col-gaps', min:10, max:34, fallback:17 },
         actions: { css:'--dash-col-actions', min:8, max:20, fallback:11 }
       };
+      const DASHBOARD_COL_RESIZE_ORDER = Object.freeze([
+        'company',
+        'completion',
+        'tier',
+        'status',
+        'outcomes',
+        'gaps',
+        'actions'
+      ]);
       let dashboardColWidths = Object.create(null);
+      let dashboardColResizeSuppressUntil = 0;
+      let dashboardColResizeActive = false;
+
+      function dashboardInteractionsSuppressed(){
+        return dashboardColResizeActive || Date.now() < dashboardColResizeSuppressUntil;
+      }
 
       const recordStore = {
         list(){
@@ -485,6 +505,12 @@
         owner: 'Owner',
         editor: 'Editor',
         viewer: 'Viewer'
+      });
+      const WORKSPACE_OWNER_FALLBACK = Object.freeze({
+        userId: 'system:workspace-owner',
+        name: 'Workspace Owner',
+        email: 'workspace.owner@immersive.local',
+        role: 'owner'
       });
       const PERMISSION_TEST_MODES = Object.freeze(new Set([
         'live',
@@ -739,6 +765,104 @@
         if(actorId && rowId && actorId === rowId) return true;
         if(actorEmail && rowEmail && actorEmail === rowEmail) return true;
         return false;
+      }
+
+      function roleMixTargets(total){
+        const count = Math.max(0, Math.floor(Number(total) || 0));
+        if(count <= 0) return { owner:0, editor:0, viewer:0 };
+        if(count === 1) return { owner:1, editor:0, viewer:0 };
+        if(count === 2) return { owner:1, editor:0, viewer:1 };
+        if(count === 3) return { owner:2, editor:0, viewer:1 };
+
+        const editor = count >= 6 ? 2 : 1;
+        let owner = Math.max(2, Math.floor(count * 0.6));
+        if(owner + editor > count - 1){
+          owner = Math.max(1, count - editor - 1);
+        }
+        const viewer = Math.max(0, count - owner - editor);
+        return { owner, editor, viewer };
+      }
+
+      function applyActorRoleToCollaborators(collaborators, actor, desiredRole){
+        const normalized = normalizeCollaboratorList(collaborators);
+        const actorId = String((actor && actor.userId) || '').trim();
+        const actorEmail = normalizeEmail(actor && actor.email);
+        const actorName = String((actor && actor.displayName) || actorEmail || 'Local collaborator').trim();
+        const role = resolveCollaboratorRole(desiredRole, 'viewer');
+
+        let next = normalized.slice();
+        if(role !== 'owner' && role !== 'admin'){
+          const hasOtherPrivileged = next.some((row)=> {
+            if(collaboratorMatchesActor(row, actor)) return false;
+            const rowRole = resolveCollaboratorRole(row && row.role, 'viewer');
+            return rowRole === 'owner' || rowRole === 'admin';
+          });
+          if(!hasOtherPrivileged){
+            next.unshift(normalizeCollaboratorEntry(WORKSPACE_OWNER_FALLBACK, next.length));
+          }
+        }
+
+        const actorEntry = normalizeCollaboratorEntry({
+          userId: actorId || (actorEmail ? `email:${actorEmail}` : ''),
+          email: actorEmail,
+          name: actorName,
+          role
+        }, next.length);
+        const actorIdx = next.findIndex((row)=> collaboratorMatchesActor(row, actor));
+        if(actorIdx >= 0){
+          next[actorIdx] = Object.assign({}, next[actorIdx], actorEntry, { role });
+        }else{
+          next.push(actorEntry);
+        }
+        return normalizeCollaboratorList(next);
+      }
+
+      function applyDefaultActorRoleMix(rows, opts){
+        const cfg = Object.assign({ force:false }, opts || {});
+        const list = Array.isArray(rows) ? rows : [];
+        const activeRows = list.filter((thread)=> thread && !thread.archived);
+        if(!activeRows.length) return false;
+        const actor = Object.assign({}, activeCollaboratorIdentity(), { permissionTestMode:'live' });
+
+        const currentCounts = activeRows.reduce((acc, thread)=> {
+          const role = effectiveActorRoleForThread(thread, { actor });
+          if(role === 'owner' || role === 'admin') acc.owner += 1;
+          else if(role === 'editor') acc.editor += 1;
+          else acc.viewer += 1;
+          return acc;
+        }, { owner:0, editor:0, viewer:0 });
+
+        const alreadyMixed = (
+          currentCounts.owner > currentCounts.viewer
+          && currentCounts.owner > currentCounts.editor
+          && currentCounts.editor >= 1
+          && currentCounts.viewer >= 1
+        );
+        if(!cfg.force && alreadyMixed) return false;
+
+        const targets = roleMixTargets(activeRows.length);
+        const ordered = activeRows.slice().sort((left, right)=> {
+          const byUpdated = Number(right && right.updatedAt || 0) - Number(left && left.updatedAt || 0);
+          if(byUpdated) return byUpdated;
+          return String((left && left.id) || '').localeCompare(String((right && right.id) || ''));
+        });
+
+        let changed = false;
+        ordered.forEach((thread, idx)=> {
+          let desired = 'viewer';
+          if(idx < targets.owner){
+            desired = 'owner';
+          }else if(idx < (targets.owner + targets.editor)){
+            desired = 'editor';
+          }
+          const before = normalizeCollaboratorList(thread.collaborators);
+          const next = applyActorRoleToCollaborators(before, actor, desired);
+          if(JSON.stringify(before) !== JSON.stringify(next)){
+            thread.collaborators = next;
+            changed = true;
+          }
+        });
+        return changed;
       }
 
       function actorWorkspaceRole(){
@@ -1190,6 +1314,51 @@
         if(!opts || opts.persist !== false) persistDashboardColWidths();
       }
 
+      function dashboardResizePartnerKey(key){
+        const normalizedKey = String(key || '').trim().toLowerCase();
+        const idx = DASHBOARD_COL_RESIZE_ORDER.indexOf(normalizedKey);
+        if(idx < 0) return '';
+        const next = DASHBOARD_COL_RESIZE_ORDER[idx + 1];
+        if(next && DASHBOARD_COLS[next]) return next;
+        const prev = DASHBOARD_COL_RESIZE_ORDER[idx - 1];
+        return (prev && DASHBOARD_COLS[prev]) ? prev : '';
+      }
+
+      function dashboardResizeDeltaBounds(primaryKey, partnerKey, startPrimary, startPartner){
+        const primaryCfg = DASHBOARD_COLS[primaryKey];
+        if(!primaryCfg){
+          return { min:0, max:0 };
+        }
+        let minDelta = primaryCfg.min - startPrimary;
+        let maxDelta = primaryCfg.max - startPrimary;
+        const partnerCfg = DASHBOARD_COLS[partnerKey];
+        if(partnerCfg){
+          // partner width = startPartner - delta
+          minDelta = Math.max(minDelta, startPartner - partnerCfg.max);
+          maxDelta = Math.min(maxDelta, startPartner - partnerCfg.min);
+        }
+        if(minDelta > maxDelta){
+          return { min:0, max:0 };
+        }
+        return { min:minDelta, max:maxDelta };
+      }
+
+      function applyDashboardResizeDelta(primaryKey, startPrimary, rawDelta, partnerKey, startPartner, opts){
+        const cfg = DASHBOARD_COLS[primaryKey];
+        const partnerCfg = DASHBOARD_COLS[partnerKey];
+        if(!cfg) return 0;
+        const bounds = dashboardResizeDeltaBounds(primaryKey, partnerKey, startPrimary, startPartner);
+        const delta = clamp(Number(rawDelta) || 0, bounds.min, bounds.max);
+        setDashboardColWidth(primaryKey, startPrimary + delta, { persist:false });
+        if(partnerCfg){
+          setDashboardColWidth(partnerKey, startPartner - delta, { persist:false });
+        }
+        if(!opts || opts.persist !== false){
+          persistDashboardColWidths();
+        }
+        return delta;
+      }
+
       function resetDashboardColumnWidths(opts){
         Object.keys(DASHBOARD_COLS).forEach((key)=>{
           setDashboardColWidth(key, DASHBOARD_COLS[key].fallback, { persist:false });
@@ -1216,12 +1385,21 @@
         const onMove = (ev)=>{
           if(!drag) return;
           const deltaPct = ((ev.clientX - drag.startX) / drag.baseWidth) * 100;
-          setDashboardColWidth(drag.key, drag.startWidth + deltaPct, { persist:false });
+          applyDashboardResizeDelta(
+            drag.key,
+            drag.startWidth,
+            deltaPct,
+            drag.partnerKey,
+            drag.startPartnerWidth,
+            { persist:false }
+          );
         };
         const onUp = ()=>{
           if(!drag) return;
           clearDragState();
           drag = null;
+          dashboardColResizeActive = false;
+          dashboardColResizeSuppressUntil = Date.now() + 240;
           persistDashboardColWidths();
           window.removeEventListener('pointermove', onMove);
           window.removeEventListener('pointerup', onUp);
@@ -1229,12 +1407,31 @@
         };
 
         $$('[data-dash-col-resize]', table).forEach((handle)=>{
+          handle.addEventListener('click', (ev)=>{
+            ev.preventDefault();
+            ev.stopPropagation();
+          });
+
           handle.addEventListener('dblclick', (ev)=>{
             const key = handle.getAttribute('data-dash-col-resize') || '';
             const cfg = DASHBOARD_COLS[key];
             if(!cfg) return;
+            const partnerKey = dashboardResizePartnerKey(key);
+            const partnerCfg = DASHBOARD_COLS[partnerKey];
+            const startWidth = Number(dashboardColWidths[key]) || cfg.fallback;
+            const startPartnerWidth = partnerCfg
+              ? (Number(dashboardColWidths[partnerKey]) || partnerCfg.fallback)
+              : 0;
             ev.preventDefault();
-            setDashboardColWidth(key, cfg.fallback);
+            ev.stopPropagation();
+            applyDashboardResizeDelta(
+              key,
+              startWidth,
+              cfg.fallback - startWidth,
+              partnerKey,
+              startPartnerWidth,
+              { persist:true }
+            );
           });
 
           handle.addEventListener('pointerdown', (ev)=>{
@@ -1242,11 +1439,18 @@
             const key = handle.getAttribute('data-dash-col-resize') || '';
             const cfg = DASHBOARD_COLS[key];
             if(!cfg) return;
+            const partnerKey = dashboardResizePartnerKey(key);
+            const partnerCfg = DASHBOARD_COLS[partnerKey];
             const th = handle.closest('th');
+            dashboardColResizeActive = true;
             drag = {
               key,
+              partnerKey,
               startX: ev.clientX,
               startWidth: Number(dashboardColWidths[key]) || cfg.fallback,
+              startPartnerWidth: partnerCfg
+                ? (Number(dashboardColWidths[partnerKey]) || partnerCfg.fallback)
+                : 0,
               baseWidth: Math.max(1, table.getBoundingClientRect().width),
               th
             };
@@ -1257,6 +1461,7 @@
             window.addEventListener('pointerup', onUp);
             window.addEventListener('pointercancel', onUp);
             ev.preventDefault();
+            ev.stopPropagation();
           });
         });
       }
@@ -2544,7 +2749,7 @@ const evidenceOpts = [
         const view = state.currentView || 'configurator';
         const interThread = (view === 'interstitial') ? activeThreadModel() : null;
         const interPerms = interThread ? actorPermissionsForThread(interThread) : actorPermissionsForThread(null);
-        const canDeleteThread = !!(
+        const canManageThread = !!(
           interThread
           && interThread.id
           && interThread.id !== 'current'
@@ -2563,7 +2768,7 @@ const evidenceOpts = [
           el.style.display = on ? '' : 'none';
         };
         setActionBtnVisible(createBtn, view === 'dashboard');
-        setActionBtnVisible(deleteBtn, view === 'interstitial' && canDeleteThread);
+        setActionBtnVisible(deleteBtn, view === 'interstitial' && canManageThread);
         setActionBtnVisible(editBtn, view === 'interstitial');
         setActionBtnVisible(shareBtn, view === 'interstitial' && canShareThread);
         setActionBtnVisible(recsBtn, view === 'interstitial');
@@ -2585,6 +2790,13 @@ const evidenceOpts = [
           shareBtn.disabled = !interPerms.canShareRecord;
           shareBtn.setAttribute('aria-disabled', shareBtn.disabled ? 'true' : 'false');
           shareBtn.title = interPerms.canShareRecord ? 'Open sharing controls' : 'Sharing is not available for this role';
+        }
+        if(deleteBtn){
+          const interArchived = !!(interThread && interThread.archived);
+          const actionLabel = interArchived ? 'Unarchive record' : 'Archive record';
+          deleteBtn.dataset.archiveMode = interArchived ? 'restore' : 'archive';
+          deleteBtn.setAttribute('aria-label', actionLabel);
+          deleteBtn.title = actionLabel;
         }
         let targetSlot = null;
         if(view === 'dashboard') targetSlot = dashboardSlot;
@@ -4038,12 +4250,52 @@ const evidenceOpts = [
         state.lockReacquirePending = false;
       }
 
+      function initializeRecordSeenVersions(rows, opts){
+        const cfg = Object.assign({
+          seedUnreadTest: false,
+          unreadCount: DEFAULT_UNREAD_TEST_RECORD_COUNT
+        }, opts || {});
+        const list = Array.isArray(rows) ? rows : [];
+        if(!list.length) return;
+        if(!state.recordSeenVersions || typeof state.recordSeenVersions !== 'object'){
+          state.recordSeenVersions = Object.create(null);
+        }
+        const seenMap = state.recordSeenVersions;
+        const hasSeenEntries = Object.keys(seenMap).length > 0;
+        list.forEach((thread)=>{
+          const threadId = String((thread && thread.id) || '').trim();
+          if(!threadId) return;
+          const version = Math.max(1, Number(thread && thread.version) || 1);
+          if(!Object.prototype.hasOwnProperty.call(seenMap, threadId)){
+            seenMap[threadId] = version;
+          }
+        });
+        if(!cfg.seedUnreadTest || hasSeenEntries) return;
+        const unreadCount = Math.max(0, Math.floor(Number(cfg.unreadCount) || 0));
+        if(!unreadCount) return;
+        const ranked = list
+          .filter((thread)=> thread && !thread.archived)
+          .slice()
+          .sort((left, right)=> {
+            const byUpdated = Number(right && right.updatedAt || 0) - Number(left && left.updatedAt || 0);
+            if(byUpdated !== 0) return byUpdated;
+            return String((left && left.id) || '').localeCompare(String((right && right.id) || ''));
+          });
+        ranked.slice(0, unreadCount).forEach((thread)=> {
+          const threadId = String((thread && thread.id) || '').trim();
+          if(!threadId) return;
+          const version = Math.max(1, Number(thread && thread.version) || 1);
+          seenMap[threadId] = Math.max(0, version - 1);
+        });
+      }
+
       function refreshSavedThreadsFromStore(opts){
         const cfg = Object.assign({ external:false, render:false }, opts || {});
         const prevById = new Map((state.savedThreads || []).map((thread)=> [String((thread && thread.id) || ''), thread]));
         const nextRows = recordStore.list().map((thread, idx)=> normalizeThreadModel(thread, idx));
         state.savedThreads = nextRows;
         state.savedThreadsLoaded = true;
+        initializeRecordSeenVersions(nextRows, { seedUnreadTest:false });
 
         if(cfg.external){
           const activeId = String(state.activeThread || '').trim();
@@ -4101,10 +4353,12 @@ const evidenceOpts = [
         });
 
         state.savedThreads = normalized;
+        applyDefaultActorRoleMix(state.savedThreads, { force:false });
         state.savedThreadsLoaded = true;
         const firstActive = normalized.find((thread)=> !thread.archived) || normalized[0] || null;
         state.activeThread = firstActive ? firstActive.id : 'current';
         resetWorkspaceUiStateCaches();
+        initializeRecordSeenVersions(normalized, { seedUnreadTest:true });
         persistSavedThreads();
 
         try{
@@ -4793,11 +5047,12 @@ const evidenceOpts = [
         const stored = loadSavedThreadsFromStorage();
         if(stored.length){
           state.savedThreads = stored;
-          persistSavedThreads();
         }else{
           state.savedThreads = staticThreadModels().map((thread, idx)=> normalizeThreadModel(thread, idx));
-          persistSavedThreads();
         }
+        applyDefaultActorRoleMix(state.savedThreads, { force:false });
+        persistSavedThreads();
+        initializeRecordSeenVersions(state.savedThreads, { seedUnreadTest:true });
         state.savedThreadsLoaded = true;
       }
 
@@ -5145,6 +5400,7 @@ const evidenceOpts = [
         const commitSave = ()=>{
           ensureSavedThreadsLoaded();
           const existing = (state.activeThread && state.activeThread !== 'current') ? findSavedThread(state.activeThread) : null;
+          const isNewRecord = !existing;
           const recordId = existing ? existing.id : nextSavedThreadId();
           const actor = activeCollaboratorIdentity();
           const actorRoleForThread = existing
@@ -5195,13 +5451,13 @@ const evidenceOpts = [
           state.savePulseUntil = Date.now() + 1600;
           persistSavedThreads();
           clearRecordLockHeartbeat();
-          state.lockReacquirePending = true;
+          state.lockReacquirePending = !isNewRecord;
           state.recordReadOnly = false;
           state.recordSeenVersions[nextThread.id] = Math.max(1, Number(nextThread.version) || 1);
           setCollaborationNotice(
             'success',
             'Changes saved',
-            `v${Math.max(1, Number(nextThread.version) || 1)} saved by ${nextThread.updatedBy || 'Unknown collaborator'} at ${formatDashboardDate(nextThread.updatedAt)}. Lock released until you continue editing.`,
+            `v${Math.max(1, Number(nextThread.version) || 1)} saved by ${nextThread.updatedBy || 'Unknown collaborator'} at ${formatDashboardDate(nextThread.updatedAt)}. ${isNewRecord ? 'New records stay unlocked by default.' : 'Lock released until you continue editing.'}`,
             nextThread.id,
             7000
           );
@@ -5243,20 +5499,71 @@ const evidenceOpts = [
         return currentThreadModel();
       }
 
-      function workflowStageRank(stageRaw){
-        const stage = String(stageRaw || '').trim().toLowerCase();
-        if(stage === 'discovery') return 1;
-        if(stage === 'validation') return 2;
-        if(stage === 'closed') return 3;
-        return 4;
-      }
-
       function dashboardTierRank(tierRaw){
         const tier = String(tierRaw || '').trim().toLowerCase();
         if(tier === 'core') return 1;
         if(tier === 'advanced') return 2;
         if(tier === 'ultimate') return 3;
         return 4;
+      }
+
+      function dashboardTierBadge(tierRaw){
+        const tier = String(tierRaw || '').trim();
+        const lower = tier.toLowerCase();
+        if(lower === 'core') return { short:'C', label:'Core' };
+        if(lower === 'advanced') return { short:'A', label:'Advanced' };
+        if(lower === 'ultimate') return { short:'U', label:'Ultimate' };
+        if(!tier) return { short:'—', label:'Unknown' };
+        return {
+          short: tier.charAt(0).toUpperCase(),
+          label: tier
+        };
+      }
+
+      function dashboardStatusMeta(thread){
+        const source = (thread && typeof thread === 'object') ? thread : {};
+        const perms = actorPermissionsForThread(source);
+        const role = resolveCollaboratorRole(perms.role, 'viewer');
+        const lockReadOnly = isThreadReadOnlyForActor(source);
+        const permissionReadOnly = !perms.canEditRecord;
+        if(lockReadOnly){
+          return {
+            key: 'read-only',
+            label: 'Read-only',
+            tone: 'readonly',
+            sortRank: 1
+          };
+        }
+        if(permissionReadOnly || role === 'viewer'){
+          return {
+            key: 'viewer',
+            label: 'Viewer',
+            tone: 'viewer',
+            sortRank: 2
+          };
+        }
+        if(role === 'editor'){
+          return {
+            key: 'editor',
+            label: 'Editor',
+            tone: 'editor',
+            sortRank: 3
+          };
+        }
+        if(role === 'owner'){
+          return {
+            key: 'owner',
+            label: 'Owner',
+            tone: 'owner',
+            sortRank: 4
+          };
+        }
+        return {
+          key: 'admin',
+          label: 'Admin',
+          tone: 'admin',
+          sortRank: 5
+        };
       }
 
       function sortThreadsByPriorityRecency(rows){
@@ -5276,6 +5583,7 @@ const evidenceOpts = [
         const snapshot = (thread)=>{
           if(cache.has(thread)) return cache.get(thread);
           const progress = threadReadinessProgress(thread);
+          const status = dashboardStatusMeta(thread);
           const result = {
             company: String(thread && thread.company || ''),
             tierRank: dashboardTierRank(thread && thread.tier),
@@ -5283,7 +5591,7 @@ const evidenceOpts = [
             completionPct: completionPctFromSummary(progress && progress.completion),
             gapsCount: Array.isArray(progress && progress.gaps) ? progress.gaps.length : 0,
             gapSummary: String(progress && progress.gapSummary || ''),
-            stageRank: workflowStageRank(thread && thread.stage),
+            statusRank: Number(status.sortRank || 0),
             createdAt: Number(thread && thread.createdAt || 0),
             updatedAt: Number(thread && thread.updatedAt || 0)
           };
@@ -5346,10 +5654,10 @@ const evidenceOpts = [
             const byUpdated = left.updatedAt - right.updatedAt;
             if(byUpdated) return byUpdated;
           }else if(sortMode === 'status-desc'){
-            const byStatus = right.stageRank - left.stageRank;
+            const byStatus = right.statusRank - left.statusRank;
             if(byStatus) return byStatus;
           }else if(sortMode === 'status-asc'){
-            const byStatus = left.stageRank - right.stageRank;
+            const byStatus = left.statusRank - right.statusRank;
             if(byStatus) return byStatus;
           }
 
@@ -5405,9 +5713,10 @@ const evidenceOpts = [
         const source = (thread && typeof thread === 'object') ? thread : {};
         const threadId = String((source.id || source.recordId) || '').trim();
         if(!threadId) return false;
+        const hasSeenVersion = Object.prototype.hasOwnProperty.call(state.recordSeenVersions || {}, threadId);
+        if(!hasSeenVersion) return false;
         const currentVersion = Math.max(1, Number(source.version) || 1);
         const seenVersion = Math.max(0, Number(state.recordSeenVersions[threadId]) || 0);
-        if(seenVersion <= 0) return false;
         return currentVersion > seenVersion;
       }
 
@@ -5415,6 +5724,8 @@ const evidenceOpts = [
         const filtered = threadModels().filter((thread)=> !thread.archived);
         return dashboardSortThreads(filtered, state.dashboardSort).map((thread)=> {
           const progress = threadReadinessProgress(thread);
+          const tierBadge = dashboardTierBadge(thread.tier);
+          const status = dashboardStatusMeta(thread);
           return ({
           id: thread.id,
           company: thread.company,
@@ -5423,6 +5734,10 @@ const evidenceOpts = [
           updatedAt: Number(thread.updatedAt || 0),
           completion: progress.completion,
           tier: thread.tier,
+          tierShort: tierBadge.short,
+          tierLabel: tierBadge.label,
+          statusLabel: status.label,
+          statusTone: status.tone,
           outcomes: thread.outcomesText,
           gaps: progress.gapSummary,
           collaborators: normalizeCollaboratorList(thread.collaborators),
@@ -5440,6 +5755,8 @@ const evidenceOpts = [
         const filtered = threadModels().filter((thread)=> !!thread.archived);
         return dashboardSortThreads(filtered, state.dashboardSort).map((thread)=> {
           const progress = threadReadinessProgress(thread);
+          const tierBadge = dashboardTierBadge(thread.tier);
+          const status = dashboardStatusMeta(thread);
           return ({
           id: thread.id,
           company: thread.company,
@@ -5448,6 +5765,10 @@ const evidenceOpts = [
           updatedAt: Number(thread.updatedAt || 0),
           completion: progress.completion,
           tier: thread.tier,
+          tierShort: tierBadge.short,
+          tierLabel: tierBadge.label,
+          statusLabel: status.label,
+          statusTone: status.tone,
           outcomes: thread.outcomesText,
           gaps: progress.gapSummary,
           collaborators: normalizeCollaboratorList(thread.collaborators),
@@ -5495,6 +5816,7 @@ const evidenceOpts = [
         host.innerHTML = rows.map((thread, idx)=>{
           const progress = threadReadinessProgress(thread);
           const pct = completionPctFromSummary(progress.completion);
+          const collabHtml = collaboratorStackHtml(thread, { maxVisible:3, size:'sm', showSingle:false });
           const active = (state.activeThread === thread.id && (state.currentView === 'interstitial' || state.currentView === 'configurator'));
           const isStarred = !!thread.priority;
           const animateStar = isStarred && !!state.starPulseQueue && state.starPulseQueue.has(thread.id);
@@ -5505,7 +5827,7 @@ const evidenceOpts = [
             : '';
           return `
             <button type="button" class="workspaceCompanyBtn${shouldAnimateEntry ? ' is-enter' : ''}" style="--nav-enter-delay:${Math.min(idx, 10) * 34}ms;" data-company-open="${escapeHtml(thread.id)}" data-active="${active ? 'true' : 'false'}" title="Open ${escapeHtml(thread.company)} overview">
-              <span class="workspaceCompanyName">${star}<span class="workspaceCompanyNameLabel">${escapeHtml(thread.company)}</span></span>
+              <span class="workspaceCompanyName">${star}<span class="workspaceCompanyNameLabel">${escapeHtml(thread.company)}</span>${collabHtml ? `<span class="workspaceCompanyCollab">${collabHtml}</span>` : ''}</span>
               <span class="workspaceCompanyMeta">${pct}% complete · ${escapeHtml(thread.tier)}</span>
             </button>
           `;
@@ -5585,7 +5907,22 @@ const evidenceOpts = [
 
       function openArchivePrompt(ids, mode){
         const uniq = Array.from(new Set((ids || []).map((id)=> String(id || '').trim()).filter(Boolean)));
-        const validIds = uniq.filter((id)=> !!findSavedThread(id));
+        const requestedMode = (mode === 'restore' || mode === 'delete') ? mode : 'archive';
+        let validIds = uniq.filter((id)=> !!findSavedThread(id));
+        if(requestedMode === 'delete'){
+          const archivedOnlyIds = validIds.filter((id)=> {
+            const thread = findSavedThread(id);
+            return !!(thread && thread.archived);
+          });
+          if(!archivedOnlyIds.length){
+            toast('Only archived records can be permanently deleted.');
+            return;
+          }
+          if(archivedOnlyIds.length !== validIds.length){
+            toast('Only archived records were kept for permanent delete.');
+          }
+          validIds = archivedOnlyIds;
+        }
         if(!validIds.length) return;
         const manageableIds = validIds.filter((id)=>{
           const thread = findSavedThread(id);
@@ -5594,14 +5931,16 @@ const evidenceOpts = [
           return perms.role === 'admin' || perms.role === 'owner';
         });
         if(!manageableIds.length){
-          toast('Only owner or admin can archive or delete records.');
+          toast(requestedMode === 'delete'
+            ? 'Only owner or admin can permanently delete archived records.'
+            : 'Only owner or admin can archive or restore records.');
           return;
         }
         if(manageableIds.length !== validIds.length){
-          toast('Some selected records were skipped because your role does not allow archive/delete.');
+          toast('Some selected records were skipped because your role does not allow this action.');
         }
 
-        archivePromptMode = (mode === 'restore' || mode === 'delete') ? mode : 'archive';
+        archivePromptMode = requestedMode;
         archivePromptIds = manageableIds;
         const count = manageableIds.length;
         const verb = archivePromptMode === 'restore'
@@ -6202,8 +6541,14 @@ const evidenceOpts = [
             }
             state.activeThread = target;
             let lockResult = { ok:false, reason:'permission', thread };
+            const recordVersion = Math.max(1, Number(thread.version) || 1);
+            const keepUnlockedByDefault = (recordVersion <= 1) && !isThreadReadOnlyForActor(thread);
             if(perms.canEditRecord){
-              lockResult = acquireRecordLock(target, { quiet:false });
+              if(keepUnlockedByDefault){
+                lockResult = { ok:false, reason:'new-unlocked', thread };
+              }else{
+                lockResult = acquireRecordLock(target, { quiet:false });
+              }
             }
             const liveThread = (lockResult && lockResult.thread) ? lockResult.thread : thread;
             state.recordSeenVersions[target] = Math.max(1, Number(liveThread.version) || 1);
@@ -6211,7 +6556,7 @@ const evidenceOpts = [
               state.recordReadOnly = false;
               ensureRecordLockHeartbeat();
             }else{
-              state.recordReadOnly = true;
+              state.recordReadOnly = !perms.canEditRecord || !!(lockResult && lockResult.reason === 'held');
               state.lockReacquirePending = !!(perms.canEditRecord && lockResult && lockResult.reason === 'held');
               clearRecordLockHeartbeat();
             }
@@ -6998,7 +7343,7 @@ const evidenceOpts = [
         if(!rows.length){
           body.innerHTML = `
             <tr>
-              <td colspan="7" style="padding:16px 12px; color: var(--muted);">
+              <td colspan="8" style="padding:16px 12px; color: var(--muted);">
                 No active records yet. Create a new record to get started.
               </td>
             </tr>
@@ -7047,7 +7392,8 @@ const evidenceOpts = [
                     <span class="dashCompletionRing${shouldAnimateRing ? ' is-enter' : ''}" data-ring-id="${escapeHtml(row.id)}" data-target-pct="${pct}" data-animate="${shouldAnimateRing ? 'true' : 'false'}" style="--pct:${shouldAnimateRing ? 0 : pct};"><span>${shouldAnimateRing ? '0%' : `${pct}%`}</span></span>
                   </div>
                 </td>
-                <td><span class="dash-tier">${escapeHtml(row.tier)}</span></td>
+                <td><span class="dash-tier" title="${escapeHtml(row.tierLabel || row.tier || 'Tier')}">${escapeHtml(row.tierShort || '—')}</span></td>
+                <td><span class="dash-status" data-tone="${escapeHtml(row.statusTone || 'viewer')}">${escapeHtml(row.statusLabel || 'Viewer')}</span></td>
                 <td><span class="dash-outcomes">${escapeHtml(row.outcomes)}</span></td>
                 <td><span class="dash-gaps">${escapeHtml(row.gaps)}</span></td>
                 <td>
@@ -7100,6 +7446,8 @@ const evidenceOpts = [
             return perms.role === 'admin' || perms.role === 'owner';
           }).length;
           archiveBtn.disabled = selectedManageable === 0;
+          archiveBtn.dataset.active = selectedManageable > 0 ? 'true' : 'false';
+          archiveBtn.classList.toggle('primary', selectedManageable > 0);
           archiveBtn.textContent = selectedManageable === selectedCount
             ? 'Archive selected'
             : 'Archive selected (owner/admin only)';
@@ -7133,7 +7481,7 @@ const evidenceOpts = [
         if(!rows.length){
           body.innerHTML = `
             <tr>
-              <td colspan="7" style="padding:16px 12px; color: var(--muted);">
+              <td colspan="8" style="padding:16px 12px; color: var(--muted);">
                 No archived accounts yet.
               </td>
             </tr>
@@ -7172,7 +7520,8 @@ const evidenceOpts = [
                     <span class="dashCompletionRing${shouldAnimateRing ? ' is-enter' : ''}" data-ring-id="${escapeHtml(ringId)}" data-target-pct="${pct}" data-animate="${shouldAnimateRing ? 'true' : 'false'}" style="--pct:${shouldAnimateRing ? 0 : pct};"><span>${shouldAnimateRing ? '0%' : `${pct}%`}</span></span>
                   </div>
                 </td>
-                <td><span class="dash-tier">${escapeHtml(row.tier)}</span></td>
+                <td><span class="dash-tier" title="${escapeHtml(row.tierLabel || row.tier || 'Tier')}">${escapeHtml(row.tierShort || '—')}</span></td>
+                <td><span class="dash-status" data-tone="${escapeHtml(row.statusTone || 'viewer')}">${escapeHtml(row.statusLabel || 'Viewer')}</span></td>
                 <td><span class="dash-outcomes">${escapeHtml(row.outcomes)}</span></td>
                 <td><span class="dash-gaps">${escapeHtml(row.gaps)}</span></td>
                 <td>
@@ -7204,19 +7553,26 @@ const evidenceOpts = [
           selectAll.indeterminate = !allChecked && selectedCount > 0;
         }
 
+        const selectedManageable = rows.filter((row)=> {
+          if(!state.archivedSelectedIds.has(row.id)) return false;
+          const thread = findSavedThread(row.id);
+          if(!thread) return false;
+          const perms = actorPermissionsForThread(thread);
+          return perms.role === 'admin' || perms.role === 'owner';
+        }).length;
         const restoreBtn = $('#archivedRestoreSelected');
         if(restoreBtn){
-          const selectedManageable = rows.filter((row)=> {
-            if(!state.archivedSelectedIds.has(row.id)) return false;
-            const thread = findSavedThread(row.id);
-            if(!thread) return false;
-            const perms = actorPermissionsForThread(thread);
-            return perms.role === 'admin' || perms.role === 'owner';
-          }).length;
           restoreBtn.disabled = selectedManageable === 0;
           restoreBtn.textContent = selectedManageable === selectedCount
             ? 'Unarchive selected'
             : 'Unarchive selected (owner/admin only)';
+        }
+        const deleteBtn = $('#archivedDeleteSelected');
+        if(deleteBtn){
+          deleteBtn.disabled = selectedManageable === 0;
+          deleteBtn.textContent = selectedManageable === selectedCount
+            ? 'Delete selected'
+            : 'Delete selected (owner/admin only)';
         }
       }
 
@@ -11129,19 +11485,19 @@ const evidenceOpts = [
         const wrap = $('#collabStatus');
         const titleEl = $('#collabStatusTitle');
         const bodyEl = $('#collabStatusBody');
-        if(!wrap || !titleEl || !bodyEl) return;
+        const hasStatusUi = !!(wrap && titleEl && bodyEl);
 
         const view = state.currentView || 'dashboard';
         const targetThread = activeCollaborationThreadModel();
         const unsupportedView = (view === 'dashboard' || view === 'archived' || view === 'account');
         if(unsupportedView){
-          wrap.hidden = true;
+          if(hasStatusUi) wrap.hidden = true;
           setReadOnlyControls(false);
           return;
         }
         if(!targetThread){
           const draftPerms = actorPermissionsForThread(null);
-          wrap.hidden = true;
+          if(hasStatusUi) wrap.hidden = true;
           setReadOnlyControls(!draftPerms.canEditRecord);
           return;
         }
@@ -11191,12 +11547,12 @@ const evidenceOpts = [
         if(threadId){
           state.recordSeenVersions[threadId] = version;
         }
-        if(showStatus){
+        if(showStatus && hasStatusUi){
           wrap.dataset.tone = tone;
           titleEl.textContent = title || 'Shared record';
           bodyEl.textContent = body || `Role: ${permissions.roleLabel} • v${version} • Updated by ${updatedBy} • ${updatedAtText}`;
           wrap.hidden = false;
-        }else{
+        }else if(hasStatusUi){
           wrap.hidden = true;
         }
         setReadOnlyControls(readOnly);
@@ -11308,7 +11664,7 @@ const evidenceOpts = [
           if(saveLabel){
             saveLabel.textContent = isThinking
               ? 'Saving...'
-              : (isReadOnly ? 'Read-only' : (justSaved ? 'Saved' : 'Save record'));
+              : (isReadOnly ? 'Read-only' : (justSaved ? 'Saved' : 'Save'));
           }
           if(isReadOnly && !isThinking){
             saveBtn.title = 'Your role cannot save edits on this record.';
@@ -12593,6 +12949,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const archivedRowsBody = $('#archivedRows');
       const archivedSelectAll = $('#archivedSelectAll');
       const archivedRestoreSelected = $('#archivedRestoreSelected');
+      const archivedDeleteSelected = $('#archivedDeleteSelected');
       const brandLogo = $('.logo');
       if(brandHome){
         brandHome.addEventListener('click', (e)=>{
@@ -12670,10 +13027,11 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         globalDeleteRecord.addEventListener('click', ()=>{
           const thread = activeThreadModel();
           if(!thread || !thread.id || thread.id === 'current'){
-            toast('Save the record first, then you can delete it from here.');
+            toast('Save the record first, then you can archive it from here.');
             return;
           }
-          openArchivePrompt([thread.id], 'delete');
+          const nextMode = thread.archived ? 'restore' : 'archive';
+          openArchivePrompt([thread.id], nextMode);
         });
       }
       if(globalBookConsultation){
@@ -12726,6 +13084,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       }
       if(workspaceCompaniesList){
         workspaceCompaniesList.addEventListener('click', (e)=>{
+          if(dashboardInteractionsSuppressed()) return;
           const openBtn = e.target.closest('[data-company-open]');
           if(openBtn){
             const id = openBtn.getAttribute('data-company-open') || '';
@@ -12735,6 +13094,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       }
       if(dashboardRowsBody){
         dashboardRowsBody.addEventListener('change', (e)=>{
+          if(dashboardInteractionsSuppressed()) return;
           const sel = e.target.closest('[data-dashboard-select-id]');
           if(!sel) return;
           const id = sel.getAttribute('data-dashboard-select-id') || '';
@@ -12744,6 +13104,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           update();
         });
         dashboardRowsBody.addEventListener('click', (e)=>{
+          if(dashboardInteractionsSuppressed()) return;
           const starBtn = e.target.closest('[data-dashboard-star-id]');
           if(starBtn){
             const id = starBtn.getAttribute('data-dashboard-star-id') || '';
@@ -12765,6 +13126,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       }
       dashSortButtons.forEach((btn)=>{
         btn.addEventListener('click', ()=>{
+          if(dashboardInteractionsSuppressed()) return;
           const column = btn.getAttribute('data-dash-sort') || '';
           const nextMode = dashboardSortNextModeForColumn(column);
           state.dashboardSort = sanitizeDashboardSortMode(nextMode);
@@ -12776,6 +13138,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       });
       dashDateToggles.forEach((btn)=>{
         btn.addEventListener('click', ()=>{
+          if(dashboardInteractionsSuppressed()) return;
           const currentMode = sanitizeDashboardDateMode(state.dashboardDateMode);
           const nextMode = currentMode === 'modified' ? 'created' : 'modified';
           const currentSort = sanitizeDashboardSortMode(state.dashboardSort);
@@ -12795,6 +13158,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       });
       dashDateSortButtons.forEach((btn)=>{
         btn.addEventListener('click', ()=>{
+          if(dashboardInteractionsSuppressed()) return;
           const mode = sanitizeDashboardDateMode(state.dashboardDateMode);
           const currentSort = sanitizeDashboardSortMode(state.dashboardSort);
           let nextSort = `${mode}-desc`;
@@ -12867,6 +13231,13 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           const ids = Array.from(state.archivedSelectedIds || []);
           if(!ids.length) return;
           openArchivePrompt(ids, 'restore');
+        });
+      }
+      if(archivedDeleteSelected){
+        archivedDeleteSelected.addEventListener('click', ()=>{
+          const ids = Array.from(state.archivedSelectedIds || []);
+          if(!ids.length) return;
+          openArchivePrompt(ids, 'delete');
         });
       }
       jumpNextIncompleteBtns.forEach((btn)=>{
@@ -13969,10 +14340,8 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         state.visited = new Set([1]);
 
         syncFormControlsFromState();
-        setView('interstitial', { render:false });
-        update();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        toast('New record created.');
+        setActiveStep(1);
+        toast('New record started.');
       }
 
       function applyDummyAccountProfile(opts){

@@ -88,6 +88,15 @@ Current section order in generated output:
 - Cross-tab sync is wired via `window.storage` events on:
   - `THREAD_STORAGE_KEY = immersive.launchpad.savedThreads.v1`
 
+### Record creation + save UX
+
+- `Create new` opens directly into configurator Step 0 (form-first flow), not the interstitial overview.
+- Draft records remain `current` until first save.
+- Header and step save labels are now compact:
+  - `Save`
+  - `Saving...`
+  - `Saved`
+
 ### Roles and permission matrix (frontend guards)
 
 Roles currently enforced in UI guards (backend enforcement deferred):
@@ -125,8 +134,15 @@ Permission constants and guards are in:
   - `RECORD_LOCK_HEARTBEAT_MS = 15000`
 - If another collaborator holds the lock, configurator enters read-only mode and shows status.
 - Save flow increments record `version`, updates `updatedBy*` and `updatedAt`, and releases lock until edit resumes.
-- Collaboration status banner is rendered in configurator header:
-  - `/Users/will.bloor/Documents/Configurator/index.html` (`#collabStatus`)
+- New records (`version <= 1`) stay unlocked by default after initial save.
+
+### Default role mix for seeded workspace data
+
+- For local/demo seed sets, actor role membership is auto-balanced to:
+  - majority `owner`
+  - a couple `editor`
+  - remaining `viewer`
+- This is applied on initial load/profile import for realistic permission testing.
 
 ### Update visibility (unseen changes)
 
@@ -176,7 +192,33 @@ Permission constants and guards are in:
   - `cfg_shell_lhn_w`
   - `cfg_shell_right_w`
 - Dashboard column widths persisted in:
-  - `cfg_dashboard_col_widths_v1`
+  - `cfg_dashboard_col_widths_v2`
+
+### Dashboard table sorting + resizing behavior
+
+- Sort controls:
+  - `Company`
+  - `Completion`
+  - `Tier`
+  - `Status`
+  - date (`Date modified` / `Date created`)
+- Column resizing now behaves as boundary resizing:
+  - resizing a column adjusts that column against its immediate neighbor
+  - unrelated columns (including select checkbox column) stay stable
+  - min/max width bounds enforced for both columns involved
+- Resize interactions are guarded so drag does not trigger row open/sort clicks.
+
+### Record lifecycle actions
+
+- Active records:
+  - can be archived/unarchived from interstitial/global record action
+  - cannot be permanently deleted directly from active views
+- Dashboard bulk action:
+  - `Archive selected` becomes visually prominent (blue) when actionable rows are selected
+- Archive view bulk actions:
+  - `Unarchive selected`
+  - `Delete selected` (red, permanent delete path)
+- Permanent delete is restricted to archived records and uses confirmation modal flow.
 
 ### Permission testing modes (for QA)
 
@@ -203,8 +245,7 @@ Hash routes supported for major states:
 
 ### Current deliberate UI choices
 
-- Workspace LHN cards remain decluttered:
-  - collaborator avatar stacks are intentionally not shown in the LHN card list.
+- Workspace LHN cards include collaborator avatar stacks for quick shared-record visibility.
 - Collaborator avatars remain in:
   - configurator header
   - dashboard/archived table company cell

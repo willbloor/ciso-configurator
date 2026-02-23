@@ -129,13 +129,11 @@
     <div id="globalActionParking" hidden aria-hidden="true">
       <div class="globalActionBtns" id="globalActionBtns">
         <button class="btn primary small" type="button" id="globalCreateRecord">Create new record</button>
-        <button class="btn small globalDeleteBtn" type="button" id="globalDeleteRecord" hidden aria-label="Delete record" title="Delete record">
+        <button class="btn small globalDeleteBtn" type="button" id="globalDeleteRecord" hidden aria-label="Archive record" title="Archive record">
           <svg viewBox="0 0 24 24" role="img" aria-hidden="true">
-            <path d="M4 7h16"></path>
-            <path d="M9 7V5.7c0-.9.7-1.7 1.7-1.7h2.6c.9 0 1.7.7 1.7 1.7V7"></path>
-            <path d="M8 7v11.2c0 1 .8 1.8 1.8 1.8h4.4c1 0 1.8-.8 1.8-1.8V7"></path>
-            <path d="M10.4 10.2v6.4"></path>
-            <path d="M13.6 10.2v6.4"></path>
+            <path d="M3 6.5h18v4H3z"></path>
+            <path d="M5.2 10.5v7.3c0 1 .8 1.8 1.8 1.8h10c1 0 1.8-.8 1.8-1.8v-7.3"></path>
+            <path d="M10 13.5h4"></path>
           </svg>
         </button>
         <button class="btn primary small" type="button" id="globalEditConfigurator" hidden>Edit record</button>
@@ -195,6 +193,13 @@
                   </button>
                   <button class="dashColResizer" type="button" data-dash-col-resize="tier" aria-label="Resize Tier column"></button>
                 </th>
+                <th data-dash-sort-col="status" aria-sort="none">
+                  <button class="dashSortToggle" type="button" data-dash-sort="status" data-dash-sort-label="Status">
+                    <span class="dashColHeadLabel">Status</span>
+                    <span class="dashSortIndicator" aria-hidden="true"></span>
+                  </button>
+                  <button class="dashColResizer" type="button" data-dash-col-resize="status" aria-label="Resize Status column"></button>
+                </th>
                 <th>
                   <span class="dashColHeadLabel">Key outcomes</span>
                   <button class="dashColResizer" type="button" data-dash-col-resize="outcomes" aria-label="Resize Key outcomes column"></button>
@@ -239,6 +244,7 @@
           </label>
           <span class="dashboardSelectCount" id="archivedSelectCount">0 selected</span>
           <button class="btn small dashArchiveSelectedBtn" type="button" id="archivedRestoreSelected" disabled>Unarchive selected</button>
+          <button class="btn small danger" type="button" id="archivedDeleteSelected" disabled>Delete selected</button>
         </div>
         <div class="dashboardTableWrap">
           <table class="dashboardTable" id="archivedTable" aria-label="Archived accounts table">
@@ -260,6 +266,12 @@
                 <th data-dash-sort-col="tier" aria-sort="none">
                   <button class="dashSortToggle" type="button" data-dash-sort="tier" data-dash-sort-label="Tier">
                     <span class="dashColHeadLabel">Tier</span>
+                    <span class="dashSortIndicator" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th data-dash-sort-col="status" aria-sort="none">
+                  <button class="dashSortToggle" type="button" data-dash-sort="status" data-dash-sort-label="Status">
+                    <span class="dashColHeadLabel">Status</span>
                     <span class="dashSortIndicator" aria-hidden="true"></span>
                   </button>
                 </th>
@@ -503,29 +515,24 @@
               <h1>Cyber readiness configurator</h1>
               <span class="titleSavedMeta" id="recordSavedMeta">Not saved yet</span>
             </div>
-            <div class="titleActions">
-              <div class="titleCollabTools" id="configuratorCollabTools">
-                <button class="titleAddUserBtn" type="button" id="configuratorShareRecordBtn" data-action="openShareRecord">Add user</button>
-                <button class="titleAddUserIconBtn" type="button" data-action="openShareRecord" data-collab-add-trigger="true" aria-label="Add collaborator">
-                  <span aria-hidden="true">+</span>
-                </button>
-                <div class="collabAvatarStack collabAvatarStack--md" id="configuratorCollabAvatars" aria-label="Record collaborators" hidden></div>
-              </div>
+              <div class="titleActions">
+                <div class="titleCollabTools" id="configuratorCollabTools">
+                  <button class="titleAddUserIconBtn" type="button" id="configuratorShareRecordBtn" data-action="openShareRecord" data-collab-add-trigger="true" aria-label="Add collaborator">
+                    <span aria-hidden="true">+</span>
+                  </button>
+                  <div class="collabAvatarStack collabAvatarStack--md" id="configuratorCollabAvatars" aria-label="Record collaborators" hidden></div>
+                </div>
               <button class="btn secondaryBlue small" type="button" id="jumpNextIncompleteBtn" data-jump-next-incomplete="true" title="Jump to next incomplete section">
                 <span class="jumpNextIncompleteBtnLabel" id="jumpNextIncompleteBtnLabel">Next incomplete</span>
               </button>
               <button class="btn primary small saveRecordBtn" type="button" id="saveRecordBtn" data-saved="false" aria-live="polite">
                 <span class="saveSpinner" aria-hidden="true"></span>
-                <span id="saveRecordBtnLabel">Save record</span>
-                <span class="saveCheck" aria-hidden="true">✓</span>
-              </button>
+                <span id="saveRecordBtnLabel">Save</span>
+                  <span class="saveCheck" aria-hidden="true">✓</span>
+                </button>
+              </div>
             </div>
           </div>
-          <div class="collabStatus" id="collabStatus" data-tone="info" hidden role="status" aria-live="polite">
-            <strong id="collabStatusTitle">Shared record</strong>
-            <span id="collabStatusBody">Collaboration status appears when a saved record is open.</span>
-          </div>
-        </div>
 
         <div class="cardPad">
           <!-- STEP 0 -->
@@ -654,7 +661,7 @@
 
             <div class="actions">
               <button class="btn ghost" type="button" disabled>Back</button>
-              <button class="btn secondaryBlue" type="button" data-action="save">Save record</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -742,7 +749,7 @@
 
             <div class="actions">
               <button class="btn" type="button" data-action="back">Back</button>
-              <button class="btn secondaryBlue" type="button" data-action="save">Save record</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -822,7 +829,7 @@
 
             <div class="actions">
               <button class="btn" type="button" data-action="back">Back</button>
-              <button class="btn secondaryBlue" type="button" data-action="save">Save record</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -927,7 +934,7 @@
 
             <div class="actions">
               <button class="btn" type="button" data-action="back">Back</button>
-              <button class="btn secondaryBlue" type="button" data-action="save">Save record</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -1121,7 +1128,7 @@
 
             <div class="actions">
               <button class="btn" type="button" data-action="back">Back</button>
-              <button class="btn secondaryBlue" type="button" data-action="save">Save record</button>
+              <button class="btn secondaryBlue" type="button" data-action="save">Save</button>
               <button class="btn primary" type="button" data-action="next">Continue</button>
             </div>
           </div>
@@ -1244,11 +1251,6 @@
                 </div>
               </div>
             </div>
-          </div>
-          <div class="configBottomActions">
-            <button class="btn secondaryBlue small" type="button" id="jumpNextIncompleteBtnBottom" data-jump-next-incomplete="true" title="Jump to next incomplete section">
-              <span class="jumpNextIncompleteBtnLabel">Next incomplete</span>
-            </button>
           </div>
         </div>
       </section>

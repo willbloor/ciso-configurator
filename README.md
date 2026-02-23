@@ -184,6 +184,7 @@ Permission constants and guards are in:
   - `Your preferences · Notifications`
   - `Workspace profiles`
   - `Settings` (theme/display/test data + layout reset)
+- Workspace left-nav account entry (`My account`) now shows an explicit active highlight when account view is open.
 - Save model:
   - Explicit `Save changes` button
   - Save button animation now mirrors record save UX (`Saving...` -> `Saved` -> `Save changes`)
@@ -261,7 +262,7 @@ Permission constants and guards are in:
   - cannot be permanently deleted directly from active views
 - Archived record overview:
   - interstitial action bar switches to restore-only mode
-  - only `Unarchive` is available (no edit/share/recommendations/consultation actions)
+  - primary CTA becomes `Unarchive` (no edit/share/recommendations/consultation actions)
   - archived records are blocked from configurator edit/share/recommendation/booking flows until restored
 - Dashboard bulk action:
   - `Archive selected` becomes visually prominent (blue) when actionable rows are selected

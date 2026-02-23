@@ -245,10 +245,13 @@ Hash routes supported for major states:
 
 ### Current deliberate UI choices
 
-- Workspace LHN cards include collaborator avatar stacks for quick shared-record visibility.
+- Workspace LHN cards intentionally do **not** include collaborator avatars (reduced visual clutter in nav).
 - Collaborator avatars remain in:
   - configurator header
   - dashboard/archived table company cell
+- Collaborator stack ordering:
+  - active user appears first
+  - if the active user has access through general/workspace sharing (but is not explicitly listed in `collaborators[]`), the UI injects the active user avatar in first position for clarity
 
 ## Content And RSS System
 

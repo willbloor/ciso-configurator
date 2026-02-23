@@ -95,10 +95,13 @@ Current section order in generated output:
 - `Create new` opens directly into configurator Step 0 (form-first flow), not the interstitial overview.
 - Draft records remain `current` until first save.
 - Header and step save labels:
-  - `Save & return`
+  - `Save` on Steps 0–4
+  - `Save & return` on `Review` only
   - `Saving...`
   - `Saved`
-- Manual save actions from configurator now return to the record overview after a successful save.
+- Save behavior:
+  - Steps 0–4 save in place (stay in configurator)
+  - Review save returns to record overview
 - Review step no longer shows a direct `Book my consultation` CTA in the step header.
 
 ### Roles and permission matrix (frontend guards)
@@ -226,6 +229,7 @@ Permission constants and guards are in:
   - `step_label` drives the visible chip labels after regenerating `assets/js/question-bank.js`
   - in SDR mode, non-required steps are grouped under an `Optional` rail heading
   - optional steps are shown as optional (not auto-marked complete), using neutral hollow-circle markers
+  - optional steps now show a tick once all questions for that optional step are completed
   - optional heading is left-aligned to the rail chip start and no longer renders a top divider rule
   - current content-step skeleton remains `1..5` plus `Review` (UI section structure is still fixed)
 
@@ -255,6 +259,10 @@ Permission constants and guards are in:
 - Active records:
   - can be archived/unarchived from interstitial/global record action
   - cannot be permanently deleted directly from active views
+- Archived record overview:
+  - interstitial action bar switches to restore-only mode
+  - only `Unarchive` is available (no edit/share/recommendations/consultation actions)
+  - archived records are blocked from configurator edit/share/recommendation/booking flows until restored
 - Dashboard bulk action:
   - `Archive selected` becomes visually prominent (blue) when actionable rows are selected
 - Archive view bulk actions:

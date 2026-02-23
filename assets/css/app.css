@@ -600,6 +600,18 @@
       color: transparent;
       font-size: 0;
     }
+    .chip[data-optional="true"][data-done="true"] strong{
+      width:22px;
+      height:22px;
+      border-radius:7px;
+      border:1px solid color-mix(in srgb, var(--lime) 52%, var(--border));
+      background: var(--surface);
+      color: color-mix(in srgb, var(--lime) 78%, #0d6b43 22%);
+      font-size:.8rem;
+      font-family: var(--font);
+      font-weight:900;
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lime) 14%, transparent);
+    }
     .chip:focus-visible{ outline:none; box-shadow: var(--focus); border-color: var(--azure); }
 
     /* Layout */
@@ -5662,6 +5674,18 @@
       color: transparent;
       font-size: 0;
     }
+    .chip[data-optional="true"][data-done="true"] strong{
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+      border: 1px solid color-mix(in srgb, var(--lime) 52%, var(--border));
+      background: var(--surface);
+      color: color-mix(in srgb, var(--lime) 78%, #0d6b43 22%);
+      font-size: .74rem;
+      font-family: var(--font);
+      font-weight: 900;
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lime) 14%, transparent);
+    }
     .chip[data-optional="true"][data-active="true"]{
       border-color: color-mix(in srgb, var(--chip-accent, var(--accent)) 34%, var(--border));
       background: color-mix(in srgb, var(--chip-accent, var(--accent)) 9%, var(--surface));
@@ -6582,6 +6606,18 @@
         color: transparent;
         font-size: 0;
       }
+      .chip[data-optional="true"][data-done="true"] strong{
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        border: 1px solid color-mix(in srgb, var(--lime) 56%, var(--border));
+        background: var(--surface);
+        color: color-mix(in srgb, var(--lime) 80%, #0d6b43 20%);
+        font-size: 10px;
+        font-family: var(--font);
+        font-weight: 900;
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lime) 14%, transparent);
+      }
       .chip[data-incomplete="true"]{
         background: color-mix(in srgb, var(--coral) 12%, var(--surface));
         box-shadow: inset 2px 0 0 color-mix(in srgb, var(--coral) 84%, #751127 16%);
@@ -6621,6 +6657,15 @@
       }
       .nav-settings:hover{
         background: color-mix(in srgb, var(--surface) 90%, var(--bg));
+      }
+      .nav-settings[data-active="true"]{
+        background: color-mix(in srgb, var(--azure) 12%, var(--surface));
+        box-shadow: inset 2px 0 0 color-mix(in srgb, var(--azure) 82%, var(--surface));
+      }
+      .nav-settings[data-active="true"] .nav-settingsIco{
+        border-color: color-mix(in srgb, var(--azure) 56%, var(--border));
+        background: color-mix(in srgb, var(--azure) 18%, var(--surface));
+        color: color-mix(in srgb, var(--azure) 82%, var(--text));
       }
       .nav-settingsIco{
         width:30px;

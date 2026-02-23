@@ -3044,6 +3044,8 @@ const evidenceOpts = [
           && (interPerms.role === 'admin' || interPerms.role === 'owner')
         );
         const canShareThread = !!(interThread && interThread.id && interThread.id !== 'current');
+        const interArchived = !!(interThread && interThread.archived);
+        const interArchiveOnly = view === 'interstitial' && interArchived;
         const interRecsGate = (view === 'interstitial' && interThread)
           ? recommendationsGateFromThread(interThread)
           : null;
@@ -3055,11 +3057,11 @@ const evidenceOpts = [
           el.style.display = on ? '' : 'none';
         };
         setActionBtnVisible(createBtn, view === 'dashboard');
-        setActionBtnVisible(deleteBtn, view === 'interstitial' && canManageThread);
-        setActionBtnVisible(editBtn, view === 'interstitial');
-        setActionBtnVisible(shareBtn, view === 'interstitial' && canShareThread);
-        setActionBtnVisible(recsBtn, view === 'interstitial');
-        setActionBtnVisible(bookBtn, view === 'interstitial');
+        setActionBtnVisible(deleteBtn, view === 'interstitial' && canManageThread && !interArchiveOnly);
+        setActionBtnVisible(editBtn, view === 'interstitial' && (!interArchiveOnly || canManageThread));
+        setActionBtnVisible(shareBtn, view === 'interstitial' && canShareThread && !interArchiveOnly);
+        setActionBtnVisible(recsBtn, view === 'interstitial' && !interArchiveOnly);
+        setActionBtnVisible(bookBtn, view === 'interstitial' && !interArchiveOnly);
         if(recsBtn){
           const unlocked = !!(interRecsGate && interRecsGate.eligible);
           recsBtn.disabled = false;
@@ -3070,8 +3072,17 @@ const evidenceOpts = [
             : `Locked until completion reaches 90% (current: ${(interRecsGate && interRecsGate.completion) || '0/22 (0%)'})`;
         }
         if(editBtn){
-          editBtn.textContent = interPerms.canEditRecord ? 'Edit record' : 'View record';
-          editBtn.title = interPerms.canEditRecord ? 'Edit this record' : 'Open this record in read-only mode';
+          if(interArchiveOnly){
+            editBtn.textContent = 'Unarchive';
+            editBtn.title = 'Restore this record to active workspace';
+            editBtn.disabled = !canManageThread;
+            editBtn.setAttribute('aria-disabled', editBtn.disabled ? 'true' : 'false');
+          }else{
+            editBtn.textContent = interPerms.canEditRecord ? 'Edit record' : 'View record';
+            editBtn.title = interPerms.canEditRecord ? 'Edit this record' : 'Open this record in read-only mode';
+            editBtn.disabled = false;
+            editBtn.setAttribute('aria-disabled', 'false');
+          }
         }
         if(shareBtn){
           shareBtn.disabled = !interPerms.canShareRecord;
@@ -3079,7 +3090,6 @@ const evidenceOpts = [
           shareBtn.title = interPerms.canShareRecord ? 'Open sharing controls' : 'Sharing is not available for this role';
         }
         if(deleteBtn){
-          const interArchived = !!(interThread && interThread.archived);
           const actionLabel = interArchived ? 'Unarchive record' : 'Archive record';
           deleteBtn.dataset.archiveMode = interArchived ? 'restore' : 'archive';
           deleteBtn.setAttribute('aria-label', actionLabel);
@@ -6552,6 +6562,10 @@ const evidenceOpts = [
           toast('Record not found.');
           return false;
         }
+        if(thread.archived){
+          toast('Unarchive this record before sharing.');
+          return false;
+        }
         const actor = activeCollaboratorIdentity();
         const perms = actorPermissionsForThread(thread, { actor });
         const ensuredCollaborators = collaboratorsWithActor(thread.collaborators, actor, {
@@ -6821,6 +6835,11 @@ const evidenceOpts = [
         if(target !== 'current'){
           const thread = findSavedThread(target);
           if(thread){
+            if(thread.archived){
+              toast('Unarchive this record before editing.');
+              openThreadOverview(target);
+              return;
+            }
             const perms = actorPermissionsForThread(thread);
             const threadCompany = String((thread && thread.company) || '').trim();
             const snapshotSource = (thread.snapshot && typeof thread.snapshot === 'object')
@@ -7085,6 +7104,13 @@ const evidenceOpts = [
 
       function openThreadBooking(threadId){
         const target = threadId || state.activeThread || 'current';
+        if(target !== 'current'){
+          const thread = findSavedThread(target);
+          if(thread && thread.archived){
+            toast('Unarchive this record before booking a consultation.');
+            return false;
+          }
+        }
         const preferLive = state.currentView === 'configurator';
         const resolved = preferLive
           ? 'current'
@@ -11394,6 +11420,10 @@ const evidenceOpts = [
         const cfg = opts || {};
         const resolvedThreadId = String(threadId || '').trim();
         const thread = resolveRecommendationThread(resolvedThreadId || 'current');
+        if(thread && thread.id && thread.id !== 'current' && thread.archived){
+          toast('Unarchive this record to view recommendations.');
+          return false;
+        }
         const gate = recommendationsGateFromThread(thread);
         state.recommendationsThreadId = gate.threadId;
         state.recommendationsReturnView = String(cfg.returnView || ((state.currentView === 'interstitial') ? 'interstitial' : 'configurator'));
@@ -11409,6 +11439,10 @@ const evidenceOpts = [
       function openRecommendationEmailBuilder(threadId){
         const resolvedThreadId = String(threadId || '').trim();
         const thread = resolveRecommendationThread(resolvedThreadId || state.recommendationsThreadId || state.activeThread || 'current');
+        if(thread && thread.id && thread.id !== 'current' && thread.archived){
+          toast('Unarchive this record to generate a recommendation email.');
+          return false;
+        }
         const gate = recommendationsGateFromThread(thread);
         if(!gate.eligible){
           toast(`Recommendations are locked until 90% completion (current: ${gate.completion}).`);
@@ -11965,6 +11999,14 @@ const evidenceOpts = [
             jumpLabels.forEach((jumpLabel)=>{ jumpLabel.textContent = 'Next incomplete'; });
           }
         }
+        const activeConfiguratorStep = clampConfiguratorStep(state.activeStep);
+        const saveReturnsToOverview = activeConfiguratorStep === reviewStepNumber();
+        const saveIdleLabel = saveReturnsToOverview ? 'Save & return' : 'Save';
+        $$('[data-action="save"]').forEach((btn)=>{
+          if(btn.textContent !== saveIdleLabel){
+            btn.textContent = saveIdleLabel;
+          }
+        });
         const saveBtn = $('#saveRecordBtn');
         const saveLabel = $('#saveRecordBtnLabel');
         if(saveBtn){
@@ -11979,7 +12021,7 @@ const evidenceOpts = [
           if(saveLabel){
             saveLabel.textContent = isThinking
               ? 'Saving...'
-              : (isReadOnly ? 'Read-only' : (justSaved ? 'Saved' : 'Save & return'));
+              : (isReadOnly ? 'Read-only' : (justSaved ? 'Saved' : saveIdleLabel));
           }
           if(isReadOnly && !isThinking){
             saveBtn.title = 'Your role cannot save edits on this record.';
@@ -12372,6 +12414,21 @@ const evidenceOpts = [
         const activeMode = effectiveConfiguratorFieldMode(state.fieldMode);
         const requiredQuestionSteps = requiredQuestionStepSetForMode(activeMode);
         const questionSteps = new Set(configuratorQuestionSteps().map((row)=> row.step));
+        const liveCtx = buildReadinessContext(state);
+        const stepCompletionByAllQuestions = new Map();
+        const requirementsByStep = new Map();
+        questionRequirementRows().forEach((requirement)=>{
+          const stepNo = clampQuestionStep(Number(requirement.step) || 1);
+          if(!requirementsByStep.has(stepNo)){
+            requirementsByStep.set(stepNo, []);
+          }
+          requirementsByStep.get(stepNo).push(requirement);
+        });
+        questionSteps.forEach((stepNo)=>{
+          const rows = requirementsByStep.get(stepNo) || [];
+          const done = rows.length > 0 && rows.every((requirement)=> requirementDoneForContext(requirement.key, liveCtx));
+          stepCompletionByAllQuestions.set(stepNo, done);
+        });
 
         $$('.chip').forEach(ch=>{
           const step = Number(ch.dataset.chip);
@@ -12379,7 +12436,9 @@ const evidenceOpts = [
           const wasDone = ch.dataset.done === 'true';
           const isQuestionStep = questionSteps.has(step);
           const isOptionalStep = isQuestionStep && !requiredQuestionSteps.has(step);
-          const isDone = (isQuestionStep && !isOptionalStep) ? !gapSteps.has(step) : false;
+          const isDone = !isQuestionStep
+            ? false
+            : (isOptionalStep ? !!stepCompletionByAllQuestions.get(step) : !gapSteps.has(step));
 
           ch.dataset.done = isDone ? 'true' : 'false';
           ch.dataset.optional = isOptionalStep ? 'true' : 'false';
@@ -13332,6 +13391,16 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       if(globalEditConfigurator){
         globalEditConfigurator.addEventListener('click', ()=>{
           const thread = activeThreadModel();
+          if(thread && thread.id && thread.id !== 'current' && thread.archived){
+            const perms = actorPermissionsForThread(thread);
+            const canRestore = perms.role === 'admin' || perms.role === 'owner';
+            if(!canRestore){
+              toast('Only owners or admins can unarchive this record.');
+              return;
+            }
+            openArchivePrompt([thread.id], 'restore');
+            return;
+          }
           const step = dashboardFirstGapStep(thread);
           openThreadConfigurator((thread && thread.id) ? thread.id : (state.activeThread || 'current'), step);
         });
@@ -13560,7 +13629,8 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       });
       if(saveRecordBtn){
         saveRecordBtn.addEventListener('click', ()=>{
-          saveActiveRecord({ returnToOverview:true });
+          const returnToOverview = clampConfiguratorStep(state.activeStep) === reviewStepNumber();
+          saveActiveRecord({ returnToOverview });
         });
       }
       const openSettingsPanelNav = $('#openSettingsNav');
@@ -15032,7 +15102,8 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           requestAutoSave(AUTO_SAVE_FAST_MS);
         }
         if(action === 'save'){
-          saveActiveRecord({ returnToOverview:true });
+          const returnToOverview = clampConfiguratorStep(state.activeStep) === reviewStepNumber();
+          saveActiveRecord({ returnToOverview });
         }
         if(action === 'back'){
           setActiveStep(state.activeStep - 1);

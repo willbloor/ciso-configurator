@@ -240,6 +240,7 @@
         // tech stack
         stack: new Set(),
         stackOther: '',
+        fieldMode: 'guided',
 
         // value preview state (stored in USD internally)
         currency: 'USD',
@@ -1759,6 +1760,107 @@
         cyber_resilience_advisor_senior_to_associate: 'cyber_resilience_advisor'
       });
 
+      const CONFIGURATOR_FIELD_MODES = Object.freeze(new Set([
+        'sdr-lite',
+        'guided',
+        'advanced'
+      ]));
+      const FALLBACK_QUESTION_REQUIREMENT_ROWS = Object.freeze([
+        { id:'rq_role', key:'role', step:1, group:'about_identity', groupLabel:'About identity', title:'Role not confirmed', why:'Role anchors ownership for outcomes and follow-up.', order:10, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_full_name', key:'fullName', step:1, group:'about_identity', groupLabel:'About identity', title:'Name not captured', why:'Contact ownership is required for follow-up and handoff.', order:20, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_company', key:'company', step:1, group:'about_identity', groupLabel:'About identity', title:'Company not captured', why:'Company context is needed before sharing a recommendation.', order:30, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_company_size', key:'companySize', step:1, group:'about_identity', groupLabel:'About identity', title:'Company size missing', why:'Size influences cadence and recommendation confidence.', order:40, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
+        { id:'rq_operating_country', key:'operatingCountry', step:1, group:'about_identity', groupLabel:'About identity', title:'Operating country missing', why:'Country informs the likely regulatory evidence path.', order:50, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_pressure_sources', key:'pressureSources', step:1, group:'trigger_urgency', groupLabel:'Trigger and urgency', title:'Pressure sources not selected', why:'Pressure signals help prioritize the right outcomes.', order:60, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_urgent_win', key:'urgentWin', step:1, group:'trigger_urgency', groupLabel:'Trigger and urgency', title:'Urgent 90-day win not set', why:'Urgency clarifies what success must look like first.', order:70, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_risk_envs', key:'riskEnvs', step:1, group:'risk_environment', groupLabel:'Risk environment', title:'Risk environment not selected', why:'Risk environment helps focus the right simulation scope.', order:80, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_measured_on', key:'measuredOn', step:1, group:'baseline_measurement', groupLabel:'Baseline and measurement', title:'Current measurement baseline missing', why:'Baseline metrics are required to quantify uplift.', order:90, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
+        { id:'rq_org_pain', key:'orgPain', step:1, group:'trigger_urgency', groupLabel:'Trigger and urgency', title:'Current organisation challenge unclear', why:'Current challenge shapes where value shows up fastest.', order:100, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_groups', key:'groups', step:2, group:'coverage_scope', groupLabel:'Coverage and scope', title:'Coverage groups not selected', why:'Coverage determines program scope and rollout design.', order:110, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_rhythm', key:'rhythm', step:2, group:'baseline_measurement', groupLabel:'Baseline and measurement', title:'Cadence not selected', why:'Cadence impacts operating model and package fit.', order:120, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
+        { id:'rq_measure', key:'measure', step:2, group:'baseline_measurement', groupLabel:'Baseline and measurement', title:'Measurement model not selected', why:'Measurement model drives reporting and evidence quality.', order:130, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
+        { id:'rq_fit_realism', key:'fitRealism', step:3, group:'package_fit', groupLabel:'Package fit', title:'Realism requirement unanswered', why:'Realism changes effort and content structure.', order:140, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
+        { id:'rq_fit_scope', key:'fitScope', step:3, group:'package_fit', groupLabel:'Package fit', title:'Scope requirement unanswered', why:'Scope alters expected delivery footprint.', order:150, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_fit_today', key:'fitToday', step:3, group:'package_fit', groupLabel:'Package fit', title:'Current state unanswered', why:'Current state helps calibrate the starting package.', order:160, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
+        { id:'rq_fit_services', key:'fitServices', step:3, group:'package_fit', groupLabel:'Package fit', title:'Delivery support unanswered', why:'Support model affects implementation recommendations.', order:170, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
+        { id:'rq_fit_risk_frame', key:'fitRiskFrame', step:3, group:'package_fit', groupLabel:'Package fit', title:'Risk frame unanswered', why:'Risk framing helps position the narrative for stakeholders.', order:180, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
+        { id:'rq_industry', key:'industry', step:4, group:'context_regulatory', groupLabel:'Context and regulatory', title:'Industry not selected', why:'Industry context changes suggested standards and language.', order:190, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_region', key:'region', step:4, group:'context_regulatory', groupLabel:'Context and regulatory', title:'Region not selected', why:'Region influences evidence and audit expectations.', order:200, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
+        { id:'rq_regs', key:'regs', step:4, group:'context_regulatory', groupLabel:'Context and regulatory', title:'Regulatory references not selected', why:'References improve the evidence narrative for stakeholders.', order:210, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
+        { id:'rq_roi_visited', key:'roiVisited', step:5, group:'roi_business_case', groupLabel:'ROI and business case', title:'ROI estimate not reviewed', why:'ROI inputs are needed for investment and timing decisions.', order:220, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true }
+      ]);
+
+      function resolveConfiguratorFieldMode(value){
+        const raw = String(value || '').trim().toLowerCase();
+        if(CONFIGURATOR_FIELD_MODES.has(raw)) return raw;
+        if(raw === 'sdr-lite' || raw === 'sdr_lite' || raw === 'sdr') return 'sdr-lite';
+        if(raw === 'advanced') return 'advanced';
+        return 'guided';
+      }
+
+      function accountFieldModeValue(){
+        const account = (typeof settingsState !== 'undefined' && settingsState && settingsState.account)
+          ? settingsState.account
+          : {};
+        return resolveConfiguratorFieldMode(account.fieldMode);
+      }
+
+      function questionRequirementRows(){
+        const bankRows = (window.immersiveQuestionBank && Array.isArray(window.immersiveQuestionBank.rows))
+          ? window.immersiveQuestionBank.rows
+          : [];
+        const sourceRows = bankRows.length ? bankRows : FALLBACK_QUESTION_REQUIREMENT_ROWS;
+        return sourceRows
+          .filter((row)=> row && row.enabled !== false && String(row.key || '').trim())
+          .slice()
+          .sort((a, b)=> {
+            const byOrder = Number(a.order || 0) - Number(b.order || 0);
+            if(byOrder) return byOrder;
+            const byStep = Number(a.step || 0) - Number(b.step || 0);
+            if(byStep) return byStep;
+            return String(a.id || '').localeCompare(String(b.id || ''));
+          });
+      }
+
+      function requirementEnabledForMode(requirement, mode){
+        const targetMode = resolveConfiguratorFieldMode(mode);
+        if(targetMode === 'advanced'){
+          return requirement.requiredAdvanced !== false;
+        }
+        if(targetMode === 'sdr-lite'){
+          return requirement.requiredSdrLite === true;
+        }
+        return requirement.requiredGuided !== false;
+      }
+
+      function requirementDoneForContext(requirementKey, ctx){
+        switch(String(requirementKey || '').trim()){
+          case 'role': return !!ctx.role;
+          case 'fullName': return !!ctx.fullName;
+          case 'company': return !!ctx.company;
+          case 'companySize': return !!ctx.companySize;
+          case 'operatingCountry': return !!ctx.operatingCountry;
+          case 'pressureSources': return ctx.pressureSources.length > 0;
+          case 'urgentWin': return !!ctx.urgentWin;
+          case 'riskEnvs': return ctx.riskEnvs.length > 0;
+          case 'measuredOn': return !!ctx.measuredOn;
+          case 'orgPain': return !!ctx.orgPain;
+          case 'groups': return ctx.groups.size > 0;
+          case 'rhythm': return !!ctx.rhythm;
+          case 'measure': return !!ctx.measure;
+          case 'fitRealism': return !!ctx.fitRealism;
+          case 'fitScope': return !!ctx.fitScope;
+          case 'fitToday': return !!ctx.fitToday;
+          case 'fitServices': return !!ctx.fitServices;
+          case 'fitRiskFrame': return !!ctx.fitRiskFrame;
+          case 'industry': return !!ctx.industry;
+          case 'region': return !!ctx.region;
+          case 'regs': return ctx.regs.size > 0 && !!ctx.regsTouched;
+          case 'roiVisited': return ctx.visited.has(5);
+          default: return false;
+        }
+      }
+
 const evidenceOpts = [
         { id:'board', label:'Board reporting' },
         { id:'reg', label:'Regulators / auditors' },
@@ -3176,7 +3278,13 @@ const evidenceOpts = [
         const src = (source && typeof source === 'object') ? source : {};
         const regsRaw = listFromCollection(src.regs);
         const hasRegsTouchedFlag = Object.prototype.hasOwnProperty.call(src, 'regsTouched');
+        const sourceFieldMode = (
+          Object.prototype.hasOwnProperty.call(src, 'fieldMode')
+          ? src.fieldMode
+          : state.fieldMode
+        );
         const ctx = {
+          fieldMode: resolveConfiguratorFieldMode(sourceFieldMode || accountFieldModeValue()),
           role: String(src.role || '').trim(),
           fullName: String(src.fullName || '').trim(),
           company: String(src.company || '').trim(),
@@ -3207,34 +3315,20 @@ const evidenceOpts = [
 
       function readinessRequirements(source){
         const ctx = buildReadinessContext(source);
-        return [
-          { key:'role', step:1, done: !!ctx.role, title:'Role not confirmed', why:'Role anchors ownership for outcomes and follow-up.' },
-          { key:'fullName', step:1, done: !!ctx.fullName, title:'Name not captured', why:'Contact ownership is required for follow-up and handoff.' },
-          { key:'company', step:1, done: !!ctx.company, title:'Company not captured', why:'Company context is needed before sharing a recommendation.' },
-          { key:'companySize', step:1, done: !!ctx.companySize, title:'Company size missing', why:'Size influences cadence and recommendation confidence.' },
-          { key:'operatingCountry', step:1, done: !!ctx.operatingCountry, title:'Operating country missing', why:'Country informs the likely regulatory evidence path.' },
-          { key:'pressureSources', step:1, done: ctx.pressureSources.length > 0, title:'Pressure sources not selected', why:'Pressure signals help prioritize the right outcomes.' },
-          { key:'urgentWin', step:1, done: !!ctx.urgentWin, title:'Urgent 90-day win not set', why:'Urgency clarifies what success must look like first.' },
-          { key:'riskEnvs', step:1, done: ctx.riskEnvs.length > 0, title:'Risk environment not selected', why:'Risk environment helps focus the right simulation scope.' },
-          { key:'measuredOn', step:1, done: !!ctx.measuredOn, title:'Current measurement baseline missing', why:'Baseline metrics are required to quantify uplift.' },
-          { key:'orgPain', step:1, done: !!ctx.orgPain, title:'Current organisation challenge unclear', why:'Current challenge shapes where value shows up fastest.' },
-
-          { key:'groups', step:2, done: ctx.groups.size > 0, title:'Coverage groups not selected', why:'Coverage determines program scope and rollout design.' },
-          { key:'rhythm', step:2, done: !!ctx.rhythm, title:'Cadence not selected', why:'Cadence impacts operating model and package fit.' },
-          { key:'measure', step:2, done: !!ctx.measure, title:'Measurement model not selected', why:'Measurement model drives reporting and evidence quality.' },
-
-          { key:'fitRealism', step:3, done: !!ctx.fitRealism, title:'Realism requirement unanswered', why:'Realism changes effort and content structure.' },
-          { key:'fitScope', step:3, done: !!ctx.fitScope, title:'Scope requirement unanswered', why:'Scope alters expected delivery footprint.' },
-          { key:'fitToday', step:3, done: !!ctx.fitToday, title:'Current state unanswered', why:'Current state helps calibrate the starting package.' },
-          { key:'fitServices', step:3, done: !!ctx.fitServices, title:'Delivery support unanswered', why:'Support model affects implementation recommendations.' },
-          { key:'fitRiskFrame', step:3, done: !!ctx.fitRiskFrame, title:'Risk frame unanswered', why:'Risk framing helps position the narrative for stakeholders.' },
-
-          { key:'industry', step:4, done: !!ctx.industry, title:'Industry not selected', why:'Industry context changes suggested standards and language.' },
-          { key:'region', step:4, done: !!ctx.region, title:'Region not selected', why:'Region influences evidence and audit expectations.' },
-          { key:'regs', step:4, done: ctx.regs.size > 0 && !!ctx.regsTouched, title:'Regulatory references not selected', why:'References improve the evidence narrative for stakeholders.' },
-
-          { key:'roiVisited', step:5, done: ctx.visited.has(5), title:'ROI estimate not reviewed', why:'ROI inputs are needed for investment and timing decisions.' }
-        ];
+        const mode = resolveConfiguratorFieldMode(ctx.fieldMode || state.fieldMode || accountFieldModeValue());
+        return questionRequirementRows()
+          .filter((requirement)=> requirementEnabledForMode(requirement, mode))
+          .map((requirement)=> ({
+            id: String(requirement.id || '').trim(),
+            key: String(requirement.key || '').trim(),
+            step: clamp(Number(requirement.step) || 1, 1, 6),
+            group: String(requirement.group || '').trim(),
+            groupLabel: String(requirement.groupLabel || '').trim(),
+            done: requirementDoneForContext(requirement.key, ctx),
+            title: String(requirement.title || 'Required question unanswered').trim(),
+            why: String(requirement.why || 'This field is required to maintain recommendation confidence.').trim()
+          }))
+          .filter((requirement)=> requirement.key);
       }
 
       function readinessProgressFromContext(source){
@@ -3597,7 +3691,7 @@ const evidenceOpts = [
         }
 
         const scalarKeys = [
-          'role', 'fullName', 'company', 'companySize', 'operatingCountry',
+          'fieldMode', 'role', 'fullName', 'company', 'companySize', 'operatingCountry',
           'industry', 'region', 'urgentWin', 'measuredOn', 'orgPain',
           'rhythm', 'measure', 'fitRealism', 'fitScope', 'fitToday',
           'fitServices', 'fitRiskFrame', 'milestone', 'regMode', 'regSearch',
@@ -4492,6 +4586,7 @@ const evidenceOpts = [
             updated_at: thread.updatedAt ? new Date(thread.updatedAt).toISOString() : '',
 
             full_name: snapshot.fullName || '',
+            config_mode: resolveConfiguratorFieldMode(snapshot.fieldMode || 'guided'),
             role: optionLabel(roleLabels, snapshot.role),
             company_size: snapshot.companySize || '',
             operating_country: snapshot.operatingCountry || '',
@@ -4805,6 +4900,7 @@ const evidenceOpts = [
         const snapshot = (snapshotJson && typeof snapshotJson === 'object' && !Array.isArray(snapshotJson))
           ? snapshotJson
           : {
+              fieldMode: resolveConfiguratorFieldMode(csvRowValue(row, ['config_mode', 'field_mode', 'mode'])),
               fullName: String(csvRowValue(row, ['full_name', 'name']) || '').trim(),
               company,
               role: optionIdFromAny(roleOpts, csvRowValue(row, ['role'])),
@@ -4815,6 +4911,7 @@ const evidenceOpts = [
               activeStep: 1,
               visited: [1]
             };
+        snapshot.fieldMode = resolveConfiguratorFieldMode(snapshot.fieldMode || csvRowValue(row, ['config_mode', 'field_mode', 'mode']));
 
         const fallbackRoiPct = csvPercentValue(csvRowValue(row, ['roi_pct_3yr', 'roi_3yr_pct']));
         const fallbackNpv = Number(String(csvRowValue(row, ['npv_usd_3yr', 'npv_3yr']) || '').replace(/[^0-9.-]/g, ''));
@@ -4970,6 +5067,7 @@ const evidenceOpts = [
       function defaultSnapshotForThread(thread){
         const firstGap = Number(thread && thread.gaps && thread.gaps[0] && thread.gaps[0].step);
         return {
+          fieldMode: resolveConfiguratorFieldMode((thread && thread.fieldMode) || state.fieldMode || accountFieldModeValue()),
           fullName: '',
           company: (thread && thread.company) ? String(thread.company) : 'Record',
           role: '',
@@ -5002,6 +5100,7 @@ const evidenceOpts = [
           snapshotSeed,
           sourceCompany
         );
+        snapshot.fieldMode = resolveConfiguratorFieldMode(snapshot.fieldMode || 'guided');
         const progress = readinessProgressFromContext(snapshot);
         const modules = threadModulesFromSnapshot(snapshot, { outcomes, outcomesText });
         const company = String(snapshot.company || sourceCompany || 'Record');
@@ -5116,6 +5215,7 @@ const evidenceOpts = [
 
       function buildThreadSnapshotFromState(){
         return {
+          fieldMode: resolveConfiguratorFieldMode(state.fieldMode || accountFieldModeValue()),
           role: state.role,
           fullName: state.fullName,
           company: state.company,
@@ -5184,6 +5284,7 @@ const evidenceOpts = [
             : []
         );
         return {
+          fieldMode: resolveConfiguratorFieldMode(src.fieldMode || accountFieldModeValue()),
           role: String(src.role || '').trim(),
           fullName: String(src.fullName || '').trim(),
           company: String(src.company || '').trim(),
@@ -5342,6 +5443,7 @@ const evidenceOpts = [
         state.saveIsThinking = false;
         clearScheduledAutoSave();
 
+        state.fieldMode = resolveConfiguratorFieldMode(snap.fieldMode || accountFieldModeValue());
         state.role = snap.role || '';
         state.fullName = snap.fullName || '';
         state.company = (snap.company && String(snap.company).trim()) ? String(snap.company).trim() : '';
@@ -13409,7 +13511,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       }
 
       function resolveAccountFieldMode(next){
-        return String(next || '').toLowerCase() === 'advanced' ? 'advanced' : 'guided';
+        return resolveConfiguratorFieldMode(next);
       }
 
       function resolveAccountWorkspaceRole(next){
@@ -13581,7 +13683,9 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       function updateAccountLeftNavSummary(profile){
         const acc = normalizeAccountProfile(profile || settingsState.account || {});
         if(accountLhnMode){
-          accountLhnMode.textContent = `Mode: ${resolveAccountFieldMode(acc.fieldMode) === 'advanced' ? 'Advanced' : 'Guided'}`;
+          const mode = resolveAccountFieldMode(acc.fieldMode);
+          const modeLabel = mode === 'advanced' ? 'Advanced' : (mode === 'sdr-lite' ? 'SDR-lite' : 'Guided');
+          accountLhnMode.textContent = `Mode: ${modeLabel}`;
         }
         if(accountLhnPrefill){
           accountLhnPrefill.textContent = `Prefill: ${resolveAccountPrefillMode(acc.prefillMode) === 'off' ? 'Off' : 'On'}`;
@@ -13717,6 +13821,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       function applyAccountDefaultsToState(opts){
         const cfg = Object.assign({ emptyOnly:true }, opts || {});
         const acc = settingsState.account || {};
+        const mode = resolveAccountFieldMode(acc.fieldMode);
         const applyText = (key, val)=>{
           const next = String(val || '').trim();
           if(!next) return;
@@ -13724,6 +13829,9 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           if(cfg.emptyOnly && cur) return;
           state[key] = next;
         };
+        if(!cfg.emptyOnly || String(state.activeThread || 'current').trim() === 'current'){
+          state.fieldMode = mode;
+        }
         applyText('fullName', acc.fullName);
         applyText('email', acc.email);
         applyText('phone', acc.phone);
@@ -14343,6 +14451,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         clearScheduledAutoSave();
 
         // Identity + context
+        state.fieldMode = resolveConfiguratorFieldMode(account.fieldMode || 'guided');
         state.role = '';
         state.fullName = useAccountDefaults ? (account.fullName || '') : '';
         state.company = '';
@@ -14419,6 +14528,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         const keepStep = clamp(Number(state.activeStep) || 1, 1, 6);
 
         // Identity + context
+        state.fieldMode = 'guided';
         state.role = 'ciso';
         state.fullName = 'Jane Doe';
         state.company = 'Orchid Corp';

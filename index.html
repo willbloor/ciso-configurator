@@ -365,10 +365,11 @@
               <label class="settingsField">
                 <span class="settingsFieldLabel">Configurator mode</span>
                 <select id="accountFieldMode">
+                  <option value="sdr-lite">SDR-lite</option>
                   <option value="guided">Guided</option>
                   <option value="advanced">Advanced</option>
                 </select>
-                <p class="settingsFieldNote">Guided keeps the flow lean. Advanced exposes extra detail and controls.</p>
+                <p class="settingsFieldNote">SDR-lite keeps required inputs minimal. Guided keeps the flow lean. Advanced exposes full depth.</p>
               </label>
             </div>
             <div class="settingsOptions settingsInlineOptions" id="accountPrefillOptions">
@@ -1680,6 +1681,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="assets/js/ui-schema.js"></script>
+    <script src="assets/js/question-bank.js"></script>
     <script src="assets/js/content-catalog.js"></script>
     <script src="assets/js/official-blog-rss-fallback.js"></script>
     <script src="assets/js/app.js"></script>

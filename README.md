@@ -18,6 +18,8 @@ This repository contains the static configurator app used to generate customer d
 - Main logic: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
 - Styles: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
 - Collaboration record schema: `/Users/will.bloor/Documents/Configurator/schemas/workspace-record.v2.schema.json`
+- Question bank source CSV: `/Users/will.bloor/Documents/Configurator/assets/data/question-bank.v1.csv`
+- Generated question bank runtime file: `/Users/will.bloor/Documents/Configurator/assets/js/question-bank.js`
 
 The generated customer dashboard is created in code (not from a static HTML file) by:
 
@@ -193,6 +195,23 @@ Permission constants and guards are in:
   - `cfg_shell_right_w`
 - Dashboard column widths persisted in:
   - `cfg_dashboard_col_widths_v2`
+
+### Question bank + configurator modes (foundation)
+
+- Question requirements are now externalized to a CSV-backed bank:
+  - source: `/Users/will.bloor/Documents/Configurator/assets/data/question-bank.v1.csv`
+  - generated runtime file: `/Users/will.bloor/Documents/Configurator/assets/js/question-bank.js`
+  - generator script: `/Users/will.bloor/Documents/Configurator/scripts/generate_question_bank_js.mjs`
+- Supported configurator modes:
+  - `sdr-lite`
+  - `guided`
+  - `advanced`
+- Mode behavior currently implemented:
+  - requirement/gap/completion engine uses mode-filtered requirement rows
+  - mode is persisted per record snapshot as `snapshot.fieldMode`
+  - CSV export/import includes `config_mode`
+- Current intentional constraint:
+  - question UI remains fully visible for now; mode changes required-question logic and progress math first (safe migration path before full dynamic rendering)
 
 ### Dashboard table sorting + resizing behavior
 
@@ -410,6 +429,9 @@ for f in assets/js/*.js; do node --check "$f"; done
 
 # scripts syntax check
 for f in scripts/*.mjs; do node --check "$f"; done
+
+# regenerate question bank runtime file from CSV
+node scripts/generate_question_bank_js.mjs
 
 # schema JSON parse check
 node -e "const fs=require('fs'); JSON.parse(fs.readFileSync('schemas/workspace-record.v2.schema.json','utf8'));"

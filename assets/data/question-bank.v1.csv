@@ -1,0 +1,23 @@
+id,key,step,group,group_label,title,why,order,required_guided,required_advanced,required_sdr_lite,enabled
+rq_role,role,1,about_identity,About identity,Role not confirmed,Role anchors ownership for outcomes and follow-up.,10,true,true,true,true
+rq_full_name,fullName,1,about_identity,About identity,Name not captured,Contact ownership is required for follow-up and handoff.,20,true,true,true,true
+rq_company,company,1,about_identity,About identity,Company not captured,Company context is needed before sharing a recommendation.,30,true,true,true,true
+rq_company_size,companySize,1,about_identity,About identity,Company size missing,Size influences cadence and recommendation confidence.,40,true,true,false,true
+rq_operating_country,operatingCountry,1,about_identity,About identity,Operating country missing,Country informs the likely regulatory evidence path.,50,true,true,true,true
+rq_pressure_sources,pressureSources,1,trigger_urgency,Trigger and urgency,Pressure sources not selected,Pressure signals help prioritize the right outcomes.,60,true,true,true,true
+rq_urgent_win,urgentWin,1,trigger_urgency,Trigger and urgency,Urgent 90-day win not set,Urgency clarifies what success must look like first.,70,true,true,true,true
+rq_risk_envs,riskEnvs,1,risk_environment,Risk environment,Risk environment not selected,Risk environment helps focus the right simulation scope.,80,true,true,true,true
+rq_measured_on,measuredOn,1,baseline_measurement,Baseline and measurement,Current measurement baseline missing,Baseline metrics are required to quantify uplift.,90,true,true,false,true
+rq_org_pain,orgPain,1,trigger_urgency,Trigger and urgency,Current organisation challenge unclear,Current challenge shapes where value shows up fastest.,100,true,true,true,true
+rq_groups,groups,2,coverage_scope,Coverage and scope,Coverage groups not selected,Coverage determines program scope and rollout design.,110,true,true,true,true
+rq_rhythm,rhythm,2,baseline_measurement,Baseline and measurement,Cadence not selected,Cadence impacts operating model and package fit.,120,true,true,false,true
+rq_measure,measure,2,baseline_measurement,Baseline and measurement,Measurement model not selected,Measurement model drives reporting and evidence quality.,130,true,true,false,true
+rq_fit_realism,fitRealism,3,package_fit,Package fit,Realism requirement unanswered,Realism changes effort and content structure.,140,true,true,false,true
+rq_fit_scope,fitScope,3,package_fit,Package fit,Scope requirement unanswered,Scope alters expected delivery footprint.,150,true,true,true,true
+rq_fit_today,fitToday,3,package_fit,Package fit,Current state unanswered,Current state helps calibrate the starting package.,160,true,true,false,true
+rq_fit_services,fitServices,3,package_fit,Package fit,Delivery support unanswered,Support model affects implementation recommendations.,170,true,true,false,true
+rq_fit_risk_frame,fitRiskFrame,3,package_fit,Package fit,Risk frame unanswered,Risk framing helps position the narrative for stakeholders.,180,true,true,false,true
+rq_industry,industry,4,context_regulatory,Context and regulatory,Industry not selected,Industry context changes suggested standards and language.,190,true,true,true,true
+rq_region,region,4,context_regulatory,Context and regulatory,Region not selected,Region influences evidence and audit expectations.,200,true,true,false,true
+rq_regs,regs,4,context_regulatory,Context and regulatory,Regulatory references not selected,References improve the evidence narrative for stakeholders.,210,true,true,false,true
+rq_roi_visited,roiVisited,5,roi_business_case,ROI and business case,ROI estimate not reviewed,ROI inputs are needed for investment and timing decisions.,220,true,true,false,true

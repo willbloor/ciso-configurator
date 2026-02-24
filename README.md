@@ -257,6 +257,16 @@ Export workflow simplification deployed:
    - File: `/Users/will.bloor/Documents/Configurator/index.html`
    - File: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
 
+## Workspace Profiles Advanced Cleanup (2026-02-24)
+
+Account page declutter deployed:
+
+1. Moved secondary workspace profile actions under `Advanced settings`
+   - `Open CRM export` and `Export high-fidelity CSV` are now inside a collapsed advanced block within `Workspace profiles`.
+   - Primary day-to-day actions remain visible: demo profile loads and profile CSV upload.
+   - File: `/Users/will.bloor/Documents/Configurator/index.html`
+   - File: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
 ## Source Of Truth
 
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`

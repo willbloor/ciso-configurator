@@ -924,18 +924,7 @@
         'force-viewer'
       ]));
       function permissionTestOverridesEnabled(){
-        try{
-          if(window && window.__ENABLE_PERMISSION_ROLE_TEST_MODES__ === true){
-            return true;
-          }
-          const host = String((window && window.location && window.location.hostname) || '').trim().toLowerCase();
-          return host === 'localhost'
-            || host === '127.0.0.1'
-            || host === '[::1]'
-            || host.endsWith('.local');
-        }catch(err){
-          return false;
-        }
+        return true;
       }
       const COLLAB_PERMISSION_MATRIX = Object.freeze({
         admin: Object.freeze({

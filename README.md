@@ -209,6 +209,15 @@ Branding polish deployed:
    - Uses Immersive official favicon/webclip CDN assets.
    - File: `/Users/will.bloor/Documents/Configurator/index.html`
 
+## Permission Mode Dropdown Fix (2026-02-24)
+
+Behavior correction deployed:
+
+1. Restored permission testing role options when backend connection is off
+   - `force-admin`, `force-owner`, `force-editor`, `force-sdr`, and `force-viewer` are available again for local workflow testing.
+   - These force-role overrides remain disabled when backend connection is on.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
 ## Source Of Truth
 
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`

@@ -281,6 +281,19 @@ Layout adjustment to match approved reference (supersedes interim snapshot-heade
    - `x/14 captured` now appears on the `Package` row (not in the top header row).
    - File: `/Users/will.bloor/Documents/Configurator/index.html`
 
+## New Record Validation Deferral (2026-02-24)
+
+Create-flow behavior refinement deployed:
+
+1. Brand-new records now open in a neutral state
+   - Draft records (`id = current`) no longer show red incomplete styling in the left rail or field outlines on first open.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+2. First saved session stays neutral until reopen
+   - When a new record is saved for the first time, incomplete highlighting remains deferred during that same live configurator session.
+   - Once the user leaves that record context and reopens it, normal required/incomplete highlighting resumes.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
 ## Source Of Truth
 
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`

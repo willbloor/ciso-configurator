@@ -660,6 +660,7 @@
         collaborationNoticeTone: 'info',
         collaborationNoticeRecordId: '',
         collaborationNoticeUntil: 0,
+        deferIncompleteHighlightsRecordId: '',
         recordReadOnly: false,
         lockReacquirePending: false,
 
@@ -3773,6 +3774,13 @@ const evidenceOpts = [
         });
       }
 
+      function shouldShowIncompleteHighlights(){
+        const activeId = String(state.activeThread || '').trim() || 'current';
+        if(activeId === 'current') return false;
+        const deferredId = String(state.deferIncompleteHighlightsRecordId || '').trim();
+        return !deferredId || deferredId !== activeId;
+      }
+
       function listOrDash(values){
         const arr = (values || []).map((v)=> String(v || '').trim()).filter(Boolean);
         return arr.length ? arr.join(' · ') : '—';
@@ -6674,6 +6682,9 @@ const evidenceOpts = [
           }
           recordStore.save(nextThread);
           state.activeThread = nextThread.id;
+          if(isNewRecord){
+            state.deferIncompleteHighlightsRecordId = nextThread.id;
+          }
           state.saveIsThinking = false;
           state.savePulseUntil = Date.now() + 1600;
           persistSavedThreads();
@@ -7772,12 +7783,19 @@ const evidenceOpts = [
 
       function openThreadConfigurator(threadId, step){
         const target = threadId || state.activeThread || 'current';
+        const previousView = state.currentView || 'dashboard';
         const currentRecordId = currentEditableRecordId();
         if(currentRecordId && currentRecordId !== String(target || '').trim()){
           releaseRecordLock(currentRecordId, { force:false });
           clearRecordLockHeartbeat();
         }
         if(target !== 'current'){
+          const deferredId = String(state.deferIncompleteHighlightsRecordId || '').trim();
+          const sameConfiguratorSession = previousView === 'configurator'
+            && String(state.activeThread || '').trim() === String(target || '').trim();
+          if(deferredId && deferredId === String(target || '').trim() && !sameConfiguratorSession){
+            state.deferIncompleteHighlightsRecordId = '';
+          }
           const thread = findSavedThread(target);
           if(thread){
             if(thread.archived){
@@ -13088,15 +13106,19 @@ const evidenceOpts = [
         )
           ? threadReadinessProgress(findSavedThread(state.activeThread))
           : null;
-        const liveGaps = (savedProgressForConfigurator && Array.isArray(savedProgressForConfigurator.gaps))
+        const baseLiveGaps = (savedProgressForConfigurator && Array.isArray(savedProgressForConfigurator.gaps))
           ? savedProgressForConfigurator.gaps
           : dashboardCurrentGaps();
+        const showIncompleteHighlights = shouldShowIncompleteHighlights();
+        const liveGaps = showIncompleteHighlights ? baseLiveGaps : [];
         const liveRequirements = readinessRequirements(state);
-        const missingRequirementKeys = new Set(
-          liveRequirements
-            .filter((req)=> !req.done && req.key)
-            .map((req)=> req.key)
-        );
+        const missingRequirementKeys = showIncompleteHighlights
+          ? new Set(
+              liveRequirements
+                .filter((req)=> !req.done && req.key)
+                .map((req)=> req.key)
+            )
+          : new Set();
         const gapSteps = new Set(
           liveGaps.map((gap)=> clampQuestionStep(Number(gap && gap.step) || 1))
         );

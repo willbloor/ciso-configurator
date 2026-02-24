@@ -294,6 +294,11 @@ Create-flow behavior refinement deployed:
    - Once the user leaves that record context and reopens it, normal required/incomplete highlighting resumes.
    - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
 
+3. Completion ticks remain strict while red warnings are deferred
+   - Step checkmarks now continue to reflect true completion state and are no longer incorrectly shown as complete during first-use deferral.
+   - Deferral now affects only red incomplete styling (field outlines/section incomplete state), not completion truth.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
 ## Source Of Truth
 
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`

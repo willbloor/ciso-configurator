@@ -13119,9 +13119,12 @@ const evidenceOpts = [
                 .map((req)=> req.key)
             )
           : new Set();
-        const gapSteps = new Set(
-          liveGaps.map((gap)=> clampQuestionStep(Number(gap && gap.step) || 1))
+        const completionGapSteps = new Set(
+          baseLiveGaps.map((gap)=> clampQuestionStep(Number(gap && gap.step) || 1))
         );
+        const highlightGapSteps = showIncompleteHighlights
+          ? new Set(completionGapSteps)
+          : new Set();
 
         syncMilestoneFromSignals();
         syncEvidenceFromPressure();
@@ -13238,7 +13241,7 @@ const evidenceOpts = [
             const stepForAcc = Number(Object.keys(inputAccByStep).find((stepNo)=>{
               return (inputAccByStep[stepNo] || []).includes(acc.id);
             })) || null;
-            const hasGap = stepForAcc ? gapSteps.has(stepForAcc) : false;
+            const hasGap = stepForAcc ? highlightGapSteps.has(stepForAcc) : false;
             acc.dataset.incomplete = hasGap ? 'true' : 'false';
           });
         }
@@ -13478,11 +13481,11 @@ const evidenceOpts = [
           const isOptionalStep = isQuestionStep && !requiredQuestionSteps.has(step);
           const isDone = !isQuestionStep
             ? false
-            : (isOptionalStep ? !!stepCompletionByAllQuestions.get(step) : !gapSteps.has(step));
+            : (isOptionalStep ? !!stepCompletionByAllQuestions.get(step) : !completionGapSteps.has(step));
 
           ch.dataset.done = isDone ? 'true' : 'false';
           ch.dataset.optional = isOptionalStep ? 'true' : 'false';
-          ch.dataset.incomplete = (!isOptionalStep && isQuestionStep && !isDone && gapSteps.has(step)) ? 'true' : 'false';
+          ch.dataset.incomplete = (!isOptionalStep && isQuestionStep && !isDone && highlightGapSteps.has(step)) ? 'true' : 'false';
           if(strong){
             strong.textContent = isDone ? '✔' : (isOptionalStep ? '' : String(configuratorStepDisplayIndex(step)));
             if(!wasDone && isDone){
@@ -13492,7 +13495,7 @@ const evidenceOpts = [
         });
         $$('.step').forEach((stepEl)=>{
           const stepNo = clampConfiguratorStep(Number(stepEl.dataset.step) || 1);
-          const hasGap = questionSteps.has(stepNo) && requiredQuestionSteps.has(stepNo) && gapSteps.has(stepNo);
+          const hasGap = questionSteps.has(stepNo) && requiredQuestionSteps.has(stepNo) && highlightGapSteps.has(stepNo);
           stepEl.dataset.incomplete = hasGap ? 'true' : 'false';
         });
         applyRequiredFieldHighlights(missingRequirementKeys);

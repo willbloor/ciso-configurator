@@ -197,6 +197,18 @@ Low-stakes UX polish deployed:
    - Added `noscript` style to ensure main content remains visible if JavaScript is disabled.
    - File: `/Users/will.bloor/Documents/Configurator/index.html`
 
+## Favicon Update (2026-02-24)
+
+Branding polish deployed:
+
+1. Added Immersive favicon and Apple webclip links in app head
+   - Added:
+     - `rel="icon"`
+     - `rel="shortcut icon"`
+     - `rel="apple-touch-icon"`
+   - Uses Immersive official favicon/webclip CDN assets.
+   - File: `/Users/will.bloor/Documents/Configurator/index.html`
+
 ## Source Of Truth
 
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`

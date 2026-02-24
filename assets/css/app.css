@@ -133,6 +133,9 @@
       line-height: var(--lh-body);
       font-size:1rem;
     }
+    body.is-booting main.wrap{
+      visibility:hidden;
+    }
 
     a{ color:inherit; }
     .wrap{ max-width: var(--container); margin:0 auto; padding: 0 22px; }

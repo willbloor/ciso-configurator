@@ -16539,5 +16539,13 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         }
         syncRouteWithState({ replace:true });
       }
+      if(document.body && document.body.classList.contains('is-booting')){
+        const revealUi = ()=> document.body.classList.remove('is-booting');
+        if(window && typeof window.requestAnimationFrame === 'function'){
+          window.requestAnimationFrame(revealUi);
+        }else{
+          window.setTimeout(revealUi, 0);
+        }
+      }
     })();
   

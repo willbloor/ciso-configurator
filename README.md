@@ -182,6 +182,21 @@ Only proceed with real customer data when all are true:
 - [ ] Audit logging and rollback paths are in place.
 - [ ] Security/IT stakeholders provide explicit approval.
 
+## UI Boot Paint Fix (2026-02-24)
+
+Low-stakes UX polish deployed:
+
+1. Removed initial configurator flash on refresh
+   - Added a boot class on `<body>` to hide `main.wrap` until route/view classes are fully applied.
+   - Removed boot class after initialization on next animation frame.
+   - File: `/Users/will.bloor/Documents/Configurator/index.html`
+   - File: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+2. Added no-JS fallback for visibility
+   - Added `noscript` style to ensure main content remains visible if JavaScript is disabled.
+   - File: `/Users/will.bloor/Documents/Configurator/index.html`
+
 ## Source Of Truth
 
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`

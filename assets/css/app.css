@@ -3534,12 +3534,11 @@
     }
     .snapshotTopBarRight{
       display:flex;
-      align-items:flex-start;
-      justify-content:flex-end;
-      gap:14px;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
       width:100%;
-      margin-left:auto;
-      flex-wrap:wrap;
+      min-width:0;
     }
     .snapshotTopProfile{
       display:grid;
@@ -7156,9 +7155,9 @@
       }
       .snapshotTopBarRight{
         display:flex;
-        flex-direction:column;
-        align-items:flex-end;
-        justify-content:flex-end;
+        flex-direction:row;
+        align-items:center;
+        justify-content:space-between;
         gap:10px;
       }
       .snapshotTopProfile{

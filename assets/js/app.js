@@ -12972,22 +12972,6 @@ const evidenceOpts = [
         );
       }
 
-      function syncSnapshotTopProfileVisibility(){
-        const profileWrap = $('.snapshotTopProfile');
-        if(!profileWrap) return;
-        let visibleCount = 0;
-        $$('.snapshotTopProfileItem', profileWrap).forEach((item)=>{
-          const valueEl = $('.snapshotTopProfileValue', item);
-          const valueText = String(valueEl ? valueEl.textContent : '').trim();
-          const isPlaceholder = !valueText || valueText === '—';
-          item.hidden = isPlaceholder;
-          if(!isPlaceholder){
-            visibleCount += 1;
-          }
-        });
-        profileWrap.hidden = visibleCount === 0;
-      }
-
       // ---------- Update UI ----------
       function update(){
         const setText = (sel, val) => {
@@ -13413,21 +13397,6 @@ const evidenceOpts = [
         else if(state.stack.has('grc')) grcLabel = 'ServiceNow / Archer';
         setText('#snapGrc', grcLabel);
 
-        const sizeMapInline = {
-          'lt500':'< 500',
-          '500-2k':'500–2,000',
-          '2k-10k':'2,000–10,000',
-          '10k-50k':'10,000–50,000',
-          '50kplus':'50,000+'
-        };
-        const roleLabelInline = state.role ? labelFrom(roleOpts, state.role) : '—';
-        const companySizeInline = state.companySize ? (sizeMapInline[state.companySize] || state.companySize) : '—';
-        setText('#snapOrgRole', roleLabelInline);
-        setText('#snapOrgName', state.fullName || '—');
-        setText('#snapOrgCompany', state.company || '—');
-        setText('#snapOrgCountry', state.operatingCountry || '—');
-        setText('#snapOrgSize', companySizeInline);
-        syncSnapshotTopProfileVisibility();
         setText('#snapReviewPackage', `${tier.name} package`);
         setHTML('#snapReviewOutcomes', chipsHTML(topOutcomes.map(o => o.short || o.label), 99));
 

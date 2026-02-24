@@ -267,15 +267,19 @@ Account page declutter deployed:
    - File: `/Users/will.bloor/Documents/Configurator/index.html`
    - File: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
 
-## Snapshot Header Cleanup (2026-02-24)
+## Snapshot Header Final Alignment (2026-02-24)
 
-Right-rail header stability fix deployed:
+Layout adjustment to match approved reference (supersedes interim snapshot-header iterations):
 
-1. Hid empty top-profile placeholders in snapshot header
-   - Snapshot top-profile items now auto-hide when value is blank/placeholder (`—`), avoiding the broken-looking header state on new/empty records.
-   - Entire top-profile block hides when all fields are empty.
-   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+1. Top row now combines snapshot title and collaborator controls
+   - `YOUR SNAPSHOT` sits on the left.
+   - Collaborator `+` and avatar stack sit on the right.
+   - File: `/Users/will.bloor/Documents/Configurator/index.html`
    - File: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+2. Capture-count pill moved back to package header row
+   - `x/14 captured` now appears on the `Package` row (not in the top header row).
+   - File: `/Users/will.bloor/Documents/Configurator/index.html`
 
 ## Source Of Truth
 

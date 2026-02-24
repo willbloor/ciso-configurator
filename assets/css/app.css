@@ -3547,10 +3547,16 @@
       gap:8px 16px;
       min-width:min(360px, 100%);
     }
+    .snapshotTopProfile[hidden]{
+      display:none !important;
+    }
     .snapshotTopProfileItem{
       display:grid;
       gap:2px;
       min-width:0;
+    }
+    .snapshotTopProfileItem[hidden]{
+      display:none !important;
     }
     .snapshotTopProfileLabel{
       font-size:.66rem;

@@ -267,6 +267,16 @@ Account page declutter deployed:
    - File: `/Users/will.bloor/Documents/Configurator/index.html`
    - File: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
 
+## Snapshot Header Cleanup (2026-02-24)
+
+Right-rail header stability fix deployed:
+
+1. Hid empty top-profile placeholders in snapshot header
+   - Snapshot top-profile items now auto-hide when value is blank/placeholder (`—`), avoiding the broken-looking header state on new/empty records.
+   - Entire top-profile block hides when all fields are empty.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+   - File: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
 ## Source Of Truth
 
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`

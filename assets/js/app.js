@@ -12972,6 +12972,22 @@ const evidenceOpts = [
         );
       }
 
+      function syncSnapshotTopProfileVisibility(){
+        const profileWrap = $('.snapshotTopProfile');
+        if(!profileWrap) return;
+        let visibleCount = 0;
+        $$('.snapshotTopProfileItem', profileWrap).forEach((item)=>{
+          const valueEl = $('.snapshotTopProfileValue', item);
+          const valueText = String(valueEl ? valueEl.textContent : '').trim();
+          const isPlaceholder = !valueText || valueText === '—';
+          item.hidden = isPlaceholder;
+          if(!isPlaceholder){
+            visibleCount += 1;
+          }
+        });
+        profileWrap.hidden = visibleCount === 0;
+      }
+
       // ---------- Update UI ----------
       function update(){
         const setText = (sel, val) => {
@@ -13411,6 +13427,7 @@ const evidenceOpts = [
         setText('#snapOrgCompany', state.company || '—');
         setText('#snapOrgCountry', state.operatingCountry || '—');
         setText('#snapOrgSize', companySizeInline);
+        syncSnapshotTopProfileVisibility();
         setText('#snapReviewPackage', `${tier.name} package`);
         setHTML('#snapReviewOutcomes', chipsHTML(topOutcomes.map(o => o.short || o.label), 99));
 

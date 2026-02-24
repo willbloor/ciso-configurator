@@ -85,6 +85,103 @@ Manual Firebase console action required:
 - In Firebase Console > Firestore > Rules, replace permissive sandbox rules with the content from `/Users/will.bloor/Documents/Configurator/firestore.rules` and publish.
 - Do this in sandbox now; replicate to work dev/prod projects when IT provisions them.
 
+## Authorization Hardening Pass (2026-02-24)
+
+Additional RBAC and identity safeguards applied:
+
+1. Bound actor identity to Firebase UID when backend mode is on
+   - When backend connection is enabled and a user is signed in, record/lock actor identity now uses:
+     - `userId = uid:<firebase uid>`
+     - Firebase email / display name
+   - This prevents editable profile fields from acting as auth identity in backend-connected sessions.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+2. Disabled force-role test overrides in non-dev runtime
+   - `force-admin`, `force-owner`, `force-editor`, `force-sdr`, `force-viewer` are now:
+     - accepted only when explicitly enabled for local dev (`window.__ENABLE_PERMISSION_ROLE_TEST_MODES__ = true`) or localhost-style hostnames
+     - always suppressed when backend connection is on
+   - UI select options for force modes are hidden/disabled when not allowed.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+3. Treated CSV authority fields as untrusted on import
+   - Import now strips authority-bearing metadata from both row-based CSV payloads and `record_json` payloads:
+     - `shareAccess`
+     - `collaborators`
+     - `lockOwner`
+     - `lockExpiresAt`
+     - `updatedById`
+     - `updatedByEmail`
+     - `workspaceId` is reset to local default for sandbox import safety
+   - This prevents privilege injection through crafted CSVs.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+Scope note:
+- These changes do not force sign-in for normal local-only use (`Backend connection off`), and keep current sandbox workflows intact.
+
+## Go-Live Readiness Checklist (Firebase + SSO + Controlled CRM Export)
+
+Use this as the release gate before storing real customer data.
+
+### 1) Ownership, environments, and access
+
+- [ ] Create ring-fenced Firebase/GCP projects: `configurator-dev` and `configurator-prod`.
+- [ ] Confirm project owners in IT/security and engineering (named individuals).
+- [ ] Confirm Hatch access model (least privilege, scoped to required repos/projects only).
+- [ ] Confirm GitHub org access path via One Login and required labs/training completion.
+
+### 2) Authentication and SSO
+
+- [ ] Enable Firebase Authentication providers for non-prod (Google) and production target (One Login via SAML/OIDC).
+- [ ] Ensure backend-connected sessions bind actor identity to Firebase UID (not editable profile fields).
+- [ ] Disable force-role test modes in production runtime.
+- [ ] Verify sign-in/sign-out flow on Vercel production URL and custom domain URL.
+
+### 3) Authorization (RBAC) and server enforcement
+
+- [ ] Define canonical roles and permissions: `owner`, `admin`, `editor`, `sdr`, `viewer`.
+- [ ] Move all write-critical auth checks to backend/API and Firestore Rules.
+- [ ] Ensure frontend role checks are UX-only and never the sole control.
+- [ ] Add record-level ACL checks for read/write/share actions.
+
+### 4) Firestore and data safety
+
+- [ ] Publish strict Firestore rules (default deny; explicit allow by UID + role + record membership).
+- [ ] Validate rules with emulator tests for positive and negative access cases.
+- [ ] Keep imported CSV authority fields untrusted (`shareAccess`, collaborators, lock metadata, updater IDs).
+- [ ] Confirm no sensitive contractual/final pricing data is stored at this phase.
+
+### 5) Backend and integration controls
+
+- [ ] Introduce backend API service for record CRUD, sharing actions, publish/export actions.
+- [ ] Add immutable audit fields (`createdBy`, `updatedBy`, timestamps, version).
+- [ ] Implement idempotent export jobs (manual push model first; no automatic bi-directional sync yet).
+- [ ] Define HubSpot/Salesforce export mappings and required custom fields with owners.
+
+### 6) Security controls and resilience
+
+- [ ] Keep CSP/security headers active in Vercel (`vercel.json`) and verify on deployed responses.
+- [ ] Enable App Check / abuse controls as backend usage increases.
+- [ ] Add request timeouts/retries around external dependencies (RSS/proxies/integrations).
+- [ ] Ensure backup/restore approach for Firestore and exported artifacts is documented.
+
+### 7) Operations, legal, and launch readiness
+
+- [ ] Define data retention window and deletion process for discovery records.
+- [ ] Complete DPIA/security review with Phil/security stakeholders.
+- [ ] Add monitoring dashboards and alerting (auth failures, permission denials, API errors).
+- [ ] Run UAT with named pilot users (SDR + AE + Manager) and capture sign-off.
+- [ ] Prepare rollback plan (disable backend toggle, freeze writes, revert deployment).
+
+### 8) Go/No-Go gate
+
+Only proceed with real customer data when all are true:
+
+- [ ] SSO is active and tested end-to-end.
+- [ ] Server-side RBAC is enforced and tested.
+- [ ] Firestore rules are strict and validated.
+- [ ] Audit logging and rollback paths are in place.
+- [ ] Security/IT stakeholders provide explicit approval.
+
 ## Source Of Truth
 
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`

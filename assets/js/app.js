@@ -195,6 +195,7 @@
         const healthBtn = $('#firebaseHealthcheckBtn');
         const saveConfigBtn = $('#firebaseSaveConfigBtn');
         const clearConfigBtn = $('#firebaseClearConfigBtn');
+        syncPermissionTestModeOptionsUi();
 
         const cfg = resolvedFirebaseWebConfig();
         const connectionMode = resolveBackendConnectionMode(firebaseRuntime.connectionMode || readBackendConnectionModeFromStorage());
@@ -843,11 +844,29 @@
           || ''
         ).trim().toLowerCase();
         const fallbackName = rawName || (email ? email : 'Local collaborator');
+        const workspaceRole = resolveCollaboratorRole(account.workspaceRole, 'owner');
+        const permissionTestMode = resolvePermissionTestMode(account.permissionTestMode);
+        const firebaseUser = backendConnectionEnabled() && firebaseRuntime && firebaseRuntime.user
+          ? firebaseRuntime.user
+          : null;
+        const firebaseUid = String((firebaseUser && firebaseUser.uid) || '').trim();
+        if(firebaseUid){
+          const firebaseEmail = String((firebaseUser && firebaseUser.email) || '').trim().toLowerCase();
+          const firebaseName = String((firebaseUser && firebaseUser.displayName) || '').trim();
+          const displayName = firebaseName || rawName || firebaseEmail || 'Authenticated user';
+          return {
+            userId: `uid:${firebaseUid}`,
+            email: firebaseEmail,
+            displayName,
+            sessionId: LOCAL_TAB_SESSION_ID,
+            workspaceRole,
+            // Force test role overrides off for authenticated backend sessions.
+            permissionTestMode: 'live'
+          };
+        }
         const userId = email
           ? `email:${email}`
           : `name:${fallbackName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'local-collaborator'}`;
-        const workspaceRole = resolveCollaboratorRole(account.workspaceRole, 'owner');
-        const permissionTestMode = resolvePermissionTestMode(account.permissionTestMode);
         return {
           userId,
           email,
@@ -904,6 +923,20 @@
         'force-sdr',
         'force-viewer'
       ]));
+      function permissionTestOverridesEnabled(){
+        try{
+          if(window && window.__ENABLE_PERMISSION_ROLE_TEST_MODES__ === true){
+            return true;
+          }
+          const host = String((window && window.location && window.location.hostname) || '').trim().toLowerCase();
+          return host === 'localhost'
+            || host === '127.0.0.1'
+            || host === '[::1]'
+            || host.endsWith('.local');
+        }catch(err){
+          return false;
+        }
+      }
       const COLLAB_PERMISSION_MATRIX = Object.freeze({
         admin: Object.freeze({
           canViewRecord: true,
@@ -974,10 +1007,15 @@
 
       function resolvePermissionTestMode(value){
         const raw = String(value || '').trim().toLowerCase();
+        if(raw === 'live') return 'live';
+        if(!permissionTestOverridesEnabled()) return 'live';
         return PERMISSION_TEST_MODES.has(raw) ? raw : 'live';
       }
 
       function forcedRoleFromTestMode(mode){
+        if(backendConnectionEnabled()){
+          return '';
+        }
         const resolved = resolvePermissionTestMode(mode);
         if(!resolved.startsWith('force-')) return '';
         return resolveCollaboratorRole(resolved.slice(6), '');
@@ -5916,10 +5954,35 @@ const evidenceOpts = [
         }));
       }
 
+      function sanitizeImportedThreadAuthority(rawThread, idx){
+        const source = (rawThread && typeof rawThread === 'object' && !Array.isArray(rawThread))
+          ? rawThread
+          : {};
+        const snapshot = (source.snapshot && typeof source.snapshot === 'object' && !Array.isArray(source.snapshot))
+          ? source.snapshot
+          : {};
+        const fallbackUpdatedBy = String(
+          source.updatedBy
+          || snapshot.fullName
+          || snapshot.email
+          || `Imported record ${idx + 1}`
+        ).trim() || `Imported record ${idx + 1}`;
+        return Object.assign({}, source, {
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          updatedBy: fallbackUpdatedBy,
+          updatedById: '',
+          updatedByEmail: '',
+          shareAccess: 'workspace-viewer',
+          collaborators: [],
+          lockOwner: null,
+          lockExpiresAt: 0
+        });
+      }
+
       function csvThreadFromRow(row, idx){
         const recordJson = csvTryJson(csvRowValue(row, ['record_json']));
         if(recordJson && typeof recordJson === 'object' && !Array.isArray(recordJson)){
-          return recordJson;
+          return sanitizeImportedThreadAuthority(recordJson, idx);
         }
 
         const company = String(csvRowValue(row, ['company', 'company_name', 'account_company']) || '').trim();
@@ -5971,44 +6034,15 @@ const evidenceOpts = [
         const workspaceId = String(csvRowValue(row, ['workspace_id']) || DEFAULT_WORKSPACE_ID).trim() || DEFAULT_WORKSPACE_ID;
         const version = Math.max(1, Math.floor(Number(csvRowValue(row, ['version'])) || 1));
         const updatedBy = String(csvRowValue(row, ['updated_by']) || snapshot.fullName || '').trim() || 'Unknown collaborator';
-        const updatedById = String(csvRowValue(row, ['updated_by_id']) || '').trim();
-        const updatedByEmail = String(csvRowValue(row, ['updated_by_email']) || '').trim();
-        const lockOwnerName = String(csvRowValue(row, ['lock_owner_name']) || '').trim();
-        const lockOwnerUserId = String(csvRowValue(row, ['lock_owner_user_id']) || '').trim();
-        const lockExpiresAt = coerceTimestamp(csvRowValue(row, ['lock_expires_at']));
-        const shareAccess = resolveShareAccess(csvRowValue(row, ['share_access']));
-        const collaboratorsJson = csvTryJson(csvRowValue(row, ['collaborators_json']));
-        const collaboratorsEmailsRaw = String(csvRowValue(row, ['collaborators_emails']) || '').trim();
-        const collaboratorRows = Array.isArray(collaboratorsJson)
-          ? collaboratorsJson
-          : (
-            collaboratorsEmailsRaw
-              ? collaboratorsEmailsRaw.split(/[;,]/).map((value)=> String(value || '').trim()).filter(Boolean).map((email)=> ({
-                  userId: `email:${normalizeEmail(email)}`,
-                  email: normalizeEmail(email),
-                  name: email
-                }))
-              : []
-          );
-        const collaborators = normalizeCollaboratorList(collaboratorRows);
-        const lockOwner = (lockOwnerName || lockOwnerUserId)
-          ? {
-              name: lockOwnerName,
-              userId: lockOwnerUserId,
-              email: '',
-              sessionId: ''
-            }
-          : null;
-
-        return {
+        const importedThread = {
           id: idFromCsv || `imported-${idx + 1}`,
           recordId: idFromCsv || `imported-${idx + 1}`,
-          workspaceId,
+          workspaceId: workspaceId || DEFAULT_WORKSPACE_ID,
           schemaVersion: String(csvRowValue(row, ['schema_version']) || RECORD_SCHEMA_VERSION).trim() || RECORD_SCHEMA_VERSION,
           version,
           updatedBy,
-          updatedById,
-          updatedByEmail,
+          updatedById: '',
+          updatedByEmail: '',
           company,
           stage: String(csvRowValue(row, ['stage']) || '').trim() || 'Discovery',
           completion: csvCompletionSummary(csvRowValue(row, ['completion']), csvRowValue(row, ['completion_pct', 'completion_percent'])),
@@ -6025,11 +6059,12 @@ const evidenceOpts = [
           priority: csvBoolValue(csvRowValue(row, ['priority', 'starred'])),
           archived: csvBoolValue(csvRowValue(row, ['archived'])),
           archivedAt: 0,
-          shareAccess,
-          collaborators,
-          lockOwner,
-          lockExpiresAt
+          shareAccess: 'workspace-viewer',
+          collaborators: [],
+          lockOwner: null,
+          lockExpiresAt: 0
         };
+        return sanitizeImportedThreadAuthority(importedThread, idx);
       }
 
       function importWorkspaceCsvText(csvText, sourceName){
@@ -14747,6 +14782,24 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         return resolvePermissionTestMode(next);
       }
 
+      function syncPermissionTestModeOptionsUi(){
+        if(!accountPermissionTestModeSelect) return;
+        const allowTestOverrides = permissionTestOverridesEnabled() && !backendConnectionEnabled();
+        Array.from(accountPermissionTestModeSelect.options || []).forEach((opt)=>{
+          if(!(opt instanceof HTMLOptionElement)) return;
+          const value = String(opt.value || '').trim().toLowerCase();
+          const isForceMode = value.startsWith('force-');
+          opt.hidden = isForceMode && !allowTestOverrides;
+          opt.disabled = isForceMode && !allowTestOverrides;
+        });
+        if(!allowTestOverrides){
+          const current = String(accountPermissionTestModeSelect.value || '').trim().toLowerCase();
+          if(current.startsWith('force-')){
+            accountPermissionTestModeSelect.value = 'live';
+          }
+        }
+      }
+
       function resolveAccountPrefillMode(next){
         if(next === false) return 'off';
         if(next === true) return 'on';
@@ -14995,6 +15048,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
 
       function syncAccountSettingsUI(){
         const acc = settingsState.account || {};
+        syncPermissionTestModeOptionsUi();
         if(accountFullNameInput) accountFullNameInput.value = acc.fullName || '';
         if(accountEmailInput) accountEmailInput.value = acc.email || '';
         if(accountPhoneInput) accountPhoneInput.value = acc.phone || '';

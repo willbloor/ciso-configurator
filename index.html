@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>CISO Configurator Launchpad Edition Dashboard Shell</title>
   <meta name="description" content="Customer configurator prototype with a lightweight dashboard view in the existing Launchpad shell." />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:; connect-src 'self' https://api.allorigins.win https://www.immersivelabs.com https://*.googleapis.com https://*.gstatic.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -406,6 +408,33 @@
             </div>
             <p class="settingsHint">Notification preferences are saved now. Delivery channels (email/Slack/in-app) can be connected in the backend phase.</p>
           </section>
+          <section class="settingsRow" id="accountBackendConnection">
+            <div class="settingsLabel">Backend connection · Sandbox</div>
+            <p class="settingsHint">Connect Firebase Authentication + Firestore for sandbox testing. Current local record storage remains active.</p>
+            <div class="settingsOptions settingsInlineOptions" id="backendConnectionToggle">
+              <button class="settingsOption" type="button" data-backend-connection="off" aria-pressed="true">Backend connection off</button>
+              <button class="settingsOption" type="button" data-backend-connection="on" aria-pressed="false">Backend connection on</button>
+            </div>
+            <div class="settingsFieldGrid">
+              <label class="settingsField" style="grid-column:1 / -1;">
+                <span class="settingsFieldLabel">Firebase web config (JSON)</span>
+                <textarea id="firebaseConfigJson" class="settingsCodeInput" rows="8" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'></textarea>
+                <p class="settingsFieldNote">Paste JSON from Firebase console app settings. You can also paste the `firebaseConfig = { ... }` snippet.</p>
+              </label>
+            </div>
+            <div class="settingsRowActions">
+              <button class="btn secondaryBlue small" id="firebaseSaveConfigBtn" type="button">Save config</button>
+              <button class="btn small" id="firebaseClearConfigBtn" type="button">Clear config</button>
+              <button class="btn primary small" id="firebaseSignInGoogleBtn" type="button">Sign in with Google</button>
+              <button class="btn small" id="firebaseSignOutBtn" type="button">Sign out</button>
+              <button class="btn secondaryBlue small" id="firebaseHealthcheckBtn" type="button">Run Firestore healthcheck</button>
+            </div>
+            <div class="settingsStatusLine">
+              <span class="dashboardPill" id="firebaseConnectionPill">Firebase: Not configured</span>
+              <span class="dashboardPill" id="firebaseUserPill">User: Signed out</span>
+            </div>
+            <p class="settingsHint" id="firebaseHealthcheckStatus">Healthcheck: not run.</p>
+          </section>
           <section class="settingsRow" id="accountWorkspaceProfiles">
             <div class="settingsLabel">Workspace profiles</div>
             <p class="settingsHint">Load a saved profile dataset to switch record portfolios instantly, upload a CSV profile, or export all records for sharing and backup.</p>
@@ -413,6 +442,7 @@
               <button class="btn secondaryBlue small" id="accountLoadProfileAe" type="button">Load AE demo profile</button>
               <button class="btn secondaryBlue small" id="accountLoadProfileCs" type="button">Load CS demo profile</button>
               <button class="btn secondaryBlue small" id="accountUploadProfileCsv" type="button">Upload profile CSV</button>
+              <button class="btn secondaryBlue small" id="accountOpenCrmExport" type="button" data-action="openCrmExport">Open CRM export</button>
               <button class="btn small" id="accountExportAllCsv" type="button">Export high-fidelity CSV</button>
             </div>
             <input id="accountUploadProfileFile" type="file" accept=".csv,text/csv" hidden />
@@ -502,6 +532,7 @@
             <button class="btn primary small" type="button" id="generateRecommendationEmailBtn" data-action="openRecommendationEmail">Generate email</button>
             <button class="btn secondaryBlue small" type="button" id="previewCustomerPageTemplateBtn" data-action="previewCustomerPageTemplate">Preview customer page</button>
             <button class="btn secondaryBlue small" type="button" id="generateCustomerPageTemplateBtn" data-action="generateCustomerPageTemplate">Download customer page</button>
+            <button class="btn secondaryBlue small" type="button" id="openCrmExportFromRecommendationsBtn" data-action="openCrmExport">CRM export</button>
             <button class="btn small" type="button" id="contentRecommendationsBackBtn" data-action="backToReview">Back to review</button>
           </div>
         </header>
@@ -526,6 +557,51 @@
           </header>
           <div class="customerTemplatePreviewCanvas" id="customerTemplatePreviewCanvas"></div>
         </section>
+      </article>
+    </section>
+
+    <section id="crmExportView" aria-label="CRM export view">
+      <article class="recommendationsShell crmExportShell">
+        <header class="recommendationsHead">
+          <div>
+            <h2 id="crmExportTitle">CRM export</h2>
+            <p class="recommendationsSub" id="crmExportSub">Export mapped CSVs for manual HubSpot or Salesforce import. Field mapping stays stable so backend migration stays low-friction.</p>
+          </div>
+          <div class="recommendationsHeadActions">
+            <span class="dashboardPill" id="crmExportCount">Records: 0</span>
+            <span class="dashboardPill" id="crmExportTarget">Target: —</span>
+            <button class="btn small" type="button" data-action="backToDashboard">Back to dashboard</button>
+          </div>
+        </header>
+        <div class="crmExportControls">
+          <label class="settingsField">
+            <span class="settingsFieldLabel">Export scope</span>
+            <select id="crmExportScope">
+              <option value="active">Active record</option>
+              <option value="selected">Selected record</option>
+              <option value="all">All saved records</option>
+            </select>
+          </label>
+          <label class="settingsField" id="crmExportRecordField">
+            <span class="settingsFieldLabel">Record</span>
+            <select id="crmExportRecord"></select>
+          </label>
+        </div>
+        <div class="crmExportActions">
+          <button class="btn primary small" type="button" data-action="downloadHubspotCsv">Download HubSpot CSV</button>
+          <button class="btn secondaryBlue small" type="button" data-action="downloadSalesforceCsv">Download Salesforce CSV</button>
+        </div>
+        <p class="settingsHint" id="crmExportHint">Use HubSpot for contact/company import mapping. Use Salesforce for Lead import mapping with custom readiness fields.</p>
+        <div class="crmExportPreviewWrap">
+          <div class="crmExportPreviewCard">
+            <h3>HubSpot mapping preview</h3>
+            <pre id="crmExportPreviewHubspot">No record selected.</pre>
+          </div>
+          <div class="crmExportPreviewCard">
+            <h3>Salesforce mapping preview</h3>
+            <pre id="crmExportPreviewSalesforce">No record selected.</pre>
+          </div>
+        </div>
       </article>
     </section>
 
@@ -1730,6 +1806,10 @@
     <script src="assets/js/question-bank.js"></script>
     <script src="assets/js/content-catalog.js"></script>
     <script src="assets/js/official-blog-rss-fallback.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+    <script src="assets/js/firebase-config.js"></script>
     <script src="assets/js/app.js"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 # CISO Configurator
 
-Last updated: 2026-02-23
+Last updated: 2026-02-24
 
 This repository contains the static configurator app used to generate customer dashboard pages.
 
@@ -12,11 +12,51 @@ This repository contains the static configurator app used to generate customer d
 - Curates "What's new" from RSS (with fallback data).
 - Exports a downloadable customer dashboard HTML file.
 
+## Security Sweep (2026-02-24)
+
+Implemented hardening in this repo:
+
+1. Removed eval-style Firebase config parsing
+   - Replaced `new Function(...)` parsing path with strict JSON/object-literal normalization + `JSON.parse`.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+2. Added CSV injection protection for all exports
+   - Applied formula-injection guards (Excel/Sheets) to:
+     - high-fidelity record CSV
+     - HubSpot export CSV
+     - Salesforce export CSV
+     - one-row report CSV
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+3. Sanitized collaborator avatar color input
+   - Restricts collaborator color values to safe CSS color formats (`#hex`, `rgb[a]`, `hsl[a]`) with deterministic fallback.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+4. Added browser-side security policy headers via HTML meta tags
+   - Added CSP + strict referrer policy in app shell.
+   - File: `/Users/will.bloor/Documents/Configurator/index.html`
+
+5. Added Firestore least-privilege baseline rules file
+   - New rules only allow a signed-in user to read/write their own `/healthchecks/{uid}` doc.
+   - Default deny for all other documents.
+   - File: `/Users/will.bloor/Documents/Configurator/firestore.rules`
+
+6. Added import guardrail for large CSV uploads
+   - Rejects CSV imports over 5 MB to avoid browser lockups and unsafe oversized local ingestion.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+Manual Firebase console action required:
+
+- In Firebase Console > Firestore > Rules, replace permissive sandbox rules with the content from `/Users/will.bloor/Documents/Configurator/firestore.rules` and publish.
+- Do this in sandbox now; replicate to work dev/prod projects when IT provisions them.
+
 ## Source Of Truth
 
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`
 - Main logic: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
 - Styles: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+- Firebase config shim: `/Users/will.bloor/Documents/Configurator/assets/js/firebase-config.js`
+- Firestore security baseline rules: `/Users/will.bloor/Documents/Configurator/firestore.rules`
 - Collaboration record schema: `/Users/will.bloor/Documents/Configurator/schemas/workspace-record.v2.schema.json`
 - Question bank source CSV: `/Users/will.bloor/Documents/Configurator/assets/data/question-bank.v1.csv`
 - Generated question bank runtime file: `/Users/will.bloor/Documents/Configurator/assets/js/question-bank.js`
@@ -188,6 +228,12 @@ Permission constants and guards are in:
   - `Your preferences · Notifications`
   - `Workspace profiles`
   - `Settings` (theme/display/test data + layout reset)
+- Workspace profiles actions currently include:
+  - `Load AE demo profile`
+  - `Load CS demo profile`
+  - `Upload profile CSV`
+  - `Open CRM export`
+  - `Export high-fidelity CSV`
 - Workspace left-nav account entry (`My account`) now shows an explicit active highlight when account view is open.
 - Desktop left-nav active state now fills the full row without cropped/gapped highlight seams.
 - Save model:
@@ -205,8 +251,14 @@ Permission constants and guards are in:
   - `SDR mode on/off`
   - `Prefill new records` / `Manual start for new records`
   - `ROI estimate visibility` on/off for side snapshot summary blocks
+- Backend sandbox connection controls now include:
+  - Firebase web config JSON paste/save/clear
+  - Google sign-in / sign-out
+  - Firestore write/read healthcheck (`healthchecks/{uid}`)
+  - Runtime source indicator (`window` config vs localStorage config)
 - Account-level settings persisted in:
   - `ACCOUNT_PROFILE_STORAGE_KEY = cfg_shell_account_profile_v1`
+  - `FIREBASE_WEB_CONFIG_STORAGE_KEY = cfg_firebase_web_config_v1`
 - Shell settings persisted in:
   - `cfg_shell_tone`
   - `cfg_shell_density`
@@ -301,9 +353,32 @@ Hash routes supported for major states:
 - `#/dashboard`
 - `#/archived`
 - `#/account`
+- `#/export`
 - `#/records/:recordId/overview`
 - `#/records/:recordId/configure?step=1..6`
 - `#/records/:recordId/recommendations`
+- `#/records/:recordId/export`
+
+### CRM export workflow (manual, integration-ready)
+
+- Dedicated export page:
+  - `#crmExportView`
+- Entry points:
+  - `My account > Workspace profiles > Open CRM export`
+  - Recommendations header `CRM export` button
+- Export scopes:
+  - `Active record`
+  - `Selected record`
+  - `All saved records`
+- Export templates:
+  - `HubSpot CSV` (contact/company-oriented columns)
+  - `Salesforce CSV` (lead-oriented columns with custom-field API name placeholders)
+- Canonical mapping layer in:
+  - `crmExportCanonicalRows(threads)` in `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+  - `hubspotRowsFromCanonical(rows)` in `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+  - `salesforceRowsFromCanonical(rows)` in `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+- Intentional architecture:
+  - Manual CRM push remains fast now, while preserving a stable canonical field contract that can later map directly to Firestore + backend sync endpoints without reworking frontend capture logic.
 
 ### Current deliberate UI choices
 
@@ -451,6 +526,104 @@ python3 -m http.server 8080
 - Build command: empty
 - Output directory: empty
 - Entry: `index.html`
+
+## Implementation Roadmap (Proposed Backend Migration)
+
+### Recommended direction
+
+Use a Google-first stack with minimal rewrite:
+
+- Frontend: keep the current SPA.
+- Auth: Firebase Authentication (Google sign-in / workspace SSO).
+- Data: Firestore for records, profiles, memberships, and page metadata.
+- Backend: Cloud Run API for business logic and all CRM writes.
+- Async jobs: Cloud Tasks for retries and idempotent sync.
+- Pages: Firebase Hosting + Cloud Storage for published landing pages.
+
+Inference from the current codebase: this is the lowest-risk path because the app is currently local-first state plus static page generation, not API-driven persistence yet.
+
+### Why this is needed (from current code)
+
+- Records persist in browser `localStorage` (`THREAD_STORAGE_KEY` read/write in `/Users/will.bloor/Documents/Configurator/assets/js/app.js:311`, `/Users/will.bloor/Documents/Configurator/assets/js/app.js:405`, `/Users/will.bloor/Documents/Configurator/assets/js/app.js:443`).
+- View navigation is still state-driven via `setView(...)` with optional hash syncing, not backend resource routing (`/Users/will.bloor/Documents/Configurator/assets/js/app.js:2981`).
+- Landing pages are generated and downloaded as local HTML artifacts (`downloadCustomerPageTemplate` and `downloadText` in `/Users/will.bloor/Documents/Configurator/assets/js/app.js:11076`, `/Users/will.bloor/Documents/Configurator/assets/js/app.js:11111`).
+- CRM handoff is still placeholder UX copy in the consultation flow (`/Users/will.bloor/Documents/Configurator/assets/js/app.js:15318`).
+
+### Implementation plan
+
+1. Phase 0: Data contract first (2-3 days)
+   Define canonical entities and IDs: `user`, `workspace`, `membership`, `record`, `record_version`, `landing_page`, `crm_link`, `sync_job`. Reuse the existing record schema as base contract (`/Users/will.bloor/Documents/Configurator/schemas/workspace-record.v2.schema.json`).
+2. Phase 1: User profiles with one logic (3-4 days)
+   Implement a single profile resolution rule:
+   `effective_profile = workspace_defaults + user_defaults + record_overrides`
+   Store all three layers in Firestore. Keep current My Account defaults UX, but persist server-side instead of local-only.
+3. Phase 2: Backend foundation on Google (1 week)
+   Create a Cloud Run service with auth-validated CRUD for records/profiles/pages, plus audit fields (`createdBy`, `updatedBy`, timestamps, `version`). Add Firestore Security Rules for client access and IAM-only service access for admin operations.
+4. Phase 3: URL + routing model (3-4 days)
+   Add shareable URLs for major states:
+   `/app/dashboard`
+   `/app/records/:recordId/overview`
+   `/app/records/:recordId/configure?step=1..6`
+   `/app/records/:recordId/recommendations`
+   `/app/records/:recordId/landing-pages/:pageId`
+   Keep URL as location/context only, not full form payload.
+5. Phase 4: Landing page publish flow (4-5 days)
+   Keep current generator logic, but publish through backend:
+   generate HTML from saved record/version, store HTML in Cloud Storage, store metadata/slug/status in Firestore, return public/internal URL, support Draft vs Published with republish history.
+6. Phase 5: HubSpot + Salesforce integration layer (1-2 weeks)
+   Implement integrations in backend only:
+   workspace OAuth connection, field mapping table, idempotent outbound sync via Cloud Tasks, persisted external IDs in `crm_link`, manual `Sync now`, and job status. Then add optional inbound webhooks for bi-directional sync.
+7. Phase 6: Collaborators + permissions (4-5 days)
+   Add `workspace_memberships` roles:
+   Owner: admin + integration settings
+   Editor: edit records/pages
+   Viewer: read-only
+   Add invite-by-email flow and record-level permission checks in API.
+8. Phase 7: Cutover + hardening (3-5 days)
+   Migrate existing local records to Firestore, add activity log, monitoring, retry dashboards, and rollback plan.
+
+### Direct answers
+
+- Do we need URLs for each page/state?
+  Yes for major views and record context. No for every form field.
+- Can we add collaborators?
+  Yes, but not safely with localStorage-only architecture. You need backend auth + memberships + ACL.
+- Google backend?
+  Yes. Firebase + Cloud Run + Cloud Tasks is a strong fit for this app shape.
+- Frontend work required?
+  Yes. Main areas:
+  auth/session handling, API-backed data layer, router/deep links, role-based UI gating, publish/sync status UI, optimistic save + conflict handling.
+
+### IT planning answers (for internal ticket)
+
+- What does "ring-fenced Firebase project" mean?
+  A dedicated Firebase/GCP project for this app only, separate from other systems, with isolated `dev` and `prod` environments and scoped access controls.
+- How will users share and collaborate on records?
+  Use one-login auth plus workspace membership roles (`owner`, `admin`, `editor`, `sdr`, `viewer`). Record writes are permission-checked by role and record access scope. Version/lock metadata remains in the record model to prevent overwrite conflicts.
+- How will content catalog + RSS feeds run automatically?
+  Run scheduled jobs (Cloud Scheduler -> Cloud Run) to execute the existing catalog/RSS scripts and write refreshed catalog data to storage/database. Keep fallback catalog data available if feeds fail.
+- What are scalability assumptions for user data?
+  Initial planning target: ~500 users, ~100 concurrent, ~100k records.
+  Growth target: ~5,000 users, ~500 concurrent, ~1M records.
+  Data model should keep records scoped by workspace and use append-only version history for audit and rollback.
+- What is the CRM operating model?
+  Manual push remains the current workflow (HubSpot/Salesforce CSV templates). Backend sync can be added later without remapping capture fields because export mapping is centralized through one canonical record mapping layer.
+
+### External references
+
+- [Firebase Authentication](https://firebase.google.com/docs/auth)
+- [Cloud Firestore overview](https://firebase.google.com/docs/firestore)
+- [Firestore Security Rules conditions](https://firebase.google.com/docs/firestore/security/rules-conditions)
+- [Cloud Run documentation](https://cloud.google.com/run/docs)
+- [Cloud Tasks documentation](https://cloud.google.com/tasks/docs)
+- [Firebase Hosting custom domain](https://firebase.google.com/docs/hosting/custom-domain)
+- [Firebase Hosting preview/deploy flow](https://firebase.google.com/docs/hosting/test-preview-deploy)
+- [HubSpot OAuth](https://developers.hubspot.com/docs/apps/legacy-apps/authentication/oauth/working-with-oauth)
+- [HubSpot Contacts API](https://developers.hubspot.com/docs/api-reference/crm-contacts-v3/guide)
+- [HubSpot Webhooks API](https://developers.hubspot.com/docs/api-reference/webhooks-webhooks-v3/guide)
+- [Salesforce OAuth/connected app overview](https://developer.salesforce.com/docs/industries/communications/guide/authorization.html)
+- [Salesforce external client app setup example](https://developer.salesforce.com/docs/industries/loyalty/guide/authorization.html)
+- [Salesforce REST/composite API guidance](https://developer.salesforce.com/blogs/2024/04/accessing-object-data-with-salesforce-platform-apis)
 
 ## Handoff Checklist (Use After Each Push)
 

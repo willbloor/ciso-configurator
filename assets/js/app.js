@@ -47,6 +47,365 @@
         el._motionTimer = window.setTimeout(()=> el.classList.remove(className), durationMs);
       }
 
+      function firebaseWebConfigIsValid(input){
+        const cfg = (input && typeof input === 'object') ? input : null;
+        if(!cfg) return false;
+        const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+        return requiredKeys.every((key)=> String(cfg[key] || '').trim().length > 0);
+      }
+
+      function sanitizeFirebaseWebConfig(input){
+        const cfg = (input && typeof input === 'object') ? input : null;
+        if(!cfg) return null;
+        const next = {
+          apiKey: String(cfg.apiKey || '').trim(),
+          authDomain: String(cfg.authDomain || '').trim(),
+          projectId: String(cfg.projectId || '').trim(),
+          storageBucket: String(cfg.storageBucket || '').trim(),
+          messagingSenderId: String(cfg.messagingSenderId || '').trim(),
+          appId: String(cfg.appId || '').trim()
+        };
+        return firebaseWebConfigIsValid(next) ? next : null;
+      }
+
+      function parseFirebaseWebConfigText(text){
+        const src = String(text || '').trim();
+        if(!src) return null;
+        try{
+          const parsed = JSON.parse(src);
+          return sanitizeFirebaseWebConfig(parsed);
+        }catch(err){
+          // Fall through to object literal extraction.
+        }
+        const matched = src.match(/firebaseConfig\s*=\s*(\{[\s\S]*?\})\s*;?/i);
+        const objectLiteral = matched ? matched[1] : src;
+        const normalizedLiteral = objectLiteral
+          .replace(/^[^{]*\{/, '{')
+          .replace(/\}[^}]*$/, '}')
+          .replace(/([,{]\s*)([A-Za-z_$][A-Za-z0-9_$]*)\s*:/g, '$1"$2":')
+          .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_, inner)=> `"${String(inner).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`)
+          .replace(/,\s*([}\]])/g, '$1');
+        try{
+          const parsed = JSON.parse(normalizedLiteral);
+          return sanitizeFirebaseWebConfig(parsed);
+        }catch(err){
+          return null;
+        }
+      }
+
+      function resolveBackendConnectionMode(raw){
+        return String(raw || '').trim().toLowerCase() === 'on' ? 'on' : 'off';
+      }
+
+      function readBackendConnectionModeFromStorage(){
+        try{
+          const raw = window.localStorage.getItem(BACKEND_CONNECTION_MODE_STORAGE_KEY);
+          return resolveBackendConnectionMode(raw || 'off');
+        }catch(err){
+          return 'off';
+        }
+      }
+
+      function saveBackendConnectionModeToStorage(mode){
+        const next = resolveBackendConnectionMode(mode);
+        try{
+          window.localStorage.setItem(BACKEND_CONNECTION_MODE_STORAGE_KEY, next);
+        }catch(err){
+          // Ignore storage errors.
+        }
+        return next;
+      }
+
+      function backendConnectionEnabled(){
+        return resolveBackendConnectionMode(firebaseRuntime.connectionMode) === 'on';
+      }
+
+      function readFirebaseWebConfigFromStorage(){
+        try{
+          const raw = window.localStorage.getItem(FIREBASE_WEB_CONFIG_STORAGE_KEY);
+          if(!raw) return null;
+          const parsed = JSON.parse(raw);
+          return sanitizeFirebaseWebConfig(parsed);
+        }catch(err){
+          return null;
+        }
+      }
+
+      function readFirebaseWebConfigFromWindow(){
+        const raw = window.__FIREBASE_CONFIG__;
+        if(!raw) return null;
+        if(typeof raw === 'string'){
+          return parseFirebaseWebConfigText(raw);
+        }
+        return sanitizeFirebaseWebConfig(raw);
+      }
+
+      function resolvedFirebaseWebConfig(){
+        const fromWindow = readFirebaseWebConfigFromWindow();
+        if(fromWindow){
+          firebaseRuntime.source = 'window';
+          return fromWindow;
+        }
+        const fromStorage = readFirebaseWebConfigFromStorage();
+        if(fromStorage){
+          firebaseRuntime.source = 'storage';
+          return fromStorage;
+        }
+        firebaseRuntime.source = 'none';
+        return null;
+      }
+
+      function saveFirebaseWebConfigToStorage(config){
+        const safe = sanitizeFirebaseWebConfig(config);
+        if(!safe) return false;
+        try{
+          window.localStorage.setItem(FIREBASE_WEB_CONFIG_STORAGE_KEY, JSON.stringify(safe));
+          return true;
+        }catch(err){
+          return false;
+        }
+      }
+
+      function clearFirebaseWebConfigFromStorage(){
+        try{
+          window.localStorage.removeItem(FIREBASE_WEB_CONFIG_STORAGE_KEY);
+        }catch(err){
+          // Ignore storage errors.
+        }
+      }
+
+      function firebaseErrorMessage(err, fallback){
+        if(err && typeof err === 'object'){
+          const code = String(err.code || '').trim();
+          const message = String(err.message || '').trim();
+          if(code && message) return `${code}: ${message}`;
+          if(message) return message;
+        }
+        return String(fallback || 'Firebase operation failed.');
+      }
+
+      function renderFirebaseConnectionUi(){
+        const configInput = $('#firebaseConfigJson');
+        const modeOptions = $$('#backendConnectionToggle [data-backend-connection]');
+        const connectionPill = $('#firebaseConnectionPill');
+        const userPill = $('#firebaseUserPill');
+        const healthStatus = $('#firebaseHealthcheckStatus');
+        const signInBtn = $('#firebaseSignInGoogleBtn');
+        const signOutBtn = $('#firebaseSignOutBtn');
+        const healthBtn = $('#firebaseHealthcheckBtn');
+        const saveConfigBtn = $('#firebaseSaveConfigBtn');
+        const clearConfigBtn = $('#firebaseClearConfigBtn');
+
+        const cfg = resolvedFirebaseWebConfig();
+        const connectionMode = resolveBackendConnectionMode(firebaseRuntime.connectionMode || readBackendConnectionModeFromStorage());
+        firebaseRuntime.connectionMode = connectionMode;
+        const isEnabled = connectionMode === 'on';
+        firebaseRuntime.configured = !!cfg;
+        modeOptions.forEach((btn)=>{
+          if(!(btn instanceof HTMLElement)) return;
+          const mode = resolveBackendConnectionMode(btn.getAttribute('data-backend-connection') || 'off');
+          btn.setAttribute('aria-pressed', mode === connectionMode ? 'true' : 'false');
+        });
+        if(configInput){
+          if(cfg){
+            configInput.value = JSON.stringify(cfg, null, 2);
+          }else if(!String(configInput.value || '').trim()){
+            configInput.value = '';
+          }
+          configInput.disabled = !isEnabled;
+        }
+
+        if(connectionPill){
+          let label = 'Backend: Off';
+          if(isEnabled){
+            label = 'Firebase: Not configured';
+            if(cfg && firebaseRuntime.connected){
+              label = `Firebase: Connected (${firebaseRuntime.source})`;
+            }else if(cfg){
+              label = `Firebase: Configured (${firebaseRuntime.source})`;
+            }else if(firebaseRuntime.lastError){
+              label = 'Firebase: Error';
+            }
+          }
+          connectionPill.textContent = label;
+        }
+
+        if(userPill){
+          const user = firebaseRuntime.user;
+          const email = user && typeof user.email === 'string' ? user.email.trim() : '';
+          const name = user && typeof user.displayName === 'string' ? user.displayName.trim() : '';
+          userPill.textContent = user
+            ? `User: ${name || email || 'Signed in'}`
+            : 'User: Signed out';
+        }
+
+        if(healthStatus){
+          const note = String(firebaseRuntime.lastHealthcheckStatus || '').trim();
+          healthStatus.textContent = isEnabled
+            ? (note || 'Healthcheck: not run.')
+            : 'Backend connection is off. Current app behavior remains local-only.';
+        }
+
+        if(signInBtn){
+          signInBtn.disabled = !(isEnabled && cfg && firebaseRuntime.connected && firebaseAuthRef);
+        }
+        if(signOutBtn){
+          signOutBtn.disabled = !(isEnabled && firebaseRuntime.connected && firebaseAuthRef && firebaseRuntime.user);
+        }
+        if(healthBtn){
+          healthBtn.disabled = !(isEnabled && firebaseRuntime.connected && firebaseDbRef && firebaseRuntime.user);
+        }
+        if(saveConfigBtn){
+          saveConfigBtn.disabled = !isEnabled;
+        }
+        if(clearConfigBtn){
+          clearConfigBtn.disabled = !isEnabled;
+        }
+      }
+
+      function initFirebaseRuntime(){
+        const connectionMode = resolveBackendConnectionMode(firebaseRuntime.connectionMode || readBackendConnectionModeFromStorage());
+        firebaseRuntime.connectionMode = connectionMode;
+        const firebaseSdk = window.firebase;
+        const cfg = resolvedFirebaseWebConfig();
+        firebaseRuntime.configured = !!cfg;
+        firebaseRuntime.connected = false;
+        firebaseRuntime.user = null;
+        firebaseRuntime.lastError = '';
+        firebaseAppRef = null;
+        firebaseAuthRef = null;
+        firebaseDbRef = null;
+        if(firebaseAuthUnsub){
+          firebaseAuthUnsub();
+          firebaseAuthUnsub = null;
+        }
+
+        if(connectionMode !== 'on'){
+          firebaseRuntime.lastError = '';
+          firebaseRuntime.lastHealthcheckStatus = '';
+          renderFirebaseConnectionUi();
+          return false;
+        }
+        if(!cfg){
+          renderFirebaseConnectionUi();
+          return false;
+        }
+        if(!firebaseSdk || typeof firebaseSdk.initializeApp !== 'function'){
+          firebaseRuntime.lastError = 'Firebase SDK unavailable in this build.';
+          renderFirebaseConnectionUi();
+          return false;
+        }
+
+        try{
+          firebaseAppRef = (firebaseSdk.apps && firebaseSdk.apps.length)
+            ? firebaseSdk.app()
+            : firebaseSdk.initializeApp(cfg);
+          firebaseAuthRef = firebaseSdk.auth();
+          firebaseDbRef = firebaseSdk.firestore();
+          firebaseRuntime.connected = true;
+          firebaseAuthUnsub = firebaseAuthRef.onAuthStateChanged((user)=>{
+            firebaseRuntime.user = user || null;
+            renderFirebaseConnectionUi();
+          });
+          renderFirebaseConnectionUi();
+          return true;
+        }catch(err){
+          firebaseRuntime.lastError = firebaseErrorMessage(err, 'Failed to initialize Firebase.');
+          renderFirebaseConnectionUi();
+          return false;
+        }
+      }
+
+      async function signInWithGoogleFirebase(){
+        if(!backendConnectionEnabled()){
+          toast('Turn backend connection on first.');
+          return false;
+        }
+        if(!firebaseAuthRef || !window.firebase){
+          toast('Firebase auth is not configured yet.');
+          return false;
+        }
+        try{
+          const provider = new window.firebase.auth.GoogleAuthProvider();
+          await firebaseAuthRef.signInWithPopup(provider);
+          firebaseRuntime.lastError = '';
+          firebaseRuntime.lastHealthcheckStatus = '';
+          renderFirebaseConnectionUi();
+          toast('Signed in with Google.');
+          return true;
+        }catch(err){
+          const message = firebaseErrorMessage(err, 'Google sign-in failed.');
+          firebaseRuntime.lastError = message;
+          renderFirebaseConnectionUi();
+          toast(message);
+          return false;
+        }
+      }
+
+      async function signOutFirebaseUser(){
+        if(!backendConnectionEnabled()){
+          toast('Backend connection is off.');
+          return false;
+        }
+        if(!firebaseAuthRef){
+          toast('Firebase auth is not configured yet.');
+          return false;
+        }
+        try{
+          await firebaseAuthRef.signOut();
+          firebaseRuntime.lastError = '';
+          firebaseRuntime.lastHealthcheckStatus = '';
+          renderFirebaseConnectionUi();
+          toast('Signed out.');
+          return true;
+        }catch(err){
+          const message = firebaseErrorMessage(err, 'Sign-out failed.');
+          firebaseRuntime.lastError = message;
+          renderFirebaseConnectionUi();
+          toast(message);
+          return false;
+        }
+      }
+
+      async function runFirestoreHealthcheck(){
+        if(!backendConnectionEnabled()){
+          toast('Turn backend connection on first.');
+          return false;
+        }
+        if(!firebaseRuntime.user || !firebaseDbRef){
+          toast('Sign in first to run Firestore healthcheck.');
+          return false;
+        }
+        try{
+          const uid = String(firebaseRuntime.user.uid || 'unknown');
+          const docRef = firebaseDbRef.collection('healthchecks').doc(uid);
+          const nowIso = new Date().toISOString();
+          await docRef.set({
+            uid,
+            email: String(firebaseRuntime.user.email || '').trim(),
+            source: 'io-configurator-sandbox',
+            checkedAt: nowIso
+          }, { merge:true });
+          const snap = await docRef.get();
+          const exists = !!(snap && snap.exists);
+          firebaseRuntime.lastHealthcheckAt = Date.now();
+          firebaseRuntime.lastHealthcheckStatus = exists
+            ? `Healthcheck: write/read OK (${nowIso})`
+            : 'Healthcheck: write OK, read returned no document.';
+          firebaseRuntime.lastError = '';
+          renderFirebaseConnectionUi();
+          toast('Firestore healthcheck passed.');
+          return true;
+        }catch(err){
+          const message = firebaseErrorMessage(err, 'Firestore healthcheck failed.');
+          firebaseRuntime.lastError = message;
+          firebaseRuntime.lastHealthcheckStatus = `Healthcheck failed: ${message}`;
+          renderFirebaseConnectionUi();
+          toast(message);
+          return false;
+        }
+      }
+
       let outcomeTopObserver = null;
       let globalActionBtnsEl = null;
 
@@ -292,6 +651,8 @@
         customerTemplateBuildTheatrePending: false,
         recommendationsThreadId: 'current',
         recommendationsReturnView: 'configurator',
+        crmExportScope: 'active',
+        crmExportRecordId: 'current',
         recordSeenVersions: Object.create(null),
         collaborationNoticeTitle: '',
         collaborationNoticeBody: '',
@@ -311,11 +672,14 @@
       const THREAD_STORAGE_KEY = 'immersive.launchpad.savedThreads.v1';
       const WORKSPACE_PROFILE_KEY = 'immersive.launchpad.workspaceProfile.v1';
       const ACCESS_REQUESTS_STORAGE_KEY = 'cfg_record_access_requests_v1';
+      const BACKEND_CONNECTION_MODE_STORAGE_KEY = 'cfg_backend_connection_mode_v1';
+      const FIREBASE_WEB_CONFIG_STORAGE_KEY = 'cfg_firebase_web_config_v1';
       const DEFAULT_WORKSPACE_ID = 'workspace-local';
       const RECORD_SCHEMA_VERSION = 'workspace-record.v2';
       const ROUTE_HASH_PREFIX = '#/';
       const AUTO_SAVE_FAST_MS = 30000;
       const AUTO_SAVE_BASE_MS = 60000;
+      const MAX_IMPORT_CSV_BYTES = 5 * 1024 * 1024;
       const DEFAULT_UNREAD_TEST_RECORD_COUNT = 2;
       const RECORD_LOCK_TTL_MS = 45000;
       const RECORD_LOCK_HEARTBEAT_MS = 15000;
@@ -333,6 +697,20 @@
       let recordLockHeartbeatTimerId = 0;
       let routeSyncIsApplying = false;
       let routeSyncListenersBound = false;
+      let firebaseAppRef = null;
+      let firebaseAuthRef = null;
+      let firebaseDbRef = null;
+      let firebaseAuthUnsub = null;
+      const firebaseRuntime = {
+        connectionMode: 'off',
+        configured: false,
+        connected: false,
+        source: 'none',
+        user: null,
+        lastError: '',
+        lastHealthcheckAt: 0,
+        lastHealthcheckStatus: ''
+      };
       let shareModalRecordId = '';
       let archivePromptMode = 'archive';
       let archivePromptIds = [];
@@ -645,18 +1023,28 @@
         return COLLABORATOR_COLOR_POOL[idx];
       }
 
+      function sanitizeCollaboratorColor(raw, fallbackSeed){
+        const value = String(raw || '').trim();
+        if(!value) return collaboratorColor(fallbackSeed);
+        const hex = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value);
+        const rgb = /^rgba?\(\s*(?:\d{1,3}\s*,\s*){2}\d{1,3}(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i.test(value);
+        const hsl = /^hsla?\(\s*\d{1,3}(?:\.\d+)?\s*,\s*\d{1,3}%\s*,\s*\d{1,3}%(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i.test(value);
+        return (hex || rgb || hsl) ? value : collaboratorColor(fallbackSeed);
+      }
+
       function normalizeCollaboratorEntry(raw, idx){
         const source = (raw && typeof raw === 'object') ? raw : {};
         const email = normalizeEmail(source.email);
         const userIdFromName = `name:${String(source.name || source.displayName || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `collaborator-${idx + 1}`}`;
         const userId = String(source.userId || (email ? `email:${email}` : userIdFromName)).trim();
         const name = String(source.name || source.displayName || email || userId || `Collaborator ${idx + 1}`).trim();
+        const colorSeed = userId || email || name;
         return {
           userId,
           name: name || `Collaborator ${idx + 1}`,
           email,
           role: resolveCollaboratorRole(source.role, idx === 0 ? 'owner' : 'editor'),
-          color: String(source.color || collaboratorColor(userId || email || name)).trim() || collaboratorColor(userId || email || name),
+          color: sanitizeCollaboratorColor(source.color, colorSeed),
           initials: collaboratorInitials(name || email)
         };
       }
@@ -2717,13 +3105,14 @@ const evidenceOpts = [
       function renderRadios(container, name, items, onPick){
         if(!container) return;
         container.innerHTML = '';
+        const safeName = escapeHtml(String(name || 'choice'));
         const drillKey = (name && name.indexOf('drill_') === 0) ? name.replace('drill_','') : '';
         const currentValue = drillKey ? (state.outcomeDrilldowns[drillKey] || '') : (state[name] || '');
         items.forEach(it=>{
           const row = document.createElement('label');
           row.className = 'radio';
           row.innerHTML = `
-            <input type="radio" name="${name}" value="${it.id}">
+            <input type="radio" name="${safeName}" value="${escapeHtml(it.id)}">
             <div><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.desc)}</span></div>
           `;
           const input = row.querySelector('input');
@@ -2743,7 +3132,7 @@ const evidenceOpts = [
           const row = document.createElement('label');
           row.className = 'radio';
           row.innerHTML = `
-            <input type="checkbox" value="${it.id}">
+            <input type="checkbox" value="${escapeHtml(it.id)}">
             <div><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.desc)}</span></div>
           `;
           const cb = row.querySelector('input');
@@ -2778,7 +3167,7 @@ const evidenceOpts = [
           const row = document.createElement('label');
           row.className = 'radio';
           row.innerHTML = `
-            <input type="checkbox" value="${it.id}">
+            <input type="checkbox" value="${escapeHtml(it.id)}">
             <div>
               <strong>${escapeHtml(it.title)}</strong>
               <span>${escapeHtml(it.desc)}</span>
@@ -2880,6 +3269,12 @@ const evidenceOpts = [
         if(view === 'dashboard') return `${ROUTE_HASH_PREFIX}dashboard`;
         if(view === 'archived') return `${ROUTE_HASH_PREFIX}archived`;
         if(view === 'account') return `${ROUTE_HASH_PREFIX}account`;
+        if(view === 'export'){
+          if(recordId && recordId !== 'current'){
+            return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recordId)}/export`;
+          }
+          return `${ROUTE_HASH_PREFIX}export`;
+        }
         if(view === 'interstitial'){
           return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recordId)}/overview`;
         }
@@ -2916,12 +3311,14 @@ const evidenceOpts = [
         if(segs[0] === 'dashboard') return { view:'dashboard' };
         if(segs[0] === 'archived') return { view:'archived' };
         if(segs[0] === 'account') return { view:'account' };
+        if(segs[0] === 'export') return { view:'export' };
         if(segs[0] !== 'records' || segs.length < 2) return null;
 
         const recordId = decodeRouteSegment(segs[1]) || 'current';
         const mode = String(segs[2] || '').toLowerCase();
         if(mode === 'overview') return { view:'interstitial', recordId };
         if(mode === 'recommendations') return { view:'recommendations', recordId };
+        if(mode === 'export') return { view:'export', recordId };
         if(mode === 'configure'){
           const step = clampConfiguratorStep(Number(query.get('step')) || 1);
           return { view:'configurator', recordId, step };
@@ -2943,6 +3340,10 @@ const evidenceOpts = [
           }
           if(route.view === 'account'){
             setView('account');
+            return true;
+          }
+          if(route.view === 'export'){
+            openCrmExportView(route.recordId || state.activeThread || 'current');
             return true;
           }
           if(route.view === 'interstitial'){
@@ -2981,7 +3382,7 @@ const evidenceOpts = [
       function setView(view, opts){
         const cfg = Object.assign({ render: true, syncRoute: true }, opts || {});
         const prev = state.currentView || 'dashboard';
-        const next = (view === 'dashboard' || view === 'archived' || view === 'interstitial' || view === 'account' || view === 'recommendations') ? view : 'configurator';
+        const next = (view === 'dashboard' || view === 'archived' || view === 'interstitial' || view === 'account' || view === 'recommendations' || view === 'export') ? view : 'configurator';
         if(prev === 'configurator' && next !== 'configurator'){
           const prevRecordId = String(state.activeThread || '').trim();
           if(prevRecordId && prevRecordId !== 'current'){
@@ -3004,7 +3405,8 @@ const evidenceOpts = [
         document.body.classList.toggle('is-interstitial-view', next === 'interstitial');
         document.body.classList.toggle('is-account-view', next === 'account');
         document.body.classList.toggle('is-recommendations-view', next === 'recommendations');
-        if(next === 'dashboard' || next === 'archived' || next === 'account' || next === 'recommendations'){
+        document.body.classList.toggle('is-export-view', next === 'export');
+        if(next === 'dashboard' || next === 'archived' || next === 'account' || next === 'recommendations' || next === 'export'){
           state.navPreviewThreadId = null;
         }
         if(next !== 'configurator'){
@@ -3147,6 +3549,7 @@ const evidenceOpts = [
           || view === 'archived'
           || view === 'account'
           || view === 'recommendations'
+          || view === 'export'
         );
         nav.hidden = !isWorkspaceView;
         if(!isWorkspaceView){
@@ -3173,6 +3576,17 @@ const evidenceOpts = [
           const threadId = String((thread && thread.id) || state.recommendationsThreadId || 'current');
           items.push({ label:company, action:'interstitial-thread', threadId, current:false });
           items.push({ label:'Resources', action:'recommendations', current:true });
+        }else if(view === 'export'){
+          const activeId = String(state.activeThread || '').trim();
+          const thread = activeId && activeId !== 'current'
+            ? findSavedThread(activeId)
+            : currentThreadModel();
+          const company = String((thread && thread.company) || '').trim();
+          const threadId = String((thread && thread.id) || 'current').trim() || 'current';
+          if(company){
+            items.push({ label:company, action:'interstitial-thread', threadId, current:false });
+          }
+          items.push({ label:'CRM export', action:'export', current:true });
         }
 
         list.innerHTML = items.map((item)=>{
@@ -4702,6 +5116,24 @@ const evidenceOpts = [
         });
       }
 
+      function csvSafeCellValue(value){
+        const text = String(value ?? '')
+          .replace(/\r\n/g, '\n')
+          .replace(/\r/g, '\n');
+        const leftTrimmed = text.replace(/^[\u0000-\u0020]+/, '');
+        const looksLikeFormula = (
+          /^[=+@]/.test(leftTrimmed)
+          || (/^-/.test(leftTrimmed) && !/^-?\d+(\.\d+)?$/.test(leftTrimmed))
+        );
+        return looksLikeFormula ? `'${text}` : text;
+      }
+
+      function csvEscapedCell(value){
+        const safe = csvSafeCellValue(value);
+        if(/[",\n]/.test(safe)) return `"${safe.replace(/"/g, '""')}"`;
+        return safe;
+      }
+
       function buildThreadsCsv(rows){
         const join = (items)=> (items && items.length) ? items.join('; ') : '';
         const val = (v)=> (v === null || v === undefined) ? '' : String(v);
@@ -4805,13 +5237,8 @@ const evidenceOpts = [
         const cols = table.length ? Object.keys(table[0]) : [];
         if(!cols.length) return '';
 
-        const esc = (s)=>{
-          const str = String(s ?? '');
-          if(/[",\n]/.test(str)) return '"' + str.replace(/"/g, '""') + '"';
-          return str;
-        };
-        const header = cols.map(esc).join(',');
-        const lines = table.map((row)=> cols.map((col)=> esc(row[col])).join(','));
+        const header = cols.map((col)=> csvEscapedCell(col)).join(',');
+        const lines = table.map((row)=> cols.map((col)=> csvEscapedCell(row[col])).join(','));
         return [header].concat(lines).join('\n') + '\n';
       }
 
@@ -4830,6 +5257,414 @@ const evidenceOpts = [
         const filename = `immersive-records-high-fidelity-${day}.csv`;
         downloadText(csv, filename, 'text/csv;charset=utf-8;');
         toast(`Exported ${rows.length} records (high fidelity CSV).`);
+      }
+
+      function normalizeCrmExportScope(raw){
+        const value = String(raw || '').trim().toLowerCase();
+        if(value === 'selected') return 'selected';
+        if(value === 'all') return 'all';
+        return 'active';
+      }
+
+      function splitDisplayName(fullName){
+        const normalized = String(fullName || '').trim().replace(/\s+/g, ' ');
+        if(!normalized) return { firstName:'', lastName:'Unknown' };
+        const parts = normalized.split(' ');
+        if(parts.length <= 1){
+          return { firstName: normalized, lastName:'Unknown' };
+        }
+        return {
+          firstName: parts.slice(0, -1).join(' '),
+          lastName: parts[parts.length - 1]
+        };
+      }
+
+      function csvFromRowObjects(rows, cols){
+        const list = Array.isArray(rows) ? rows : [];
+        if(!list.length) return '';
+        const columns = (Array.isArray(cols) && cols.length)
+          ? cols.slice()
+          : Array.from(new Set(list.flatMap((row)=> Object.keys(row || {}))));
+        if(!columns.length) return '';
+        const header = columns.map((col)=> csvEscapedCell(col)).join(',');
+        const body = list.map((row)=> columns.map((col)=> csvEscapedCell(row && row[col])).join(',')).join('\n');
+        return `${header}\n${body}\n`;
+      }
+
+      function crmPreviewFromRows(rows){
+        const first = (Array.isArray(rows) && rows.length) ? rows[0] : null;
+        if(!first) return 'No record selected.';
+        try{
+          return JSON.stringify(first, null, 2);
+        }catch(err){
+          return 'Preview unavailable.';
+        }
+      }
+
+      function hasMeaningfulCurrentSnapshot(snapshot){
+        const snap = (snapshot && typeof snapshot === 'object') ? snapshot : {};
+        return !!(
+          String(snap.fullName || '').trim()
+          || String(snap.company || '').trim()
+          || String(snap.email || '').trim()
+          || String(snap.phone || '').trim()
+          || String(snap.role || '').trim()
+          || (Array.isArray(snap.pressureSources) && snap.pressureSources.length)
+          || (Array.isArray(snap.drivers) && snap.drivers.length)
+          || (Array.isArray(snap.groups) && snap.groups.length)
+          || (Array.isArray(snap.regs) && snap.regs.length)
+        );
+      }
+
+      function crmExportThreadCandidates(){
+        const out = [];
+        const seen = new Set();
+        const pushThread = (thread)=>{
+          if(!thread || typeof thread !== 'object') return;
+          const id = String((thread.recordId || thread.id) || '').trim() || 'current';
+          if(seen.has(id)) return;
+          seen.add(id);
+          out.push(thread);
+        };
+
+        const activeId = String(state.activeThread || '').trim();
+        if(activeId === 'current'){
+          pushThread(currentThreadModel());
+        }else if(activeId){
+          const saved = findSavedThread(activeId);
+          if(saved) pushThread(saved);
+        }
+
+        const currentSnapshot = buildThreadSnapshotFromState();
+        if(hasMeaningfulCurrentSnapshot(currentSnapshot)){
+          pushThread(currentThreadModel());
+        }
+
+        threadModels().forEach((thread)=> pushThread(thread));
+        return out;
+      }
+
+      function resolveCrmExportThreadById(threadId){
+        const target = String(threadId || '').trim() || 'current';
+        if(target === 'current') return currentThreadModel();
+        return findSavedThread(target);
+      }
+
+      function crmExportScopeThreads(){
+        const scope = normalizeCrmExportScope(state.crmExportScope);
+        const selectedId = String(state.crmExportRecordId || '').trim() || 'current';
+        if(scope === 'all'){
+          const rows = threadModels();
+          if(rows.length) return rows;
+          const currentSnapshot = buildThreadSnapshotFromState();
+          return hasMeaningfulCurrentSnapshot(currentSnapshot) ? [currentThreadModel()] : [];
+        }
+        if(scope === 'selected'){
+          const target = resolveCrmExportThreadById(selectedId);
+          if(target) return [target];
+          return [];
+        }
+        const activeId = String(state.activeThread || '').trim() || 'current';
+        const target = resolveCrmExportThreadById(activeId);
+        return target ? [target] : [];
+      }
+
+      function crmExportThreadLabel(thread){
+        const target = (thread && typeof thread === 'object') ? thread : {};
+        const id = String((target.recordId || target.id) || 'current').trim() || 'current';
+        const company = String(target.company || '').trim() || (id === 'current' ? 'Current draft' : 'Untitled company');
+        const completion = String(threadReadinessProgress(target).completion || '').trim() || '0/0 (0%)';
+        const tier = String(target.tier || '').trim() || 'Core';
+        return `${company} · ${completion} · ${tier}`;
+      }
+
+      function crmExportCanonicalRows(threads){
+        const list = Array.isArray(threads) ? threads : [];
+        const regionLabels = { NA:'North America', UKI:'UK & Ireland', EU:'Europe (EU)', APAC:'APAC', Other:'Other / Global' };
+        const join = (items)=> (Array.isArray(items) ? items : []).map((item)=> String(item || '').trim()).filter(Boolean).join(' | ');
+        const nowIso = new Date().toISOString();
+
+        return list.map((thread)=>{
+          const target = (thread && typeof thread === 'object') ? thread : {};
+          const id = String((target.recordId || target.id) || 'current').trim() || 'current';
+          const snapshot = id === 'current'
+            ? buildThreadSnapshotFromState()
+            : ((target.snapshot && typeof target.snapshot === 'object') ? target.snapshot : defaultSnapshotForThread(target));
+          const progress = threadReadinessProgress(target);
+          const completion = String(progress.completion || '').trim() || '0/0 (0%)';
+          const completionPct = completionPctFromSummary(completion);
+          const viz = id === 'current'
+            ? buildSavedVizFromState()
+            : ((target.viz && typeof target.viz === 'object') ? target.viz : {});
+          const outcomes = inferredConsultationOutcomes(target)
+            .map((row)=> String((row && (row.short || row.label)) || '').trim())
+            .filter(Boolean)
+            .slice(0, 3);
+          const pressureSourceLabels = dashLabelsFromIds(snapshot.pressureSources, pressureOpts.map((opt)=> ({ id:opt.id, label:opt.title })));
+          const driverLabels = dashLabelsFromIds(snapshot.drivers, driverOpts.map((opt)=> ({ id:opt.id, label:opt.title })));
+          const evidenceLabels = dashLabelsFromIds(snapshot.evidence, evidenceOpts);
+          const groupLabels = dashLabelsFromIds(snapshot.groups, groupOpts);
+          const names = splitDisplayName(snapshot.fullName || '');
+          const roleLabel = optionLabel(roleOpts, snapshot.role);
+          const urgentWinLabel = optionLabel(urgentWinOpts, snapshot.urgentWin);
+          const cadenceLabel = optionLabel(rhythmOpts, snapshot.rhythm);
+          const measureLabel = optionLabel(measureOpts, snapshot.measure);
+
+          return {
+            record_id: id,
+            workspace_id: String(target.workspaceId || DEFAULT_WORKSPACE_ID).trim() || DEFAULT_WORKSPACE_ID,
+            schema_version: String(target.schemaVersion || RECORD_SCHEMA_VERSION).trim() || RECORD_SCHEMA_VERSION,
+            exported_at: nowIso,
+            updated_at: Number(target.updatedAt) ? new Date(Number(target.updatedAt)).toISOString() : '',
+            company: String((snapshot.company || target.company || '')).trim(),
+            full_name: String(snapshot.fullName || '').trim(),
+            first_name: names.firstName,
+            last_name: names.lastName,
+            email: String(snapshot.email || '').trim(),
+            phone: String(snapshot.phone || '').trim(),
+            role: String(roleLabel || snapshot.role || '').trim(),
+            company_size: String(snapshot.companySize || '').trim(),
+            operating_country: String(snapshot.operatingCountry || '').trim(),
+            industry: String(snapshot.industry || '').trim(),
+            region: String(snapshot.region ? (regionLabels[snapshot.region] || snapshot.region) : '').trim(),
+            package_tier: String(target.tier || dashboardTierName()).trim() || 'Core',
+            completion_summary: completion,
+            completion_pct: completionPct,
+            primary_outcomes: join(outcomes.length ? outcomes : (Array.isArray(target.outcomes) ? target.outcomes : [])),
+            pressure_sources: join(pressureSourceLabels),
+            urgent_win: String(urgentWinLabel || '').trim(),
+            drivers: join(driverLabels),
+            evidence_audience: join(evidenceLabels),
+            coverage_groups: join(groupLabels),
+            cadence: String(cadenceLabel || '').trim(),
+            measurement: String(measureLabel || '').trim(),
+            fit_scope: String(optionLabel(fitScopeOpts, snapshot.fitScope) || snapshot.fitScope || '').trim(),
+            fit_realism: String(optionLabel(fitRealismOpts, snapshot.fitRealism) || snapshot.fitRealism || '').trim(),
+            fit_services: String(optionLabel(fitServicesOpts, snapshot.fitServices) || snapshot.fitServices || '').trim(),
+            fit_risk_frame: String(optionLabel(fitRiskFrameOpts, snapshot.fitRiskFrame) || snapshot.fitRiskFrame || '').trim(),
+            roi_pct_3yr: Number(viz.roiPct) || 0,
+            npv_usd_3yr: Number(viz.npv) || 0,
+            payback_months: (viz.paybackMonths === null || viz.paybackMonths === undefined) ? '' : Number(viz.paybackMonths),
+            share_access: String(resolveShareAccess(target.shareAccess || 'workspace-viewer')).trim(),
+            collaborators_count: Array.isArray(target.collaborators) ? target.collaborators.length : 0
+          };
+        });
+      }
+
+      const HUBSPOT_EXPORT_COLUMNS = Object.freeze([
+        'Email',
+        'First Name',
+        'Last Name',
+        'Phone Number',
+        'Company Name',
+        'Job Title',
+        'Country/Region',
+        'Readiness Record ID',
+        'Readiness Package',
+        'Readiness Completion',
+        'Readiness Primary Outcomes',
+        'Readiness Urgent Win',
+        'Readiness Drivers',
+        'Readiness Evidence Audience',
+        'Readiness ROI 3Y',
+        'Readiness NPV 3Y USD',
+        'Readiness Payback Months',
+        'Readiness Exported At'
+      ]);
+
+      function hubspotRowsFromCanonical(rows){
+        return (Array.isArray(rows) ? rows : []).map((row)=> ({
+          'Email': row.email || '',
+          'First Name': row.first_name || '',
+          'Last Name': row.last_name || 'Unknown',
+          'Phone Number': row.phone || '',
+          'Company Name': row.company || '',
+          'Job Title': row.role || '',
+          'Country/Region': row.operating_country || row.region || '',
+          'Readiness Record ID': row.record_id || '',
+          'Readiness Package': row.package_tier || '',
+          'Readiness Completion': row.completion_summary || '',
+          'Readiness Primary Outcomes': row.primary_outcomes || '',
+          'Readiness Urgent Win': row.urgent_win || '',
+          'Readiness Drivers': row.drivers || '',
+          'Readiness Evidence Audience': row.evidence_audience || '',
+          'Readiness ROI 3Y': row.roi_pct_3yr,
+          'Readiness NPV 3Y USD': row.npv_usd_3yr,
+          'Readiness Payback Months': row.payback_months,
+          'Readiness Exported At': row.exported_at || ''
+        }));
+      }
+
+      const SALESFORCE_EXPORT_COLUMNS = Object.freeze([
+        'External_Record_Id__c',
+        'Workspace_Id__c',
+        'FirstName',
+        'LastName',
+        'Email',
+        'Phone',
+        'Company',
+        'Title',
+        'Country',
+        'Industry',
+        'Immersive_Package__c',
+        'Immersive_Completion__c',
+        'Immersive_Primary_Outcomes__c',
+        'Immersive_Urgent_Win__c',
+        'Immersive_Drivers__c',
+        'Immersive_Evidence_Audience__c',
+        'Immersive_ROI_3Y__c',
+        'Immersive_NPV_3Y_USD__c',
+        'Immersive_Payback_Months__c',
+        'Immersive_Exported_At__c'
+      ]);
+
+      function salesforceRowsFromCanonical(rows){
+        return (Array.isArray(rows) ? rows : []).map((row)=> ({
+          'External_Record_Id__c': row.record_id || '',
+          'Workspace_Id__c': row.workspace_id || '',
+          'FirstName': row.first_name || '',
+          'LastName': row.last_name || 'Unknown',
+          'Email': row.email || '',
+          'Phone': row.phone || '',
+          'Company': row.company || '',
+          'Title': row.role || '',
+          'Country': row.operating_country || row.region || '',
+          'Industry': row.industry || '',
+          'Immersive_Package__c': row.package_tier || '',
+          'Immersive_Completion__c': row.completion_summary || '',
+          'Immersive_Primary_Outcomes__c': row.primary_outcomes || '',
+          'Immersive_Urgent_Win__c': row.urgent_win || '',
+          'Immersive_Drivers__c': row.drivers || '',
+          'Immersive_Evidence_Audience__c': row.evidence_audience || '',
+          'Immersive_ROI_3Y__c': row.roi_pct_3yr,
+          'Immersive_NPV_3Y_USD__c': row.npv_usd_3yr,
+          'Immersive_Payback_Months__c': row.payback_months,
+          'Immersive_Exported_At__c': row.exported_at || ''
+        }));
+      }
+
+      function renderCrmExportView(){
+        const shell = $('#crmExportView');
+        if(!shell) return;
+        const scopeSelect = $('#crmExportScope');
+        const recordSelect = $('#crmExportRecord');
+        const recordField = $('#crmExportRecordField');
+        const countPill = $('#crmExportCount');
+        const targetPill = $('#crmExportTarget');
+        const previewHubspot = $('#crmExportPreviewHubspot');
+        const previewSalesforce = $('#crmExportPreviewSalesforce');
+        const hint = $('#crmExportHint');
+
+        const scope = normalizeCrmExportScope(state.crmExportScope);
+        state.crmExportScope = scope;
+        const candidates = crmExportThreadCandidates();
+        if(!state.crmExportRecordId || !resolveCrmExportThreadById(state.crmExportRecordId)){
+          const activeId = String(state.activeThread || '').trim() || 'current';
+          state.crmExportRecordId = activeId;
+        }
+
+        if(scopeSelect){
+          scopeSelect.value = scope;
+        }
+        if(recordSelect){
+          const options = candidates.map((thread)=>{
+            const id = String((thread && (thread.recordId || thread.id)) || 'current').trim() || 'current';
+            return `<option value="${escapeHtml(id)}">${escapeHtml(crmExportThreadLabel(thread))}</option>`;
+          });
+          recordSelect.innerHTML = options.join('');
+          const fallbackId = options.length ? String(candidates[0].recordId || candidates[0].id || 'current') : 'current';
+          const selectedId = String(state.crmExportRecordId || fallbackId || 'current').trim() || 'current';
+          recordSelect.value = selectedId;
+          if(recordSelect.value !== selectedId){
+            recordSelect.value = fallbackId;
+            state.crmExportRecordId = fallbackId;
+          }
+          recordSelect.disabled = scope !== 'selected';
+        }
+        if(recordField){
+          recordField.style.opacity = scope === 'selected' ? '1' : '.6';
+        }
+
+        const selectedThreads = crmExportScopeThreads();
+        const canonicalRows = crmExportCanonicalRows(selectedThreads);
+        const hubspotRows = hubspotRowsFromCanonical(canonicalRows);
+        const salesforceRows = salesforceRowsFromCanonical(canonicalRows);
+        const targetText = selectedThreads.length === 1
+          ? crmExportThreadLabel(selectedThreads[0])
+          : `${selectedThreads.length} records`;
+
+        if(countPill){
+          countPill.textContent = `Records: ${selectedThreads.length}`;
+        }
+        if(targetPill){
+          targetPill.textContent = `Target: ${targetText || '—'}`;
+        }
+        if(previewHubspot){
+          previewHubspot.textContent = crmPreviewFromRows(hubspotRows);
+        }
+        if(previewSalesforce){
+          previewSalesforce.textContent = crmPreviewFromRows(salesforceRows);
+        }
+        if(hint){
+          hint.textContent = selectedThreads.length
+            ? 'HubSpot template is contact/company-oriented. Salesforce template is lead-oriented and expects matching custom field API names.'
+            : 'No records available yet. Save a record first, then export.';
+        }
+      }
+
+      function openCrmExportView(preferredThreadId){
+        const incomingId = String(preferredThreadId || '').trim();
+        const nextId = incomingId || String(state.activeThread || '').trim() || 'current';
+        if(nextId === 'current'){
+          state.activeThread = 'current';
+          state.crmExportRecordId = 'current';
+        }else{
+          const found = findSavedThread(nextId);
+          if(found){
+            state.activeThread = nextId;
+            state.crmExportRecordId = nextId;
+          }
+        }
+        state.crmExportScope = normalizeCrmExportScope(state.crmExportScope || 'active');
+        renderCrmExportView();
+        setView('export');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      function downloadHubspotCrmCsv(){
+        const rows = crmExportCanonicalRows(crmExportScopeThreads());
+        if(!rows.length){
+          toast('No records available to export.');
+          return;
+        }
+        const mapped = hubspotRowsFromCanonical(rows);
+        const csv = csvFromRowObjects(mapped, HUBSPOT_EXPORT_COLUMNS);
+        if(!csv){
+          toast('No records available to export.');
+          return;
+        }
+        const day = new Date().toISOString().slice(0, 10);
+        const filename = `hubspot-readiness-export-${day}.csv`;
+        downloadText(csv, filename, 'text/csv;charset=utf-8;');
+        toast(`Exported HubSpot CSV (${rows.length} record${rows.length === 1 ? '' : 's'}).`);
+      }
+
+      function downloadSalesforceCrmCsv(){
+        const rows = crmExportCanonicalRows(crmExportScopeThreads());
+        if(!rows.length){
+          toast('No records available to export.');
+          return;
+        }
+        const mapped = salesforceRowsFromCanonical(rows);
+        const csv = csvFromRowObjects(mapped, SALESFORCE_EXPORT_COLUMNS);
+        if(!csv){
+          toast('No records available to export.');
+          return;
+        }
+        const day = new Date().toISOString().slice(0, 10);
+        const filename = `salesforce-readiness-export-${day}.csv`;
+        downloadText(csv, filename, 'text/csv;charset=utf-8;');
+        toast(`Exported Salesforce CSV (${rows.length} record${rows.length === 1 ? '' : 's'}).`);
       }
 
       function csvCanonicalKey(raw){
@@ -5187,6 +6022,10 @@ const evidenceOpts = [
       function importWorkspaceCsvFile(file){
         const src = file;
         if(!src) return;
+        if(Number(src.size || 0) > MAX_IMPORT_CSV_BYTES){
+          toast('CSV is too large. Use a file under 5 MB.');
+          return;
+        }
         const reader = new FileReader();
         reader.onload = ()=>{
           try{
@@ -11869,7 +12708,7 @@ const evidenceOpts = [
 
         const view = state.currentView || 'dashboard';
         const targetThread = activeCollaborationThreadModel();
-        const unsupportedView = (view === 'dashboard' || view === 'archived' || view === 'account');
+        const unsupportedView = (view === 'dashboard' || view === 'archived' || view === 'account' || view === 'export');
         if(unsupportedView){
           if(hasStatusUi) wrap.hidden = true;
           setReadOnlyControls(false);
@@ -12023,6 +12862,9 @@ const evidenceOpts = [
         renderInterstitialView();
         syncGlobalActionBar();
         renderWorkspaceBreadcrumb();
+        if((state.currentView || '') === 'export'){
+          renderCrmExportView();
+        }
         const jumpBtns = $$('[data-jump-next-incomplete]');
         const jumpLabels = $$('.jumpNextIncompleteBtnLabel');
         if(jumpBtns.length){
@@ -13149,15 +13991,8 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         };
 
         const cols = Object.keys(row);
-
-        const esc = (s)=>{
-          const str = String(s ?? '');
-          if(/[",\n]/.test(str)) return '"' + str.replace(/"/g,'""') + '"';
-          return str;
-        };
-
-        const header = cols.map(esc).join(',');
-        const line = cols.map(c => esc(row[c])).join(',');
+        const header = cols.map((col)=> csvEscapedCell(col)).join(',');
+        const line = cols.map((c)=> csvEscapedCell(row[c])).join(',');
         return header + '\n' + line + '\n';
       }
 
@@ -13420,6 +14255,11 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           }
           if(action === 'recommendations'){
             setView('recommendations');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+          if(action === 'export'){
+            openCrmExportView(state.activeThread || 'current');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }
         });
@@ -13710,6 +14550,15 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const accountUploadProfileCsvBtn = $('#accountUploadProfileCsv');
       const accountUploadProfileFileInput = $('#accountUploadProfileFile');
       const accountExportAllCsvBtn = $('#accountExportAllCsv');
+      const backendConnectionToggleOptions = $$('#backendConnectionToggle [data-backend-connection]');
+      const firebaseConfigJsonInput = $('#firebaseConfigJson');
+      const firebaseSaveConfigBtn = $('#firebaseSaveConfigBtn');
+      const firebaseClearConfigBtn = $('#firebaseClearConfigBtn');
+      const firebaseSignInGoogleBtn = $('#firebaseSignInGoogleBtn');
+      const firebaseSignOutBtn = $('#firebaseSignOutBtn');
+      const firebaseHealthcheckBtn = $('#firebaseHealthcheckBtn');
+      const crmExportScopeSelect = $('#crmExportScope');
+      const crmExportRecordSelect = $('#crmExportRecord');
       const toneOptions = $$('#toneOptions [data-tone]');
       const densityOptions = $$('#densityOptions [data-density]');
       const fontScaleOptions = $$('#fontScaleOptions [data-font-scale]');
@@ -14508,6 +15357,76 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           exportAllRecordsCsv();
         });
       }
+      if(backendConnectionToggleOptions.length){
+        backendConnectionToggleOptions.forEach((btn)=>{
+          btn.addEventListener('click', ()=>{
+            const nextMode = resolveBackendConnectionMode(btn.getAttribute('data-backend-connection') || 'off');
+            const currentMode = resolveBackendConnectionMode(firebaseRuntime.connectionMode || readBackendConnectionModeFromStorage());
+            if(nextMode === currentMode){
+              renderFirebaseConnectionUi();
+              return;
+            }
+            saveBackendConnectionModeToStorage(nextMode);
+            firebaseRuntime.connectionMode = nextMode;
+            initFirebaseRuntime();
+            if(nextMode === 'on'){
+              toast('Backend connection enabled for this browser.');
+            }else{
+              toast('Backend connection disabled. App remains local-only.');
+            }
+          });
+        });
+      }
+      if(firebaseSaveConfigBtn && firebaseConfigJsonInput){
+        firebaseSaveConfigBtn.addEventListener('click', ()=>{
+          const parsed = parseFirebaseWebConfigText(firebaseConfigJsonInput.value || '');
+          if(!parsed){
+            toast('Firebase config is invalid. Paste JSON or firebaseConfig object.');
+            return;
+          }
+          if(!saveFirebaseWebConfigToStorage(parsed)){
+            toast('Could not save Firebase config in browser storage.');
+            return;
+          }
+          initFirebaseRuntime();
+          toast('Firebase config saved.');
+        });
+      }
+      if(firebaseClearConfigBtn && firebaseConfigJsonInput){
+        firebaseClearConfigBtn.addEventListener('click', ()=>{
+          clearFirebaseWebConfigFromStorage();
+          firebaseConfigJsonInput.value = '';
+          initFirebaseRuntime();
+          toast('Cleared Firebase config.');
+        });
+      }
+      if(firebaseSignInGoogleBtn){
+        firebaseSignInGoogleBtn.addEventListener('click', ()=>{
+          signInWithGoogleFirebase();
+        });
+      }
+      if(firebaseSignOutBtn){
+        firebaseSignOutBtn.addEventListener('click', ()=>{
+          signOutFirebaseUser();
+        });
+      }
+      if(firebaseHealthcheckBtn){
+        firebaseHealthcheckBtn.addEventListener('click', ()=>{
+          runFirestoreHealthcheck();
+        });
+      }
+      if(crmExportScopeSelect){
+        crmExportScopeSelect.addEventListener('change', ()=>{
+          state.crmExportScope = normalizeCrmExportScope(crmExportScopeSelect.value);
+          renderCrmExportView();
+        });
+      }
+      if(crmExportRecordSelect){
+        crmExportRecordSelect.addEventListener('change', ()=>{
+          state.crmExportRecordId = String(crmExportRecordSelect.value || '').trim() || 'current';
+          renderCrmExportView();
+        });
+      }
       toneOptions.forEach((btn)=>{
         btn.addEventListener('click', ()=>{
           applyShellTone(btn.getAttribute('data-tone') || 'default');
@@ -15212,6 +16131,22 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
             { returnView: state.currentView === 'interstitial' ? 'interstitial' : 'configurator' }
           );
         }
+        if(action === 'openCrmExport'){
+          const preferredThreadId = (state.currentView === 'recommendations')
+            ? (state.recommendationsThreadId || state.activeThread || 'current')
+            : (state.activeThread || 'current');
+          openCrmExportView(preferredThreadId);
+        }
+        if(action === 'downloadHubspotCsv'){
+          downloadHubspotCrmCsv();
+        }
+        if(action === 'downloadSalesforceCsv'){
+          downloadSalesforceCrmCsv();
+        }
+        if(action === 'backToDashboard'){
+          setView('dashboard');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
         if(action === 'openRecommendationEmail'){
           const targetThread = (state.currentView === 'recommendations')
             ? resolveRecommendationThread(state.recommendationsThreadId || state.activeThread || 'current')
@@ -15420,6 +16355,8 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       hydrateRssCatalogRows().catch(()=>{});
       applySuggested();
       syncFormControlsFromState();
+      initFirebaseRuntime();
+      renderFirebaseConnectionUi();
 
       // keep slider labels in sync on each update
       const _update = update;

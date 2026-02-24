@@ -638,6 +638,10 @@
       display:none;
       padding: 16px 0 30px;
     }
+    #crmExportView{
+      display:none;
+      padding: 16px 0 30px;
+    }
     .workspaceBreadcrumb{
       display:none;
       align-items:center;
@@ -710,7 +714,10 @@
     body.is-recommendations-view #contentRecommendationsView{
       display:block;
     }
-    body:is(.is-archived-view, .is-account-view, .is-interstitial-view, .is-recommendations-view) #workspaceBreadcrumb{
+    body.is-export-view #crmExportView{
+      display:block;
+    }
+    body:is(.is-archived-view, .is-account-view, .is-interstitial-view, .is-recommendations-view, .is-export-view) #workspaceBreadcrumb{
       display:flex;
     }
     body.is-dashboard-view .grid{
@@ -725,6 +732,9 @@
     body.is-recommendations-view .grid{
       display:none;
     }
+    body.is-export-view .grid{
+      display:none;
+    }
     body.is-dashboard-view #interstitialView{
       display:none;
     }
@@ -735,6 +745,9 @@
       display:none;
     }
     body.is-dashboard-view #contentRecommendationsView{
+      display:none;
+    }
+    body.is-dashboard-view #crmExportView{
       display:none;
     }
     body.is-interstitial-view #dashboardView{
@@ -749,6 +762,9 @@
     body.is-interstitial-view #contentRecommendationsView{
       display:none;
     }
+    body.is-interstitial-view #crmExportView{
+      display:none;
+    }
     body.is-account-view #dashboardView{
       display:none;
     }
@@ -756,6 +772,9 @@
       display:none;
     }
     body.is-account-view #contentRecommendationsView{
+      display:none;
+    }
+    body.is-account-view #crmExportView{
       display:none;
     }
     body.is-archived-view #dashboardView{
@@ -768,6 +787,9 @@
       display:none;
     }
     body.is-archived-view #contentRecommendationsView{
+      display:none;
+    }
+    body.is-archived-view #crmExportView{
       display:none;
     }
     body.is-account-view #interstitialView{
@@ -791,6 +813,24 @@
     body.is-recommendations-view #interstitialView{
       display:none;
     }
+    body.is-recommendations-view #crmExportView{
+      display:none;
+    }
+    body.is-export-view #dashboardView{
+      display:none;
+    }
+    body.is-export-view #archivedView{
+      display:none;
+    }
+    body.is-export-view #accountView{
+      display:none;
+    }
+    body.is-export-view #interstitialView{
+      display:none;
+    }
+    body.is-export-view #contentRecommendationsView{
+      display:none;
+    }
     body.is-dashboard-view footer{
       display:none;
     }
@@ -804,6 +844,9 @@
       display:none;
     }
     body.is-recommendations-view footer{
+      display:none;
+    }
+    body.is-export-view footer{
       display:none;
     }
     body.is-dashboard-view .colResize--right{
@@ -821,10 +864,13 @@
     body.is-recommendations-view .colResize--right{
       display:none !important;
     }
-    body:is(.is-dashboard-view, .is-interstitial-view, .is-account-view, .is-archived-view, .is-recommendations-view) .progress{
+    body.is-export-view .colResize--right{
+      display:none !important;
+    }
+    body:is(.is-dashboard-view, .is-interstitial-view, .is-account-view, .is-archived-view, .is-recommendations-view, .is-export-view) .progress{
       display:none;
     }
-    body:is(.is-dashboard-view, .is-interstitial-view, .is-account-view, .is-archived-view, .is-recommendations-view) .recordContext{
+    body:is(.is-dashboard-view, .is-interstitial-view, .is-account-view, .is-archived-view, .is-recommendations-view, .is-export-view) .recordContext{
       display:none;
     }
     body.is-configurator-view .workspaceNav,
@@ -4237,6 +4283,18 @@
       width:100%;
       min-width:0;
     }
+    .settingsField > textarea{
+      width:100%;
+      min-width:0;
+      resize:vertical;
+      min-height:130px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:.84rem;
+      line-height:1.35;
+    }
+    .settingsCodeInput{
+      background: color-mix(in srgb, var(--surface) 82%, var(--surface-2));
+    }
     .settingsInlineOptions{
       margin-top:10px;
     }
@@ -4255,6 +4313,13 @@
       gap:8px;
       margin-top:12px;
       flex-wrap:wrap;
+    }
+    .settingsStatusLine{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top:10px;
     }
     @media (max-width: 720px){
       .accountHeadActions{
@@ -4511,13 +4576,57 @@
   font-size:.78rem;
   color: var(--muted);
 }
+.crmExportShell{
+  display:grid;
+  gap:14px;
+}
+.crmExportControls{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+.crmExportActions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.crmExportPreviewWrap{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+.crmExportPreviewCard{
+  border:1px solid var(--border);
+  background: var(--soft2);
+  border-radius:12px;
+  padding:12px;
+  display:grid;
+  gap:8px;
+}
+.crmExportPreviewCard h3{
+  margin:0;
+  font-size:.9rem;
+  line-height:1.3;
+  color: var(--text);
+}
+.crmExportPreviewCard pre{
+  margin:0;
+  font-size:.78rem;
+  line-height:1.45;
+  color: var(--muted);
+  white-space:pre-wrap;
+  word-break:break-word;
+}
 @media (max-width: 980px){
   .recommendationsGrid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .crmExportPreviewWrap{ grid-template-columns: 1fr; }
 }
 @media (max-width: 760px){
   .recommendationsHead{ flex-direction:column; }
   .recommendationsHeadActions{ justify-content:flex-start; }
   .recommendationsGrid{ grid-template-columns: 1fr; }
+  .crmExportControls{ grid-template-columns: 1fr; }
 }
 
 .customerTemplatePreviewWrap{
@@ -6797,7 +6906,7 @@
         margin-left: var(--app-lhn-w);
         padding: 0 0 0 var(--app-gap);
       }
-      body:is(.is-dashboard-view, .is-archived-view, .is-interstitial-view, .is-recommendations-view) main.wrap{
+      body:is(.is-dashboard-view, .is-archived-view, .is-interstitial-view, .is-recommendations-view, .is-export-view) main.wrap{
         padding-right: var(--app-gap);
       }
       .grid{

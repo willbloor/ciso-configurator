@@ -242,6 +242,21 @@ Navigation and IA cleanup deployed:
    - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
    - File: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
 
+## HubSpot-First CRM Export UX (2026-02-24)
+
+Export workflow simplification deployed:
+
+1. Made HubSpot the explicit default handoff path
+   - CRM export subtitle and runtime hint now prioritize manual HubSpot import first.
+   - File: `/Users/will.bloor/Documents/Configurator/index.html`
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+2. Moved Salesforce actions into Advanced UI
+   - Salesforce CSV button is now under a collapsed `Advanced: Salesforce template` control.
+   - Salesforce mapping preview is now under a collapsed `Advanced preview` section.
+   - File: `/Users/will.bloor/Documents/Configurator/index.html`
+   - File: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
 ## Source Of Truth
 
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`

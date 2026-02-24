@@ -4649,10 +4649,45 @@
   gap:10px;
   flex-wrap:wrap;
 }
+.crmExportAdvanced{
+  border:1px solid var(--border);
+  border-radius:10px;
+  background: var(--surface);
+  padding: 6px 10px;
+}
+.crmExportAdvanced summary{
+  cursor:pointer;
+  list-style:none;
+  font-size:.82rem;
+  color: var(--muted);
+  font-weight:700;
+  user-select:none;
+}
+.crmExportAdvanced summary::-webkit-details-marker{
+  display:none;
+}
+.crmExportAdvanced summary::after{
+  content:'v';
+  display:inline-block;
+  margin-left:8px;
+  font-size:.74rem;
+}
+.crmExportAdvanced[open] summary::after{
+  transform: rotate(180deg);
+}
+.crmExportAdvancedBody{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:8px;
+}
 .crmExportPreviewWrap{
   display:grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap:12px;
+}
+.crmExportPreviewWrap--single{
+  grid-template-columns: minmax(0, 1fr);
 }
 .crmExportPreviewCard{
   border:1px solid var(--border);
@@ -4661,6 +4696,9 @@
   padding:12px;
   display:grid;
   gap:8px;
+}
+.crmExportAdvanced--preview{
+  margin-top:4px;
 }
 .crmExportPreviewCard h3{
   margin:0;

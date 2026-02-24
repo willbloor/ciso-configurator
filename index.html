@@ -583,7 +583,7 @@
         <header class="recommendationsHead">
           <div>
             <h2 id="crmExportTitle">CRM export</h2>
-            <p class="recommendationsSub" id="crmExportSub">Export mapped CSVs for manual HubSpot or Salesforce import. Field mapping stays stable so backend migration stays low-friction.</p>
+            <p class="recommendationsSub" id="crmExportSub">Export mapped CSVs for manual HubSpot import first. Salesforce remains available as an advanced template path.</p>
           </div>
           <div class="recommendationsHeadActions">
             <span class="dashboardPill" id="crmExportCount">Records: 0</span>
@@ -607,19 +607,29 @@
         </div>
         <div class="crmExportActions">
           <button class="btn primary small" type="button" data-action="downloadHubspotCsv">Download HubSpot CSV</button>
-          <button class="btn secondaryBlue small" type="button" data-action="downloadSalesforceCsv">Download Salesforce CSV</button>
+          <details class="crmExportAdvanced" id="crmExportSalesforceAdvanced">
+            <summary>Advanced: Salesforce template</summary>
+            <div class="crmExportAdvancedBody">
+              <button class="btn secondaryBlue small" type="button" data-action="downloadSalesforceCsv">Download Salesforce CSV</button>
+            </div>
+          </details>
         </div>
-        <p class="settingsHint" id="crmExportHint">Use HubSpot for contact/company import mapping. Use Salesforce for Lead import mapping with custom readiness fields.</p>
+        <p class="settingsHint" id="crmExportHint">HubSpot is the default handoff. Salesforce export is optional under Advanced.</p>
         <div class="crmExportPreviewWrap">
           <div class="crmExportPreviewCard">
             <h3>HubSpot mapping preview</h3>
             <pre id="crmExportPreviewHubspot">No record selected.</pre>
           </div>
-          <div class="crmExportPreviewCard">
-            <h3>Salesforce mapping preview</h3>
-            <pre id="crmExportPreviewSalesforce">No record selected.</pre>
-          </div>
         </div>
+        <details class="crmExportAdvanced crmExportAdvanced--preview" id="crmExportSalesforcePreviewAdvanced">
+          <summary>Advanced preview: Salesforce mapping</summary>
+          <div class="crmExportPreviewWrap crmExportPreviewWrap--single">
+            <div class="crmExportPreviewCard">
+              <h3>Salesforce mapping preview</h3>
+              <pre id="crmExportPreviewSalesforce">No record selected.</pre>
+            </div>
+          </div>
+        </details>
       </article>
     </section>
 

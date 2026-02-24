@@ -5655,7 +5655,7 @@ const evidenceOpts = [
         }
         if(hint){
           hint.textContent = selectedThreads.length
-            ? 'HubSpot template is contact/company-oriented. Salesforce template is lead-oriented and expects matching custom field API names.'
+            ? 'HubSpot is the default export path (contact/company mapping). Salesforce remains available in Advanced when you need lead/object template output.'
             : 'No records available yet. Save a record first, then export.';
         }
       }

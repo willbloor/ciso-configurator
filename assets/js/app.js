@@ -680,6 +680,9 @@
       const AUTO_SAVE_FAST_MS = 30000;
       const AUTO_SAVE_BASE_MS = 60000;
       const MAX_IMPORT_CSV_BYTES = 5 * 1024 * 1024;
+      const MAX_IMPORT_CSV_ROWS = 5000;
+      const MAX_IMPORT_CSV_COLUMNS = 300;
+      const MAX_IMPORT_CSV_CELL_CHARS = 20000;
       const DEFAULT_UNREAD_TEST_RECORD_COUNT = 2;
       const RECORD_LOCK_TTL_MS = 45000;
       const RECORD_LOCK_HEARTBEAT_MS = 15000;
@@ -5685,6 +5688,27 @@ const evidenceOpts = [
         let inQuotes = false;
         let idx = 0;
 
+        const fail = (message)=> {
+          throw new Error(message);
+        };
+        const pushCell = ()=>{
+          if(cell.length > MAX_IMPORT_CSV_CELL_CHARS){
+            fail(`CSV cell exceeds ${MAX_IMPORT_CSV_CELL_CHARS} characters.`);
+          }
+          row.push(cell);
+          cell = '';
+          if(row.length > MAX_IMPORT_CSV_COLUMNS){
+            fail(`CSV row exceeds ${MAX_IMPORT_CSV_COLUMNS} columns.`);
+          }
+        };
+        const pushRow = ()=>{
+          rows.push(row);
+          row = [];
+          if(rows.length > MAX_IMPORT_CSV_ROWS){
+            fail(`CSV has more than ${MAX_IMPORT_CSV_ROWS} rows.`);
+          }
+        };
+
         while(idx < src.length){
           const ch = src[idx];
           if(inQuotes){
@@ -5699,6 +5723,9 @@ const evidenceOpts = [
               continue;
             }
             cell += ch;
+            if(cell.length > MAX_IMPORT_CSV_CELL_CHARS){
+              fail(`CSV cell exceeds ${MAX_IMPORT_CSV_CELL_CHARS} characters.`);
+            }
             idx += 1;
             continue;
           }
@@ -5709,16 +5736,13 @@ const evidenceOpts = [
             continue;
           }
           if(ch === ','){
-            row.push(cell);
-            cell = '';
+            pushCell();
             idx += 1;
             continue;
           }
           if(ch === '\n'){
-            row.push(cell);
-            rows.push(row);
-            row = [];
-            cell = '';
+            pushCell();
+            pushRow();
             idx += 1;
             continue;
           }
@@ -5727,12 +5751,19 @@ const evidenceOpts = [
             continue;
           }
           cell += ch;
+          if(cell.length > MAX_IMPORT_CSV_CELL_CHARS){
+            fail(`CSV cell exceeds ${MAX_IMPORT_CSV_CELL_CHARS} characters.`);
+          }
           idx += 1;
         }
 
-        row.push(cell);
+        if(inQuotes){
+          fail('CSV appears malformed (unterminated quoted value).');
+        }
+
+        pushCell();
         if(row.length > 1 || row[0] !== '' || rows.length === 0){
-          rows.push(row);
+          pushRow();
         }
         if(rows.length && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0] === ''){
           rows.pop();
@@ -9431,6 +9462,7 @@ const evidenceOpts = [
       const CONTENT_MAX_AGE_DAYS = 365 * 3;
       const CONTENT_FRESH_PRIORITY_DAYS = 365;
       const CONTENT_RECENT_PRIORITY_DAYS = 365 * 2;
+      const RSS_FETCH_TIMEOUT_MS = 12000;
       const OFFICIAL_BLOG_RSS_URL = 'https://www.immersivelabs.com/resources/blog/rss.xml';
       const OFFICIAL_BLOG_RSS_PROXY_URL = `https://api.allorigins.win/raw?url=${encodeURIComponent(OFFICIAL_BLOG_RSS_URL)}`;
       const IMMERSIVE_DEFAULT_IMAGE_URL = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/679228e2e5f16602a4b0c480_Why%20Immersive-cta-image.webp';
@@ -9480,6 +9512,26 @@ const evidenceOpts = [
         if(value.startsWith('//')) return rewriteLegacyImmersiveBlogUrl(`https:${value}`);
         if(value.startsWith('/')) return rewriteLegacyImmersiveBlogUrl(`https://www.immersivelabs.com${value}`);
         return '';
+      }
+
+      function safeLinkHref(raw, opts){
+        const cfg = Object.assign({ allowHash:false }, opts || {});
+        const value = String(raw || '').trim();
+        if(!value) return '';
+        if(cfg.allowHash && /^#[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(value)){
+          return value;
+        }
+        return normalizedHttpUrl(value);
+      }
+
+      function safeMailtoHref(raw){
+        const value = String(raw || '').trim();
+        if(!value) return '';
+        const email = value.replace(/^mailto:/i, '').split('?')[0].trim().toLowerCase();
+        if(!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email)){
+          return '';
+        }
+        return `mailto:${email}`;
       }
 
       function publishedTimestamp(value){
@@ -9770,8 +9822,19 @@ const evidenceOpts = [
         rssCatalogHydratePromise = (async ()=>{
           const rows = [];
           await Promise.all(defaultRssFeedSources.map(async (feed)=>{
+            const controller = (window && typeof window.AbortController === 'function')
+              ? new window.AbortController()
+              : null;
+            const timeoutId = controller
+              ? window.setTimeout(()=> controller.abort(), RSS_FETCH_TIMEOUT_MS)
+              : 0;
             try{
-              const response = await window.fetch(feed.url, { method:'GET', mode:'cors', credentials:'omit' });
+              const response = await window.fetch(feed.url, {
+                method:'GET',
+                mode:'cors',
+                credentials:'omit',
+                signal: controller ? controller.signal : undefined
+              });
               if(!response || !response.ok){
                 rssCatalogFetchReport.failed += 1;
                 rssCatalogFetchReport.errors.push(`${feed.label}: HTTP ${response ? response.status : 'request failed'}`);
@@ -9782,8 +9845,15 @@ const evidenceOpts = [
               rssCatalogFetchReport.succeeded += 1;
             }catch(err){
               rssCatalogFetchReport.failed += 1;
-              rssCatalogFetchReport.errors.push(`${feed.label}: ${(err && err.message) ? err.message : 'request failed'}`);
+              const msg = (err && err.name === 'AbortError')
+                ? `request timed out after ${Math.round(RSS_FETCH_TIMEOUT_MS / 1000)}s`
+                : ((err && err.message) ? err.message : 'request failed');
+              rssCatalogFetchReport.errors.push(`${feed.label}: ${msg}`);
               // Best effort only; existing content catalog remains the default source.
+            }finally{
+              if(timeoutId){
+                window.clearTimeout(timeoutId);
+              }
             }
           }));
           const deduped = [];
@@ -10097,7 +10167,7 @@ const evidenceOpts = [
           title: matched.title,
           summary,
           why: whyOverride || `Selected because it supports your ${outcomeLabel.toLowerCase()} priority.`,
-          url: matched.url || '',
+          url: safeLinkHref(matched.url) || '',
           linkLabel: matched.linkLabel || 'Read more',
           source: matched.sourceCsv || '',
           publishedOn: matched.publishedOn || '',
@@ -10385,7 +10455,7 @@ const evidenceOpts = [
               formatKey: String(item.format || '').trim().toLowerCase() || 'rss-post',
               title: String(item.title || '').trim() || 'Latest update',
               summary: rssSummaryFromRaw(item.summary || '', 190) || 'Latest update from the Immersive Labs blog.',
-              url: String(item.url || '').trim(),
+              url: safeLinkHref(item.url),
               linkLabel: 'Read post',
               publishedOn: String(item.publishedOn || '').trim(),
               imageUrl: cardImageUrlForItem(item)
@@ -10398,7 +10468,7 @@ const evidenceOpts = [
               formatKey: String(card && card.formatKey || '').trim().toLowerCase() || 'rss-post',
               title: String(card && card.title || '').trim() || 'Latest update',
               summary: rssSummaryFromRaw(card && card.summary || '', 190) || 'Latest update from the Immersive Labs blog.',
-              url: String(card && card.url || '').trim(),
+              url: safeLinkHref(card && card.url),
               linkLabel: 'Read post',
               publishedOn: String(card && card.publishedOn || '').trim(),
               imageUrl: cardImageUrlForItem(card)
@@ -10473,11 +10543,11 @@ const evidenceOpts = [
           },
           contentCards: (curatedContentCards.length ? curatedContentCards : cards).length
               ? (curatedContentCards.length ? curatedContentCards : cards).map((card)=> Object.assign({}, card, {
-                  url: canonicalizeContentUrlByFormat(
+                  url: safeLinkHref(canonicalizeContentUrlByFormat(
                     card && card.url,
                     (card && (card.formatKey || card.format)) || '',
                     (card && card.slug) || ''
-                  ) || (card && card.url) || '',
+                  )),
                   imageUrl: cardImageUrlForItem(card)
                 }))
               : [{
@@ -10531,11 +10601,15 @@ const evidenceOpts = [
               videoWebm: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_webm.webm'
             };
         const heroImageDefault = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/678646ce52898299cc1134be_HERO%20IMAGE%20LABS.webp';
-        const heroImageUrl = String(hero.imageUrl || '').trim() || heroImageDefault;
+        const heroImageUrl = safeLinkHref(hero.imageUrl) || heroImageDefault;
         const heroPrimaryCtaLabel = String(hero.primaryCtaLabel || '').trim() || 'Recommended resources';
-        const heroPrimaryCtaHref = String(hero.primaryCtaHref || '').trim() || '#recommended-for-you';
+        const heroPrimaryCtaHref = safeLinkHref(hero.primaryCtaHref, { allowHash:true }) || '#recommended-for-you';
         const heroSecondaryCtaLabel = String(hero.secondaryCtaLabel || '').trim() || 'Contact your team';
-        const heroSecondaryCtaHref = String(hero.secondaryCtaHref || '').trim() || '#contact-your-team';
+        const heroSecondaryCtaHref = safeLinkHref(hero.secondaryCtaHref, { allowHash:true }) || '#contact-your-team';
+        const demoCardCtaHref = safeLinkHref(demoCard && demoCard.ctaUrl);
+        const demoCardPosterHref = safeLinkHref(demoCard && demoCard.videoPoster);
+        const demoCardVideoMp4Href = safeLinkHref(demoCard && demoCard.videoMp4);
+        const demoCardVideoWebmHref = safeLinkHref(demoCard && demoCard.videoWebm);
         const initialsFromName = (value)=> {
           const tokens = String(value || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
           if(!tokens.length) return 'IL';
@@ -10548,15 +10622,19 @@ const evidenceOpts = [
           email: 'customer.success@immersivelabs.com'
         }]).map((contact)=> {
           const entry = (contact && typeof contact === 'object') ? contact : {};
+          const normalizedEmail = String(entry.email || '').trim() || 'customer.success@immersivelabs.com';
           return {
             name: String(entry.name || 'Customer Success Lead').trim() || 'Customer Success Lead',
             role: String(entry.role || 'Programme owner').trim() || 'Programme owner',
-            email: String(entry.email || '').trim() || 'customer.success@immersivelabs.com',
-            imageUrl: String(entry.imageUrl || '').trim(),
+            email: normalizedEmail,
+            emailHref: safeMailtoHref(normalizedEmail),
+            imageUrl: safeLinkHref(entry.imageUrl),
             initials: initialsFromName(entry.name || 'Customer Success Lead')
           };
         });
         const primaryContactEmail = String((contactTeam[0] && contactTeam[0].email) || 'customer.success@immersivelabs.com').trim();
+        const primaryContactMailto = safeMailtoHref(primaryContactEmail) || 'mailto:customer.success@immersivelabs.com';
+        const primaryContactRecipient = primaryContactMailto.replace(/^mailto:/i, '');
 
         const normalizedId = (value)=> String(value || '')
           .toLowerCase()
@@ -10664,10 +10742,12 @@ const evidenceOpts = [
           const summary = String(item.summary || '').trim();
           const why = String(item.why || '').trim();
           const title = String(item.title || 'Content block').trim() || 'Content block';
-          const titleHtml = item.url
-            ? `<h3><a class="contentTitleLink" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(title)}</a></h3>`
+          const linkHref = safeLinkHref(item.url);
+          const imageUrl = safeLinkHref(item.imageUrl);
+          const titleHtml = linkHref
+            ? `<h3><a class="contentTitleLink" href="${esc(linkHref)}" target="_blank" rel="noopener noreferrer">${esc(title)}</a></h3>`
             : `<h3>${esc(title)}</h3>`;
-          return `<article class="contentCard">${item.imageUrl ? `<div class="contentImageWrap"><img class="contentImage" src="${esc(item.imageUrl)}" alt="${esc(item.title || 'Recommended content image')}" loading="lazy" /></div>` : ''}<p class="contentEyebrow">Recommendation ${idx + 1} | ${esc(formatLabel)}</p>${titleHtml}<p class="contentText"><strong>Focus area:</strong> ${esc(focusArea)}</p>${summary ? `<p class="contentText">${esc(summary)}</p>` : ''}${why ? `<p class="contentText"><strong>Why this is relevant:</strong> ${esc(why)}</p>` : ''}${item.url ? `<a class="contentLink" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.linkLabel || 'Read more')}</a>` : ''}</article>`;
+          return `<article class="contentCard">${imageUrl ? `<div class="contentImageWrap"><img class="contentImage" src="${esc(imageUrl)}" alt="${esc(item.title || 'Recommended content image')}" loading="lazy" /></div>` : ''}<p class="contentEyebrow">Recommendation ${idx + 1} | ${esc(formatLabel)}</p>${titleHtml}<p class="contentText"><strong>Focus area:</strong> ${esc(focusArea)}</p>${summary ? `<p class="contentText">${esc(summary)}</p>` : ''}${why ? `<p class="contentText"><strong>Why this is relevant:</strong> ${esc(why)}</p>` : ''}${linkHref ? `<a class="contentLink" href="${esc(linkHref)}" target="_blank" rel="noopener noreferrer">${esc(item.linkLabel || 'Read more')}</a>` : ''}</article>`;
         };
 
         const newsCards = (whatsNewCardsInput.length
@@ -10679,10 +10759,10 @@ const evidenceOpts = [
           : cards.slice(0, 3).map((card)=> ({
               title: String(card && card.title || '').trim() || 'Latest update',
               summary: String(card && card.summary || '').trim() || 'Latest update from Immersive Labs.',
-              url: String(card && card.url || '').trim(),
+              url: safeLinkHref(card && card.url),
               linkLabel: String(card && card.linkLabel || '').trim() || 'Read post',
               publishedOn: String(card && card.publishedOn || '').trim(),
-              imageUrl: String(card && card.imageUrl || '').trim()
+              imageUrl: safeLinkHref(card && card.imageUrl)
             }));
 
         const renderNewsCard = (card)=>{
@@ -10692,10 +10772,12 @@ const evidenceOpts = [
           const summary = String(item.summary || '').trim() || 'Latest update from the Immersive Labs blog.';
           const linkLabel = String(item.linkLabel || '').trim() || 'Read post';
           const title = String(item.title || 'Latest post').trim() || 'Latest post';
-          const titleHtml = item.url
-            ? `<h3><a class="contentTitleLink" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(title)}</a></h3>`
+          const linkHref = safeLinkHref(item.url);
+          const imageUrl = safeLinkHref(item.imageUrl);
+          const titleHtml = linkHref
+            ? `<h3><a class="contentTitleLink" href="${esc(linkHref)}" target="_blank" rel="noopener noreferrer">${esc(title)}</a></h3>`
             : `<h3>${esc(title)}</h3>`;
-          return `<article class="contentCard">${item.imageUrl ? `<div class="contentImageWrap"><img class="contentImage" loading="lazy" src="${esc(item.imageUrl)}" alt="${esc(item.title || 'Latest post image')}" /></div>` : ''}<p class="contentEyebrow">${esc(eyebrow)}</p>${titleHtml}<p class="contentText">${esc(summary)}</p>${item.url ? `<a class="contentLink" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(linkLabel)}</a>` : ''}</article>`;
+          return `<article class="contentCard">${imageUrl ? `<div class="contentImageWrap"><img class="contentImage" loading="lazy" src="${esc(imageUrl)}" alt="${esc(item.title || 'Latest post image')}" /></div>` : ''}<p class="contentEyebrow">${esc(eyebrow)}</p>${titleHtml}<p class="contentText">${esc(summary)}</p>${linkHref ? `<a class="contentLink" href="${esc(linkHref)}" target="_blank" rel="noopener noreferrer">${esc(linkLabel)}</a>` : ''}</article>`;
         };
 
         const logoSrc = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg';
@@ -11023,16 +11105,16 @@ const evidenceOpts = [
       <article class="storyCard storyCard--tour">
         <div class="storyInner">
           <div class="storyMedia storyMedia--tour" aria-hidden="true">
-            <video autoplay loop muted playsinline preload="metadata"${demoCard.videoPoster ? ` poster="${esc(demoCard.videoPoster)}"` : ''}>
-              ${demoCard.videoMp4 ? `<source src="${esc(demoCard.videoMp4)}" type="video/mp4" />` : ''}
-              ${demoCard.videoWebm ? `<source src="${esc(demoCard.videoWebm)}" type="video/webm" />` : ''}
+            <video autoplay loop muted playsinline preload="metadata"${demoCardPosterHref ? ` poster="${esc(demoCardPosterHref)}"` : ''}>
+              ${demoCardVideoMp4Href ? `<source src="${esc(demoCardVideoMp4Href)}" type="video/mp4" />` : ''}
+              ${demoCardVideoWebmHref ? `<source src="${esc(demoCardVideoWebmHref)}" type="video/webm" />` : ''}
             </video>
           </div>
           <div class="storyContent storyContent--tour">
             <div class="storyKicker">${esc(demoCard.kicker || 'PRODUCT TOUR')}</div>
             <h3>${esc(demoCard.title || 'Take a guided tour of the platform')}</h3>
             <p>${esc(demoCard.text || 'See how you can run scenario-based exercises, capture after-action evidence, and export summaries for stakeholders.')}</p>
-            ${demoCard.ctaUrl ? `<div class="storyTourCta"><a class="storyTourBtn" href="${esc(demoCard.ctaUrl)}" target="_blank" rel="noopener noreferrer">${esc(demoCard.ctaLabel || 'Take a Product Tour')}</a></div>` : ''}
+            ${demoCardCtaHref ? `<div class="storyTourCta"><a class="storyTourBtn" href="${esc(demoCardCtaHref)}" target="_blank" rel="noopener noreferrer">${esc(demoCard.ctaLabel || 'Take a Product Tour')}</a></div>` : ''}
           </div>
         </div>
       </article>
@@ -11059,7 +11141,7 @@ const evidenceOpts = [
         <p class="panelSub">Use this form to contact your Immersive customer team and align next steps.</p>
         <div class="contactGrid">
           <div class="contactTeamGrid">
-            ${contactTeam.map((contact)=> `<article class="contactPerson">${contact.imageUrl ? `<img class="contactAvatarImg" src="${esc(contact.imageUrl)}" alt="${esc(contact.name)}" loading="lazy" />` : `<span class="contactAvatar">${esc(contact.initials)}</span>`}<div><h3 class="contactPersonName">${esc(contact.name)}</h3><p class="contactPersonRole">${esc(contact.role)}</p><a class="contactPersonEmail" href="mailto:${esc(contact.email)}">${esc(contact.email)}</a></div></article>`).join('')}
+            ${contactTeam.map((contact)=> `<article class="contactPerson">${contact.imageUrl ? `<img class="contactAvatarImg" src="${esc(contact.imageUrl)}" alt="${esc(contact.name)}" loading="lazy" />` : `<span class="contactAvatar">${esc(contact.initials)}</span>`}<div><h3 class="contactPersonName">${esc(contact.name)}</h3><p class="contactPersonRole">${esc(contact.role)}</p>${contact.emailHref ? `<a class="contactPersonEmail" href="${esc(contact.emailHref)}">${esc(contact.email)}</a>` : `<span class="contactPersonEmail">${esc(contact.email)}</span>`}</div></article>`).join('')}
           </div>
           <form class="contactForm" data-contact-form>
             <div class="contactFormGrid">
@@ -11077,7 +11159,7 @@ const evidenceOpts = [
               </div>
             </div>
             <div class="contactFormFoot">
-              <p class="contactFormHint">Messages are routed to ${esc(primaryContactEmail)}.</p>
+              <p class="contactFormHint">Messages are routed to ${esc(primaryContactRecipient)}.</p>
               <button type="submit" class="button w-button">Send message</button>
             </div>
           </form>
@@ -11227,7 +11309,7 @@ const evidenceOpts = [
         if(contactForm){
           contactForm.addEventListener('submit', function(event){
             event.preventDefault();
-            var recipient = '${esc(primaryContactEmail)}';
+            var recipient = '${esc(primaryContactRecipient)}';
             if(!recipient) return;
             var nameEl = contactForm.querySelector('input[name="name"]');
             var emailEl = contactForm.querySelector('input[name="email"]');
@@ -11578,6 +11660,10 @@ const evidenceOpts = [
         const understandingLead = `For ${String(draft.company || 'your organisation').trim() || 'your organisation'}, this means defensible evidence you can use with leadership and external stakeholders: clear baselines, visible movement over time, and proof aligned to board and regulatory expectations.`;
         const esc = (value)=> escapeHtml(String(value == null ? '' : value));
         const demoCard = (draft.demoCard && typeof draft.demoCard === 'object') ? draft.demoCard : null;
+        const demoCardCtaHref = safeLinkHref(demoCard && demoCard.ctaUrl);
+        const demoCardPosterHref = safeLinkHref(demoCard && demoCard.videoPoster);
+        const demoCardVideoMp4Href = safeLinkHref(demoCard && demoCard.videoMp4);
+        const demoCardVideoWebmHref = safeLinkHref(demoCard && demoCard.videoWebm);
         const safeToken = (value)=> String(value || '')
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
@@ -11588,9 +11674,13 @@ const evidenceOpts = [
           const reverseClass = entry.reverse ? ' reverse' : '';
           const bullets = Array.isArray(entry.bullets) ? entry.bullets.map((line)=> String(line || '').trim()).filter(Boolean).slice(0, 4) : [];
           const mediaType = String(entry.mediaType || 'image').toLowerCase();
+          const posterHref = safeLinkHref(entry.videoPoster);
+          const videoMp4Href = safeLinkHref(entry.videoMp4);
+          const videoWebmHref = safeLinkHref(entry.videoWebm);
+          const mediaImageHref = safeLinkHref(entry.mediaUrl);
           const media = mediaType === 'video'
-            ? `<video autoplay loop muted playsinline preload="metadata"${entry.videoPoster ? ` poster="${esc(entry.videoPoster)}"` : ''}>${entry.videoMp4 ? `<source src="${esc(entry.videoMp4)}" type="video/mp4" />` : ''}${entry.videoWebm ? `<source src="${esc(entry.videoWebm)}" type="video/webm" />` : ''}</video>`
-            : (entry.mediaUrl ? `<img src="${esc(entry.mediaUrl)}" alt="${esc(entry.mediaAlt || entry.title || 'Story visual')}" loading="lazy" />` : '');
+            ? `<video autoplay loop muted playsinline preload="metadata"${posterHref ? ` poster="${esc(posterHref)}"` : ''}>${videoMp4Href ? `<source src="${esc(videoMp4Href)}" type="video/mp4" />` : ''}${videoWebmHref ? `<source src="${esc(videoWebmHref)}" type="video/webm" />` : ''}</video>`
+            : (mediaImageHref ? `<img src="${esc(mediaImageHref)}" alt="${esc(entry.mediaAlt || entry.title || 'Story visual')}" loading="lazy" />` : '');
           return `<article class="customerPreviewStoryCard${reverseClass}"><div class="customerPreviewStoryInner"><div class="customerPreviewStoryMedia customerPreviewStoryMedia--${esc(token)}" aria-hidden="true">${media}</div><div class="customerPreviewStoryContent"><div class="customerPreviewStoryKicker">${esc(entry.kicker || 'FOCUS')}</div><h6>${esc(entry.title || 'Focus area')}</h6><p>${esc(entry.text || '')}</p>${bullets.length ? `<ul class="customerPreviewStoryBullets">${bullets.map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}</div></div></article>`;
         };
         const logoSrc = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg';
@@ -11667,15 +11757,15 @@ const evidenceOpts = [
               <article class="customerPreviewStoryCard customerPreviewStoryCard--tour">
                 <div class="customerPreviewStoryInner">
                   <div class="customerPreviewStoryMedia customerPreviewStoryMedia--tour" aria-hidden="true">
-                    <video autoplay loop muted playsinline preload="metadata"${demoCard.videoPoster ? ` poster="${esc(demoCard.videoPoster)}"` : ''}>
-                      ${demoCard.videoMp4 ? `<source src="${esc(demoCard.videoMp4)}" type="video/mp4" />` : ''}
-                      ${demoCard.videoWebm ? `<source src="${esc(demoCard.videoWebm)}" type="video/webm" />` : ''}
+                    <video autoplay loop muted playsinline preload="metadata"${demoCardPosterHref ? ` poster="${esc(demoCardPosterHref)}"` : ''}>
+                      ${demoCardVideoMp4Href ? `<source src="${esc(demoCardVideoMp4Href)}" type="video/mp4" />` : ''}
+                      ${demoCardVideoWebmHref ? `<source src="${esc(demoCardVideoWebmHref)}" type="video/webm" />` : ''}
                     </video>
                   </div>
                   <div class="customerPreviewStoryContent customerPreviewStoryContent--tour">
                     <h6>${esc(demoCard.title || 'Take a guided tour')}</h6>
                     <p>${esc(demoCard.text || '')}</p>
-                    ${demoCard.ctaUrl ? `<div class="customerPreviewStoryCta"><a class="btn small primary" href="${esc(demoCard.ctaUrl)}" target="_blank" rel="noopener noreferrer">${esc(demoCard.ctaLabel || 'Take a Product Tour')}</a></div>` : ''}
+                    ${demoCardCtaHref ? `<div class="customerPreviewStoryCta"><a class="btn small primary" href="${esc(demoCardCtaHref)}" target="_blank" rel="noopener noreferrer">${esc(demoCard.ctaLabel || 'Take a Product Tour')}</a></div>` : ''}
                   </div>
                 </div>
               </article>
@@ -11692,9 +11782,11 @@ const evidenceOpts = [
             <h5>Recommended for you</h5>
             <p>A short list of articles, webinars, and case studies selected for your team.</p>
             <div class="customerPreviewContentGrid">
-              ${cards.map((card, idx)=> `
+              ${cards.map((card, idx)=> {
+                const imageHref = safeLinkHref(card && card.imageUrl);
+                return `
                 <article class="customerPreviewContentCard">
-                  ${card.imageUrl ? `<div class="customerPreviewImageWrap"><img class="customerPreviewContentImage" src="${esc(card.imageUrl)}" alt="${esc(card.title || 'Recommended content image')}" loading="lazy" /></div>` : ''}
+                  ${imageHref ? `<div class="customerPreviewImageWrap"><img class="customerPreviewContentImage" src="${esc(imageHref)}" alt="${esc(card.title || 'Recommended content image')}" loading="lazy" /></div>` : ''}
                   <p>${esc(card.format || 'Content')} · Focus area: ${esc(card.outcomeLabel || 'Priority outcome')}</p>
                   <h6>${esc(card.title || 'Content block')}</h6>
                   <p>${esc(card.summary || '')}</p>
@@ -11703,22 +11795,27 @@ const evidenceOpts = [
                     <button class="btn small" type="button" data-action="editCustomerTemplateCard" data-card-index="${idx}">Edit card</button>
                   </div>
                 </article>
-              `).join('')}
+              `;
+              }).join('')}
             </div>
           </article>
           ${whatsNewCards.length ? `
             <article class="customerPreviewSection">
               <h5>What's new</h5>
               <div class="customerPreviewContentGrid">
-                ${whatsNewCards.map((card)=> `
+                ${whatsNewCards.map((card)=> {
+                  const linkHref = safeLinkHref(card && card.url);
+                  const imageHref = safeLinkHref(card && card.imageUrl);
+                  return `
                   <article class="customerPreviewContentCard">
-                    ${card.imageUrl ? `<div class="customerPreviewImageWrap"><img class="customerPreviewContentImage" src="${esc(card.imageUrl)}" alt="${esc(card.title || 'Latest post image')}" loading="lazy" /></div>` : ''}
+                    ${imageHref ? `<div class="customerPreviewImageWrap"><img class="customerPreviewContentImage" src="${esc(imageHref)}" alt="${esc(card.title || 'Latest post image')}" loading="lazy" /></div>` : ''}
                     <p>${esc(card.publishedOn || 'RSS post')}</p>
                     <h6>${esc(card.title || 'Latest post')}</h6>
                     <p>${esc(card.summary || '')}</p>
-                    ${card.url ? `<a class="contentLink" href="${esc(card.url)}" target="_blank" rel="noopener noreferrer">${esc(card.linkLabel || 'Read post')}</a>` : ''}
+                    ${linkHref ? `<a class="contentLink" href="${esc(linkHref)}" target="_blank" rel="noopener noreferrer">${esc(card.linkLabel || 'Read post')}</a>` : ''}
                   </article>
-                `).join('')}
+                `;
+                }).join('')}
               </div>
             </article>
           ` : ''}
@@ -12134,6 +12231,7 @@ const evidenceOpts = [
         gridEl.innerHTML = cards.map((card, idx)=>{
           const sourceLabel = recommendationSourceLabel(card);
           const publishedLabel = formatPublishedDate(card.publishedOn);
+          const cardHref = safeLinkHref(card && card.url);
           return `
             <article class="contentRecCard">
               <p class="contentRecEyebrow">Recommendation ${idx + 1} · ${escapeHtml(card.format)}</p>
@@ -12141,8 +12239,8 @@ const evidenceOpts = [
               <p class="contentRecOutcome"><strong>Outcome:</strong> ${escapeHtml(card.outcomeLabel)}</p>
               <p class="contentRecSummary">${escapeHtml(card.summary)}</p>
               <p class="contentRecWhy"><strong>Why this match:</strong> ${escapeHtml(card.why)}</p>
-              ${card.url
-                ? `<a class="contentRecLink" href="${escapeHtml(card.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Read more')}</a>`
+              ${cardHref
+                ? `<a class="contentRecLink" href="${escapeHtml(cardHref)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Read more')}</a>`
                 : ''
               }
               ${publishedLabel ? `<p class="contentRecMeta"><strong>Published:</strong> ${escapeHtml(publishedLabel)}</p>` : ''}
@@ -12225,11 +12323,12 @@ const evidenceOpts = [
         lines.push('Recommended content blocks');
         if(cards.length){
           cards.forEach((card, idx)=>{
+            const safeCardHref = safeLinkHref(card && card.url);
             lines.push(`${idx + 1}) ${card.title}`);
             lines.push(`   Format: ${card.format}`);
             lines.push(`   Outcome: ${card.outcomeLabel}`);
             lines.push(`   Why this match: ${card.why}`);
-            if(card.url) lines.push(`   Link: ${card.url}`);
+            if(safeCardHref) lines.push(`   Link: ${safeCardHref}`);
           });
         }else{
           lines.push('- No mapped content available from the current Webflow export for this profile yet.');
@@ -12270,16 +12369,19 @@ const evidenceOpts = [
         const resourcesEl = $('#emailBuilderResources');
         if(resourcesEl){
           if(model.cards.length){
-            resourcesEl.innerHTML = model.cards.map((card, idx)=> `
+            resourcesEl.innerHTML = model.cards.map((card, idx)=> {
+              const linkHref = safeLinkHref(card && card.url);
+              return `
               <li>
                 <strong>${idx + 1}. ${escapeHtml(card.title)}</strong>
-                ${card.url
-                  ? ` <a href="${escapeHtml(card.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Read more')}</a>`
+                ${linkHref
+                  ? ` <a href="${escapeHtml(linkHref)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Read more')}</a>`
                   : ''
                 }
                 <div class="emailBuilderResourceMeta">${escapeHtml(`${card.format} · ${card.outcomeLabel}`)}</div>
               </li>
-            `).join('');
+            `;
+            }).join('');
           }else{
             resourcesEl.innerHTML = '<li>No mapped content blocks available for this profile yet.</li>';
           }

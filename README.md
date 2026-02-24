@@ -45,6 +45,41 @@ Implemented hardening in this repo:
    - Rejects CSV imports over 5 MB to avoid browser lockups and unsafe oversized local ingestion.
    - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
 
+## Adversarial Hardening Pass (2026-02-24)
+
+Additional hardening applied after a second attack-vector sweep:
+
+1. Hardened all dynamic link rendering paths
+   - Added strict URL sanitizers:
+     - `safeLinkHref(...)` for `http/https` (and optional `#anchor`) only
+     - `safeMailtoHref(...)` for validated email links only
+   - Applied to generated customer pages, recommendations view links, email-builder links, and preview CTA links.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+2. Removed raw URL fallback in content-card mapping
+   - Content-card URLs now pass through canonicalization + sanitizer only (no unsanitized fallback path).
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+3. Added CSV parser resilience limits (DoS hardening)
+   - Enforced caps during CSV parse:
+     - max rows: `5000`
+     - max columns per row: `300`
+     - max chars per cell: `20000`
+   - Parser now fails fast on malformed unterminated quoted values.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+4. Added deployment-time HTTP security headers for Vercel
+   - Added `/Users/will.bloor/Documents/Configurator/vercel.json` with:
+     - CSP (Firebase auth iframe-compatible allowlist)
+     - Referrer policy
+     - MIME sniffing protection
+     - Frame embedding protection
+     - Permissions policy
+     - COOP for popup auth compatibility
+
+Note:
+- CSP was adjusted to allow Firebase auth iframe/popup flows (`*.firebaseapp.com`, `*.web.app`, Google auth domains). A strict `frame-src 'none'` policy will break Firebase sign-in.
+
 Manual Firebase console action required:
 
 - In Firebase Console > Firestore > Rules, replace permissive sandbox rules with the content from `/Users/will.bloor/Documents/Configurator/firestore.rules` and publish.
@@ -57,6 +92,7 @@ Manual Firebase console action required:
 - Styles: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
 - Firebase config shim: `/Users/will.bloor/Documents/Configurator/assets/js/firebase-config.js`
 - Firestore security baseline rules: `/Users/will.bloor/Documents/Configurator/firestore.rules`
+- Vercel deploy-time security headers: `/Users/will.bloor/Documents/Configurator/vercel.json`
 - Collaboration record schema: `/Users/will.bloor/Documents/Configurator/schemas/workspace-record.v2.schema.json`
 - Question bank source CSV: `/Users/will.bloor/Documents/Configurator/assets/data/question-bank.v1.csv`
 - Generated question bank runtime file: `/Users/will.bloor/Documents/Configurator/assets/js/question-bank.js`

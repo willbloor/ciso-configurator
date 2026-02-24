@@ -218,6 +218,30 @@ Behavior correction deployed:
    - These force-role overrides remain disabled when backend connection is on.
    - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
 
+## Backend Configuration Page Split (2026-02-24)
+
+Navigation and IA cleanup deployed:
+
+1. Moved backend controls off `My account` into a dedicated page
+   - Backend connection controls (`#accountBackendConnection`) now live in a separate `#backendConfigView`.
+   - New route: `#/account/backend-configurations`.
+   - File: `/Users/will.bloor/Documents/Configurator/index.html`
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+   - File: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+2. Replaced bottom-left `My settings` dock item with `Backend config`
+   - Removed duplicate settings entry in dock to reduce confusion with in-page account settings.
+   - Added a dedicated dock nav item that opens backend configuration view directly.
+   - File: `/Users/will.bloor/Documents/Configurator/index.html`
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+3. Added backend-aware routing, breadcrumb, and view-state handling
+   - Hash routing now parses and emits backend path.
+   - Workspace breadcrumb now supports `Dashboard / My account / Backend configurations`.
+   - Body view classes/CSS visibility rules now include `is-backend-view`.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+   - File: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
 ## Source Of Truth
 
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`

@@ -3299,6 +3299,7 @@ const evidenceOpts = [
         if(view === 'dashboard') return `${ROUTE_HASH_PREFIX}dashboard`;
         if(view === 'archived') return `${ROUTE_HASH_PREFIX}archived`;
         if(view === 'account') return `${ROUTE_HASH_PREFIX}account`;
+        if(view === 'backend') return `${ROUTE_HASH_PREFIX}account/backend-configurations`;
         if(view === 'export'){
           if(recordId && recordId !== 'current'){
             return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recordId)}/export`;
@@ -3340,7 +3341,11 @@ const evidenceOpts = [
 
         if(segs[0] === 'dashboard') return { view:'dashboard' };
         if(segs[0] === 'archived') return { view:'archived' };
-        if(segs[0] === 'account') return { view:'account' };
+        if(segs[0] === 'account'){
+          const subView = String(segs[1] || '').trim().toLowerCase();
+          if(subView === 'backend-configurations') return { view:'backend' };
+          return { view:'account' };
+        }
         if(segs[0] === 'export') return { view:'export' };
         if(segs[0] !== 'records' || segs.length < 2) return null;
 
@@ -3370,6 +3375,10 @@ const evidenceOpts = [
           }
           if(route.view === 'account'){
             setView('account');
+            return true;
+          }
+          if(route.view === 'backend'){
+            setView('backend');
             return true;
           }
           if(route.view === 'export'){
@@ -3412,7 +3421,7 @@ const evidenceOpts = [
       function setView(view, opts){
         const cfg = Object.assign({ render: true, syncRoute: true }, opts || {});
         const prev = state.currentView || 'dashboard';
-        const next = (view === 'dashboard' || view === 'archived' || view === 'interstitial' || view === 'account' || view === 'recommendations' || view === 'export') ? view : 'configurator';
+        const next = (view === 'dashboard' || view === 'archived' || view === 'interstitial' || view === 'account' || view === 'backend' || view === 'recommendations' || view === 'export') ? view : 'configurator';
         if(prev === 'configurator' && next !== 'configurator'){
           const prevRecordId = String(state.activeThread || '').trim();
           if(prevRecordId && prevRecordId !== 'current'){
@@ -3434,9 +3443,10 @@ const evidenceOpts = [
         document.body.classList.toggle('is-archived-view', next === 'archived');
         document.body.classList.toggle('is-interstitial-view', next === 'interstitial');
         document.body.classList.toggle('is-account-view', next === 'account');
+        document.body.classList.toggle('is-backend-view', next === 'backend');
         document.body.classList.toggle('is-recommendations-view', next === 'recommendations');
         document.body.classList.toggle('is-export-view', next === 'export');
-        if(next === 'dashboard' || next === 'archived' || next === 'account' || next === 'recommendations' || next === 'export'){
+        if(next === 'dashboard' || next === 'archived' || next === 'account' || next === 'backend' || next === 'recommendations' || next === 'export'){
           state.navPreviewThreadId = null;
         }
         if(next !== 'configurator'){
@@ -3450,11 +3460,15 @@ const evidenceOpts = [
 
         const workspaceArchive = $('#workspaceArchive');
         const workspaceAccount = $('#workspaceAccount');
+        const workspaceBackend = $('#workspaceBackend');
         if(workspaceArchive){
           workspaceArchive.dataset.active = (next === 'archived') ? 'true' : 'false';
         }
         if(workspaceAccount){
           workspaceAccount.dataset.active = (next === 'account') ? 'true' : 'false';
+        }
+        if(workspaceBackend){
+          workspaceBackend.dataset.active = (next === 'backend') ? 'true' : 'false';
         }
         const recordContextName = $('#recordContextName');
         if(recordContextName){
@@ -3578,6 +3592,7 @@ const evidenceOpts = [
           view === 'interstitial'
           || view === 'archived'
           || view === 'account'
+          || view === 'backend'
           || view === 'recommendations'
           || view === 'export'
         );
@@ -3595,6 +3610,9 @@ const evidenceOpts = [
           items.push({ label:'My archive', action:'archived', current:true });
         }else if(view === 'account'){
           items.push({ label:'My account', action:'account', current:true });
+        }else if(view === 'backend'){
+          items.push({ label:'My account', action:'account', current:false });
+          items.push({ label:'Backend configurations', action:'account-backend', current:true });
         }else if(view === 'interstitial'){
           const thread = activeThreadModel();
           const company = String((thread && thread.company) || '').trim() || 'Record';
@@ -12834,7 +12852,7 @@ const evidenceOpts = [
 
         const view = state.currentView || 'dashboard';
         const targetThread = activeCollaborationThreadModel();
-        const unsupportedView = (view === 'dashboard' || view === 'archived' || view === 'account' || view === 'export');
+        const unsupportedView = (view === 'dashboard' || view === 'archived' || view === 'account' || view === 'backend' || view === 'export');
         if(unsupportedView){
           if(hasStatusUi) wrap.hidden = true;
           setReadOnlyControls(false);
@@ -14302,6 +14320,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const brandHome = $('#brandHome');
       const workspaceArchive = $('#workspaceArchive');
       const workspaceAccount = $('#workspaceAccount');
+      const workspaceBackend = $('#workspaceBackend');
       const recordOverviewBtn = $('#recordOverviewBtn');
       const workspaceCreateRecord = $('#workspaceCreateRecord');
       const globalCreateRecord = $('#globalCreateRecord');
@@ -14349,6 +14368,12 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           window.scrollTo({ top: 0, behavior: 'smooth' });
         });
       }
+      if(workspaceBackend){
+        workspaceBackend.addEventListener('click', ()=>{
+          setView('backend');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      }
       if(recordOverviewBtn){
         recordOverviewBtn.addEventListener('click', ()=>{
           openThreadOverview(state.activeThread || 'current');
@@ -14372,6 +14397,11 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           }
           if(action === 'account'){
             setView('account');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+          if(action === 'account-backend'){
+            setView('backend');
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
           }
@@ -14645,7 +14675,6 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           saveActiveRecord({ returnToOverview });
         });
       }
-      const openSettingsPanelNav = $('#openSettingsNav');
       const accountFullNameInput = $('#accountFullName');
       const accountEmailInput = $('#accountEmail');
       const accountPhoneInput = $('#accountPhone');
@@ -15234,26 +15263,6 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         });
       }
 
-      function toggleSettings(force){
-        const open = (typeof force === 'boolean') ? force : true;
-        if(!open) return;
-        const targetId = 'accountWorkspaceSettings';
-        const target = document.getElementById(targetId);
-        setActiveAccountNavTarget(targetId);
-        if(state.currentView !== 'account'){
-          setView('account');
-          window.setTimeout(()=>{
-            const delayedTarget = document.getElementById(targetId);
-            if(delayedTarget){
-              delayedTarget.scrollIntoView({ behavior:'smooth', block:'start' });
-            }
-          }, 16);
-        }else if(target){
-          target.scrollIntoView({ behavior:'smooth', block:'start' });
-        }
-        syncAccountChoiceSources();
-      }
-
       (function initSettingsPrefs(){
         const storedTone = window.localStorage.getItem('cfg_shell_tone');
         const storedDensity = window.localStorage.getItem('cfg_shell_density');
@@ -15344,9 +15353,6 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       wireShellHandle($('#rightResizeHandle'), shellBounds.right, true);
       initDashboardColumnResizing();
 
-      if(openSettingsPanelNav){
-        openSettingsPanelNav.addEventListener('click', ()=> toggleSettings(true));
-      }
       let shellResizeTimer = null;
       window.addEventListener('resize', ()=>{
         window.clearTimeout(shellResizeTimer);

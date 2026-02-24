@@ -645,6 +645,10 @@
       display:none;
       padding: 16px 0 30px;
     }
+    #backendConfigView{
+      display:none;
+      padding: 16px 0 30px;
+    }
     .workspaceBreadcrumb{
       display:none;
       align-items:center;
@@ -708,7 +712,13 @@
     body.is-account-view #accountView{
       display:block;
     }
+    body.is-backend-view #backendConfigView{
+      display:block;
+    }
     body.is-account-view .workspaceCompanies{
+      display:none;
+    }
+    body.is-backend-view .workspaceCompanies{
       display:none;
     }
     body.is-account-view .accountLhn{
@@ -720,7 +730,7 @@
     body.is-export-view #crmExportView{
       display:block;
     }
-    body:is(.is-archived-view, .is-account-view, .is-interstitial-view, .is-recommendations-view, .is-export-view) #workspaceBreadcrumb{
+    body:is(.is-archived-view, .is-account-view, .is-backend-view, .is-interstitial-view, .is-recommendations-view, .is-export-view) #workspaceBreadcrumb{
       display:flex;
     }
     body.is-dashboard-view .grid{
@@ -730,6 +740,9 @@
       display:none;
     }
     body.is-account-view .grid{
+      display:none;
+    }
+    body.is-backend-view .grid{
       display:none;
     }
     body.is-recommendations-view .grid{
@@ -753,6 +766,9 @@
     body.is-dashboard-view #crmExportView{
       display:none;
     }
+    body.is-dashboard-view #backendConfigView{
+      display:none;
+    }
     body.is-interstitial-view #dashboardView{
       display:none;
     }
@@ -768,6 +784,9 @@
     body.is-interstitial-view #crmExportView{
       display:none;
     }
+    body.is-interstitial-view #backendConfigView{
+      display:none;
+    }
     body.is-account-view #dashboardView{
       display:none;
     }
@@ -778,6 +797,27 @@
       display:none;
     }
     body.is-account-view #crmExportView{
+      display:none;
+    }
+    body.is-account-view #backendConfigView{
+      display:none;
+    }
+    body.is-backend-view #dashboardView{
+      display:none;
+    }
+    body.is-backend-view #archivedView{
+      display:none;
+    }
+    body.is-backend-view #accountView{
+      display:none;
+    }
+    body.is-backend-view #interstitialView{
+      display:none;
+    }
+    body.is-backend-view #contentRecommendationsView{
+      display:none;
+    }
+    body.is-backend-view #crmExportView{
       display:none;
     }
     body.is-archived-view #dashboardView{
@@ -793,6 +833,9 @@
       display:none;
     }
     body.is-archived-view #crmExportView{
+      display:none;
+    }
+    body.is-archived-view #backendConfigView{
       display:none;
     }
     body.is-account-view #interstitialView{
@@ -819,6 +862,9 @@
     body.is-recommendations-view #crmExportView{
       display:none;
     }
+    body.is-recommendations-view #backendConfigView{
+      display:none;
+    }
     body.is-export-view #dashboardView{
       display:none;
     }
@@ -834,10 +880,16 @@
     body.is-export-view #contentRecommendationsView{
       display:none;
     }
+    body.is-export-view #backendConfigView{
+      display:none;
+    }
     body.is-dashboard-view footer{
       display:none;
     }
     body.is-account-view footer{
+      display:none;
+    }
+    body.is-backend-view footer{
       display:none;
     }
     body.is-archived-view footer{
@@ -858,6 +910,9 @@
     body.is-account-view .colResize--right{
       display:none !important;
     }
+    body.is-backend-view .colResize--right{
+      display:none !important;
+    }
     body.is-archived-view .colResize--right{
       display:none !important;
     }
@@ -870,10 +925,10 @@
     body.is-export-view .colResize--right{
       display:none !important;
     }
-    body:is(.is-dashboard-view, .is-interstitial-view, .is-account-view, .is-archived-view, .is-recommendations-view, .is-export-view) .progress{
+    body:is(.is-dashboard-view, .is-interstitial-view, .is-account-view, .is-backend-view, .is-archived-view, .is-recommendations-view, .is-export-view) .progress{
       display:none;
     }
-    body:is(.is-dashboard-view, .is-interstitial-view, .is-account-view, .is-archived-view, .is-recommendations-view, .is-export-view) .recordContext{
+    body:is(.is-dashboard-view, .is-interstitial-view, .is-account-view, .is-backend-view, .is-archived-view, .is-recommendations-view, .is-export-view) .recordContext{
       display:none;
     }
     body.is-configurator-view .workspaceNav,

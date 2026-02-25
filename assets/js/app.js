@@ -181,7 +181,7 @@
           if(code && message) return `${code}: ${message}`;
           if(message) return message;
         }
-        return String(fallback || 'Firebase operation failed.');
+        return String(fallback || 'Backend sandbox operation failed.');
       }
 
       function renderFirebaseConnectionUi(){
@@ -219,13 +219,13 @@
         if(connectionPill){
           let label = 'Backend: Off';
           if(isEnabled){
-            label = 'Firebase: Not configured';
+            label = 'Backend sandbox: Not configured';
             if(cfg && firebaseRuntime.connected){
-              label = `Firebase: Connected (${firebaseRuntime.source})`;
+              label = `Backend sandbox: Connected (${firebaseRuntime.source})`;
             }else if(cfg){
-              label = `Firebase: Configured (${firebaseRuntime.source})`;
+              label = `Backend sandbox: Configured (${firebaseRuntime.source})`;
             }else if(firebaseRuntime.lastError){
-              label = 'Firebase: Error';
+              label = 'Backend sandbox: Error';
             }
           }
           connectionPill.textContent = label;
@@ -244,7 +244,7 @@
           const note = String(firebaseRuntime.lastHealthcheckStatus || '').trim();
           healthStatus.textContent = isEnabled
             ? (note || 'Healthcheck: not run.')
-            : 'Backend connection is off. Current app behavior remains local-only.';
+            : 'Backend connection is off. App remains local-only (AWS/SAML target not wired yet).';
         }
 
         if(signInBtn){
@@ -292,7 +292,7 @@
           return false;
         }
         if(!firebaseSdk || typeof firebaseSdk.initializeApp !== 'function'){
-          firebaseRuntime.lastError = 'Firebase SDK unavailable in this build.';
+          firebaseRuntime.lastError = 'Sandbox SDK unavailable in this build.';
           renderFirebaseConnectionUi();
           return false;
         }
@@ -311,7 +311,7 @@
           renderFirebaseConnectionUi();
           return true;
         }catch(err){
-          firebaseRuntime.lastError = firebaseErrorMessage(err, 'Failed to initialize Firebase.');
+          firebaseRuntime.lastError = firebaseErrorMessage(err, 'Failed to initialize backend sandbox.');
           renderFirebaseConnectionUi();
           return false;
         }
@@ -323,7 +323,7 @@
           return false;
         }
         if(!firebaseAuthRef || !window.firebase){
-          toast('Firebase auth is not configured yet.');
+          toast('Sandbox auth is not configured yet.');
           return false;
         }
         try{
@@ -332,10 +332,10 @@
           firebaseRuntime.lastError = '';
           firebaseRuntime.lastHealthcheckStatus = '';
           renderFirebaseConnectionUi();
-          toast('Signed in with Google.');
+          toast('Signed in to sandbox auth.');
           return true;
         }catch(err){
-          const message = firebaseErrorMessage(err, 'Google sign-in failed.');
+          const message = firebaseErrorMessage(err, 'Sandbox sign-in failed.');
           firebaseRuntime.lastError = message;
           renderFirebaseConnectionUi();
           toast(message);
@@ -349,7 +349,7 @@
           return false;
         }
         if(!firebaseAuthRef){
-          toast('Firebase auth is not configured yet.');
+          toast('Sandbox auth is not configured yet.');
           return false;
         }
         try{
@@ -360,7 +360,7 @@
           toast('Signed out.');
           return true;
         }catch(err){
-          const message = firebaseErrorMessage(err, 'Sign-out failed.');
+          const message = firebaseErrorMessage(err, 'Sandbox sign-out failed.');
           firebaseRuntime.lastError = message;
           renderFirebaseConnectionUi();
           toast(message);
@@ -374,7 +374,7 @@
           return false;
         }
         if(!firebaseRuntime.user || !firebaseDbRef){
-          toast('Sign in first to run Firestore healthcheck.');
+          toast('Sign in first to run sandbox healthcheck.');
           return false;
         }
         try{
@@ -395,10 +395,10 @@
             : 'Healthcheck: write OK, read returned no document.';
           firebaseRuntime.lastError = '';
           renderFirebaseConnectionUi();
-          toast('Firestore healthcheck passed.');
+          toast('Sandbox healthcheck passed.');
           return true;
         }catch(err){
-          const message = firebaseErrorMessage(err, 'Firestore healthcheck failed.');
+          const message = firebaseErrorMessage(err, 'Sandbox healthcheck failed.');
           firebaseRuntime.lastError = message;
           firebaseRuntime.lastHealthcheckStatus = `Healthcheck failed: ${message}`;
           renderFirebaseConnectionUi();
@@ -15543,15 +15543,15 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         firebaseSaveConfigBtn.addEventListener('click', ()=>{
           const parsed = parseFirebaseWebConfigText(firebaseConfigJsonInput.value || '');
           if(!parsed){
-            toast('Firebase config is invalid. Paste JSON or firebaseConfig object.');
+            toast('Sandbox config is invalid. Paste JSON or firebaseConfig object.');
             return;
           }
           if(!saveFirebaseWebConfigToStorage(parsed)){
-            toast('Could not save Firebase config in browser storage.');
+            toast('Could not save sandbox config in browser storage.');
             return;
           }
           initFirebaseRuntime();
-          toast('Firebase config saved.');
+          toast('Sandbox config saved.');
         });
       }
       if(firebaseClearConfigBtn && firebaseConfigJsonInput){
@@ -15559,7 +15559,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           clearFirebaseWebConfigFromStorage();
           firebaseConfigJsonInput.value = '';
           initFirebaseRuntime();
-          toast('Cleared Firebase config.');
+          toast('Cleared sandbox config.');
         });
       }
       if(firebaseSignInGoogleBtn){

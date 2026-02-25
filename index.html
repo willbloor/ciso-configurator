@@ -116,7 +116,7 @@
           </span>
           <span class="nav-settingsText">
             <span class="nav-settingsTitle">Backend config</span>
-            <span class="nav-settingsSub">Firebase sandbox</span>
+            <span class="nav-settingsSub">AWS/SAML planning</span>
           </span>
         </button>
       </div>
@@ -300,7 +300,7 @@
         <header class="accountHead">
           <div>
             <h2>My account</h2>
-            <p class="accountSub">Google Workspace profile defaults used to prefill new records and shape role-aware configurator behavior.</p>
+            <p class="accountSub">Workspace profile defaults used to prefill new records and shape role-aware configurator behavior.</p>
           </div>
           <div class="accountHeadActions">
             <span class="accountSaveState" id="accountSaveState" data-state="saved">Saved</span>
@@ -504,33 +504,55 @@
         <header class="accountHead">
           <div>
             <h2>Backend configurations</h2>
-            <p class="accountSub">Sandbox controls for Firebase Authentication and Firestore. Keep this separate from profile defaults to reduce account page complexity.</p>
+            <p class="accountSub">AWS-first target configuration with SAML assumptions. Legacy Firebase sandbox controls remain available for local prototyping only.</p>
           </div>
         </header>
         <div class="accountBody">
+          <section class="settingsRow" id="backendTargetAssumptions">
+            <div class="settingsLabel">Target platform assumptions</div>
+            <div class="settingsFieldGrid">
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Cloud platform target</span>
+                <input type="text" value="AWS (ring-fenced dev/prod)" readonly />
+              </label>
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Authentication target</span>
+                <input type="text" value="OneLogin via SAML 2.0 federation" readonly />
+              </label>
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Identity service target</span>
+                <input type="text" value="Amazon Cognito (federated with OneLogin)" readonly />
+              </label>
+              <label class="settingsField">
+                <span class="settingsFieldLabel">Shared data target</span>
+                <input type="text" value="DynamoDB/AppSync + API layer" readonly />
+              </label>
+            </div>
+            <p class="settingsHint">These assumptions drive implementation planning only. Current deployed runtime remains local-first unless backend sandbox mode is explicitly turned on.</p>
+          </section>
           <section class="settingsRow" id="accountBackendConnection">
-            <div class="settingsLabel">Backend connection · Sandbox</div>
-            <p class="settingsHint">Connect Firebase Authentication + Firestore for sandbox testing. Current local record storage remains active.</p>
+            <div class="settingsLabel">Backend connection · Sandbox (legacy Firebase test harness)</div>
+            <p class="settingsHint">Use this only for local sandbox checks while AWS + OneLogin SAML integration is being stood up. Current local record storage remains active.</p>
             <div class="settingsOptions settingsInlineOptions" id="backendConnectionToggle">
               <button class="settingsOption" type="button" data-backend-connection="off" aria-pressed="true">Backend connection off</button>
               <button class="settingsOption" type="button" data-backend-connection="on" aria-pressed="false">Backend connection on</button>
             </div>
             <div class="settingsFieldGrid">
               <label class="settingsField" style="grid-column:1 / -1;">
-                <span class="settingsFieldLabel">Firebase web config (JSON)</span>
+                <span class="settingsFieldLabel">Firebase web config (JSON, sandbox-only)</span>
                 <textarea id="firebaseConfigJson" class="settingsCodeInput" rows="8" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'></textarea>
-                <p class="settingsFieldNote">Paste JSON from Firebase console app settings. You can also paste the `firebaseConfig = { ... }` snippet.</p>
+                <p class="settingsFieldNote">Optional temporary harness while AWS target services are not wired. You can paste JSON or the `firebaseConfig = { ... }` snippet.</p>
               </label>
             </div>
             <div class="settingsRowActions">
               <button class="btn secondaryBlue small" id="firebaseSaveConfigBtn" type="button">Save config</button>
               <button class="btn small" id="firebaseClearConfigBtn" type="button">Clear config</button>
-              <button class="btn primary small" id="firebaseSignInGoogleBtn" type="button">Sign in with Google</button>
+              <button class="btn primary small" id="firebaseSignInGoogleBtn" type="button">Sign in with Google (sandbox)</button>
               <button class="btn small" id="firebaseSignOutBtn" type="button">Sign out</button>
-              <button class="btn secondaryBlue small" id="firebaseHealthcheckBtn" type="button">Run Firestore healthcheck</button>
+              <button class="btn secondaryBlue small" id="firebaseHealthcheckBtn" type="button">Run sandbox healthcheck</button>
             </div>
             <div class="settingsStatusLine">
-              <span class="dashboardPill" id="firebaseConnectionPill">Firebase: Not configured</span>
+              <span class="dashboardPill" id="firebaseConnectionPill">Backend sandbox: Not configured</span>
               <span class="dashboardPill" id="firebaseUserPill">User: Signed out</span>
             </div>
             <p class="settingsHint" id="firebaseHealthcheckStatus">Healthcheck: not run.</p>

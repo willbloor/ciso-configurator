@@ -1,6 +1,6 @@
 # CISO Configurator
 
-Last updated: 2026-02-24
+Last updated: 2026-02-25
 
 This repository contains the static configurator app used to generate customer dashboard pages.
 
@@ -11,6 +11,20 @@ This repository contains the static configurator app used to generate customer d
 - Curates "Recommended for you" cards from reconciled Webflow CSV data.
 - Curates "What's new" from RSS (with fallback data).
 - Exports a downloadable customer dashboard HTML file.
+
+## Platform Direction Update (2026-02-25)
+
+Current delivery direction has moved to AWS-first infrastructure ownership:
+
+- Cloud target: AWS (ring-fenced `dev` and `prod` accounts/environments).
+- Identity target: OneLogin via SAML 2.0 federation.
+- Application auth target: Amazon Cognito federated with OneLogin SAML.
+- Shared data target: DynamoDB (or AppSync + DynamoDB) behind API enforcement.
+- API/logic target: API Gateway + Lambda (or equivalent service-owned API layer).
+- Async jobs target: EventBridge + SQS (retry/idempotent sync).
+
+Note:
+- The existing Firebase controls in this repo are now treated as a temporary sandbox harness only and do not represent the production target architecture.
 
 ## Security Sweep (2026-02-24)
 
@@ -118,35 +132,35 @@ Additional RBAC and identity safeguards applied:
 Scope note:
 - These changes do not force sign-in for normal local-only use (`Backend connection off`), and keep current sandbox workflows intact.
 
-## Go-Live Readiness Checklist (Firebase + SSO + Controlled CRM Export)
+## Go-Live Readiness Checklist (AWS + OneLogin SAML + Controlled CRM Export)
 
 Use this as the release gate before storing real customer data.
 
 ### 1) Ownership, environments, and access
 
-- [ ] Create ring-fenced Firebase/GCP projects: `configurator-dev` and `configurator-prod`.
+- [ ] Create ring-fenced AWS environments/accounts: `configurator-dev` and `configurator-prod`.
 - [ ] Confirm project owners in IT/security and engineering (named individuals).
 - [ ] Confirm Hatch access model (least privilege, scoped to required repos/projects only).
 - [ ] Confirm GitHub org access path via One Login and required labs/training completion.
 
 ### 2) Authentication and SSO
 
-- [ ] Enable Firebase Authentication providers for non-prod (Google) and production target (One Login via SAML/OIDC).
-- [ ] Ensure backend-connected sessions bind actor identity to Firebase UID (not editable profile fields).
+- [ ] Configure Amazon Cognito with OneLogin federation (SAML 2.0) for non-prod and prod.
+- [ ] Ensure backend-connected sessions bind actor identity to immutable IdP subject claims (not editable profile fields).
 - [ ] Disable force-role test modes in production runtime.
 - [ ] Verify sign-in/sign-out flow on Vercel production URL and custom domain URL.
 
 ### 3) Authorization (RBAC) and server enforcement
 
 - [ ] Define canonical roles and permissions: `owner`, `admin`, `editor`, `sdr`, `viewer`.
-- [ ] Move all write-critical auth checks to backend/API and Firestore Rules.
+- [ ] Move all write-critical auth checks to backend/API and AWS-side authorization policies.
 - [ ] Ensure frontend role checks are UX-only and never the sole control.
 - [ ] Add record-level ACL checks for read/write/share actions.
 
-### 4) Firestore and data safety
+### 4) Shared data and data safety
 
-- [ ] Publish strict Firestore rules (default deny; explicit allow by UID + role + record membership).
-- [ ] Validate rules with emulator tests for positive and negative access cases.
+- [ ] Enforce default-deny access for data reads/writes (DynamoDB + API policy controls by identity + role + record membership).
+- [ ] Validate access policy behavior with positive and negative integration tests.
 - [ ] Keep imported CSV authority fields untrusted (`shareAccess`, collaborators, lock metadata, updater IDs).
 - [ ] Confirm no sensitive contractual/final pricing data is stored at this phase.
 
@@ -162,7 +176,7 @@ Use this as the release gate before storing real customer data.
 - [ ] Keep CSP/security headers active in Vercel (`vercel.json`) and verify on deployed responses.
 - [ ] Enable App Check / abuse controls as backend usage increases.
 - [ ] Add request timeouts/retries around external dependencies (RSS/proxies/integrations).
-- [ ] Ensure backup/restore approach for Firestore and exported artifacts is documented.
+- [ ] Ensure backup/restore approach for DynamoDB/S3 and exported artifacts is documented.
 
 ### 7) Operations, legal, and launch readiness
 
@@ -178,7 +192,7 @@ Only proceed with real customer data when all are true:
 
 - [ ] SSO is active and tested end-to-end.
 - [ ] Server-side RBAC is enforced and tested.
-- [ ] Firestore rules are strict and validated.
+- [ ] AWS authorization and data access controls are strict and validated.
 - [ ] Audit logging and rollback paths are in place.
 - [ ] Security/IT stakeholders provide explicit approval.
 
@@ -502,9 +516,10 @@ Permission constants and guards are in:
   - `Prefill new records` / `Manual start for new records`
   - `ROI estimate visibility` on/off for side snapshot summary blocks
 - Backend sandbox connection controls now include:
-  - Firebase web config JSON paste/save/clear
-  - Google sign-in / sign-out
-  - Firestore write/read healthcheck (`healthchecks/{uid}`)
+  - Target platform assumption display (`AWS` + `OneLogin SAML` + Cognito federation)
+  - Legacy Firebase web config JSON paste/save/clear (sandbox only)
+  - Legacy Google sign-in / sign-out (sandbox only)
+  - Legacy Firestore write/read healthcheck (`healthchecks/{uid}`) (sandbox only)
   - Runtime source indicator (`window` config vs localStorage config)
 - Account-level settings persisted in:
   - `ACCOUNT_PROFILE_STORAGE_KEY = cfg_shell_account_profile_v1`
@@ -781,14 +796,14 @@ python3 -m http.server 8080
 
 ### Recommended direction
 
-Use a Google-first stack with minimal rewrite:
+Use an AWS-first stack with minimal rewrite:
 
 - Frontend: keep the current SPA.
-- Auth: Firebase Authentication (Google sign-in / workspace SSO).
-- Data: Firestore for records, profiles, memberships, and page metadata.
-- Backend: Cloud Run API for business logic and all CRM writes.
-- Async jobs: Cloud Tasks for retries and idempotent sync.
-- Pages: Firebase Hosting + Cloud Storage for published landing pages.
+- Auth: Amazon Cognito federated with OneLogin SAML.
+- Data: DynamoDB for records, profiles, memberships, and page metadata.
+- Backend: API Gateway + Lambda API layer for business logic and all CRM writes.
+- Async jobs: EventBridge + SQS for retries and idempotent sync.
+- Pages: keep Vercel for app delivery; store published landing artifacts in S3.
 
 Inference from the current codebase: this is the lowest-risk path because the app is currently local-first state plus static page generation, not API-driven persistence yet.
 
@@ -806,9 +821,9 @@ Inference from the current codebase: this is the lowest-risk path because the ap
 2. Phase 1: User profiles with one logic (3-4 days)
    Implement a single profile resolution rule:
    `effective_profile = workspace_defaults + user_defaults + record_overrides`
-   Store all three layers in Firestore. Keep current My Account defaults UX, but persist server-side instead of local-only.
-3. Phase 2: Backend foundation on Google (1 week)
-   Create a Cloud Run service with auth-validated CRUD for records/profiles/pages, plus audit fields (`createdBy`, `updatedBy`, timestamps, `version`). Add Firestore Security Rules for client access and IAM-only service access for admin operations.
+   Store all three layers in DynamoDB. Keep current My Account defaults UX, but persist server-side instead of local-only.
+3. Phase 2: Backend foundation on AWS (1 week)
+   Create API endpoints with auth-validated CRUD for records/profiles/pages, plus audit fields (`createdBy`, `updatedBy`, timestamps, `version`). Enforce data access controls through AWS-side authorization and policy boundaries.
 4. Phase 3: URL + routing model (3-4 days)
    Add shareable URLs for major states:
    `/app/dashboard`
@@ -819,10 +834,10 @@ Inference from the current codebase: this is the lowest-risk path because the ap
    Keep URL as location/context only, not full form payload.
 5. Phase 4: Landing page publish flow (4-5 days)
    Keep current generator logic, but publish through backend:
-   generate HTML from saved record/version, store HTML in Cloud Storage, store metadata/slug/status in Firestore, return public/internal URL, support Draft vs Published with republish history.
+   generate HTML from saved record/version, store HTML in S3, store metadata/slug/status in DynamoDB, return public/internal URL, support Draft vs Published with republish history.
 6. Phase 5: HubSpot + Salesforce integration layer (1-2 weeks)
    Implement integrations in backend only:
-   workspace OAuth connection, field mapping table, idempotent outbound sync via Cloud Tasks, persisted external IDs in `crm_link`, manual `Sync now`, and job status. Then add optional inbound webhooks for bi-directional sync.
+   workspace OAuth connection, field mapping table, idempotent outbound sync via EventBridge/SQS workers, persisted external IDs in `crm_link`, manual `Sync now`, and job status. Then add optional inbound webhooks for bi-directional sync.
 7. Phase 6: Collaborators + permissions (4-5 days)
    Add `workspace_memberships` roles:
    Owner: admin + integration settings
@@ -830,7 +845,7 @@ Inference from the current codebase: this is the lowest-risk path because the ap
    Viewer: read-only
    Add invite-by-email flow and record-level permission checks in API.
 8. Phase 7: Cutover + hardening (3-5 days)
-   Migrate existing local records to Firestore, add activity log, monitoring, retry dashboards, and rollback plan.
+   Migrate existing local records to DynamoDB, add activity log, monitoring, retry dashboards, and rollback plan.
 
 ### Direct answers
 
@@ -838,20 +853,20 @@ Inference from the current codebase: this is the lowest-risk path because the ap
   Yes for major views and record context. No for every form field.
 - Can we add collaborators?
   Yes, but not safely with localStorage-only architecture. You need backend auth + memberships + ACL.
-- Google backend?
-  Yes. Firebase + Cloud Run + Cloud Tasks is a strong fit for this app shape.
+- AWS backend?
+  Yes. Cognito + API Gateway/Lambda + DynamoDB (+ EventBridge/SQS) is a strong fit for this app shape.
 - Frontend work required?
   Yes. Main areas:
   auth/session handling, API-backed data layer, router/deep links, role-based UI gating, publish/sync status UI, optimistic save + conflict handling.
 
 ### IT planning answers (for internal ticket)
 
-- What does "ring-fenced Firebase project" mean?
-  A dedicated Firebase/GCP project for this app only, separate from other systems, with isolated `dev` and `prod` environments and scoped access controls.
+- What does "ring-fenced AWS environment" mean?
+  A dedicated AWS account/environment for this app only, separate from other systems, with isolated `dev` and `prod` and scoped IAM controls.
 - How will users share and collaborate on records?
   Use one-login auth plus workspace membership roles (`owner`, `admin`, `editor`, `sdr`, `viewer`). Record writes are permission-checked by role and record access scope. Version/lock metadata remains in the record model to prevent overwrite conflicts.
 - How will content catalog + RSS feeds run automatically?
-  Run scheduled jobs (Cloud Scheduler -> Cloud Run) to execute the existing catalog/RSS scripts and write refreshed catalog data to storage/database. Keep fallback catalog data available if feeds fail.
+  Run scheduled jobs (EventBridge Scheduler -> Lambda/worker) to execute the existing catalog/RSS scripts and write refreshed catalog data to storage/database. Keep fallback catalog data available if feeds fail.
 - What are scalability assumptions for user data?
   Initial planning target: ~500 users, ~100 concurrent, ~100k records.
   Growth target: ~5,000 users, ~500 concurrent, ~1M records.
@@ -861,13 +876,14 @@ Inference from the current codebase: this is the lowest-risk path because the ap
 
 ### External references
 
-- [Firebase Authentication](https://firebase.google.com/docs/auth)
-- [Cloud Firestore overview](https://firebase.google.com/docs/firestore)
-- [Firestore Security Rules conditions](https://firebase.google.com/docs/firestore/security/rules-conditions)
-- [Cloud Run documentation](https://cloud.google.com/run/docs)
-- [Cloud Tasks documentation](https://cloud.google.com/tasks/docs)
-- [Firebase Hosting custom domain](https://firebase.google.com/docs/hosting/custom-domain)
-- [Firebase Hosting preview/deploy flow](https://firebase.google.com/docs/hosting/test-preview-deploy)
+- [Amazon Cognito](https://docs.aws.amazon.com/cognito/)
+- [Cognito SAML identity providers](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-saml-idp.html)
+- [Amazon API Gateway](https://docs.aws.amazon.com/apigateway/)
+- [AWS Lambda](https://docs.aws.amazon.com/lambda/)
+- [Amazon DynamoDB](https://docs.aws.amazon.com/dynamodb/)
+- [Amazon EventBridge](https://docs.aws.amazon.com/eventbridge/)
+- [Amazon SQS](https://docs.aws.amazon.com/sqs/)
+- [Amazon S3](https://docs.aws.amazon.com/s3/)
 - [HubSpot OAuth](https://developers.hubspot.com/docs/apps/legacy-apps/authentication/oauth/working-with-oauth)
 - [HubSpot Contacts API](https://developers.hubspot.com/docs/api-reference/crm-contacts-v3/guide)
 - [HubSpot Webhooks API](https://developers.hubspot.com/docs/api-reference/webhooks-webhooks-v3/guide)

@@ -24,7 +24,21 @@ Current delivery direction has moved to AWS-first infrastructure ownership:
 - Async jobs target: EventBridge + SQS (retry/idempotent sync).
 
 Note:
-- The existing Firebase controls in this repo are now treated as a temporary sandbox harness only and do not represent the production target architecture.
+- Firebase sandbox tooling has been removed from UI/runtime as of 2026-02-25. AWS + OneLogin SAML is now the only target direction documented here.
+
+## Firebase Sandbox Removal (2026-02-25)
+
+Removed from active runtime and configuration surface:
+
+- Firebase backend configuration controls in `Backend configurations`.
+- Firebase SDK script includes from `/Users/will.bloor/Documents/Configurator/index.html`.
+- Firebase config shim file `/Users/will.bloor/Documents/Configurator/assets/js/firebase-config.js`.
+- Firestore rules file `/Users/will.bloor/Documents/Configurator/firestore.rules`.
+
+Current state:
+
+- App remains local-first.
+- Backend setup page now documents AWS/SAML target assumptions and current implementation status.
 
 ## Security Sweep (2026-02-24)
 
@@ -50,10 +64,9 @@ Implemented hardening in this repo:
    - Added CSP + strict referrer policy in app shell.
    - File: `/Users/will.bloor/Documents/Configurator/index.html`
 
-5. Added Firestore least-privilege baseline rules file
-   - New rules only allow a signed-in user to read/write their own `/healthchecks/{uid}` doc.
-   - Default deny for all other documents.
-   - File: `/Users/will.bloor/Documents/Configurator/firestore.rules`
+5. Historical note (superseded by AWS pivot)
+   - A temporary Firestore least-privilege baseline rules file existed during Firebase sandbox testing.
+   - This file has been removed as part of the AWS direction change.
 
 6. Added import guardrail for large CSV uploads
    - Rejects CSV imports over 5 MB to avoid browser lockups and unsafe oversized local ingestion.
@@ -83,32 +96,22 @@ Additional hardening applied after a second attack-vector sweep:
    - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
 
 4. Added deployment-time HTTP security headers for Vercel
-   - Added `/Users/will.bloor/Documents/Configurator/vercel.json` with:
-     - CSP (Firebase auth iframe-compatible allowlist)
-     - Referrer policy
-     - MIME sniffing protection
-     - Frame embedding protection
-     - Permissions policy
-     - COOP for popup auth compatibility
-
-Note:
-- CSP was adjusted to allow Firebase auth iframe/popup flows (`*.firebaseapp.com`, `*.web.app`, Google auth domains). A strict `frame-src 'none'` policy will break Firebase sign-in.
-
-Manual Firebase console action required:
-
-- In Firebase Console > Firestore > Rules, replace permissive sandbox rules with the content from `/Users/will.bloor/Documents/Configurator/firestore.rules` and publish.
-- Do this in sandbox now; replicate to work dev/prod projects when IT provisions them.
+  - Added `/Users/will.bloor/Documents/Configurator/vercel.json` with:
+    - CSP (Firebase allowances removed after AWS pivot)
+    - Referrer policy
+    - MIME sniffing protection
+    - Frame embedding protection
+    - Permissions policy
+    - COOP
 
 ## Authorization Hardening Pass (2026-02-24)
 
 Additional RBAC and identity safeguards applied:
 
-1. Bound actor identity to Firebase UID when backend mode is on
-   - When backend connection is enabled and a user is signed in, record/lock actor identity now uses:
-     - `userId = uid:<firebase uid>`
-     - Firebase email / display name
-   - This prevents editable profile fields from acting as auth identity in backend-connected sessions.
-   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+1. Historical note (superseded by AWS pivot)
+   - Prior sandbox implementation bound actor identity to Firebase UID in backend test mode.
+   - Firebase sandbox mode has now been removed; production identity target is OneLogin SAML claims via AWS auth infrastructure.
+   - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js` (historical references pending cleanup)
 
 2. Disabled force-role test overrides in non-dev runtime
    - `force-admin`, `force-owner`, `force-editor`, `force-sdr`, `force-viewer` are now:
@@ -318,8 +321,6 @@ Create-flow behavior refinement deployed:
 - App shell: `/Users/will.bloor/Documents/Configurator/index.html`
 - Main logic: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
 - Styles: `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
-- Firebase config shim: `/Users/will.bloor/Documents/Configurator/assets/js/firebase-config.js`
-- Firestore security baseline rules: `/Users/will.bloor/Documents/Configurator/firestore.rules`
 - Vercel deploy-time security headers: `/Users/will.bloor/Documents/Configurator/vercel.json`
 - Collaboration record schema: `/Users/will.bloor/Documents/Configurator/schemas/workspace-record.v2.schema.json`
 - Question bank source CSV: `/Users/will.bloor/Documents/Configurator/assets/data/question-bank.v1.csv`
@@ -515,15 +516,11 @@ Permission constants and guards are in:
   - `SDR mode on/off`
   - `Prefill new records` / `Manual start for new records`
   - `ROI estimate visibility` on/off for side snapshot summary blocks
-- Backend sandbox connection controls now include:
+- Backend configuration page now includes:
   - Target platform assumption display (`AWS` + `OneLogin SAML` + Cognito federation)
-  - Legacy Firebase web config JSON paste/save/clear (sandbox only)
-  - Legacy Google sign-in / sign-out (sandbox only)
-  - Legacy Firestore write/read healthcheck (`healthchecks/{uid}`) (sandbox only)
-  - Runtime source indicator (`window` config vs localStorage config)
+  - Current implementation status (local-only runtime, backend not wired yet)
 - Account-level settings persisted in:
   - `ACCOUNT_PROFILE_STORAGE_KEY = cfg_shell_account_profile_v1`
-  - `FIREBASE_WEB_CONFIG_STORAGE_KEY = cfg_firebase_web_config_v1`
 - Shell settings persisted in:
   - `cfg_shell_tone`
   - `cfg_shell_density`

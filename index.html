@@ -504,7 +504,7 @@
         <header class="accountHead">
           <div>
             <h2>Backend configurations</h2>
-            <p class="accountSub">AWS-first target configuration with SAML assumptions. Legacy Firebase sandbox controls remain available for local prototyping only.</p>
+            <p class="accountSub">AWS-first target configuration with SAML assumptions.</p>
           </div>
         </header>
         <div class="accountBody">
@@ -528,34 +528,16 @@
                 <input type="text" value="DynamoDB/AppSync + API layer" readonly />
               </label>
             </div>
-            <p class="settingsHint">These assumptions drive implementation planning only. Current deployed runtime remains local-first unless backend sandbox mode is explicitly turned on.</p>
+            <p class="settingsHint">These assumptions drive implementation planning only. Current deployed runtime remains local-first until AWS backend services are wired.</p>
           </section>
-          <section class="settingsRow" id="accountBackendConnection">
-            <div class="settingsLabel">Backend connection · Sandbox (legacy Firebase test harness)</div>
-            <p class="settingsHint">Use this only for local sandbox checks while AWS + OneLogin SAML integration is being stood up. Current local record storage remains active.</p>
-            <div class="settingsOptions settingsInlineOptions" id="backendConnectionToggle">
-              <button class="settingsOption" type="button" data-backend-connection="off" aria-pressed="true">Backend connection off</button>
-              <button class="settingsOption" type="button" data-backend-connection="on" aria-pressed="false">Backend connection on</button>
-            </div>
-            <div class="settingsFieldGrid">
-              <label class="settingsField" style="grid-column:1 / -1;">
-                <span class="settingsFieldLabel">Firebase web config (JSON, sandbox-only)</span>
-                <textarea id="firebaseConfigJson" class="settingsCodeInput" rows="8" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'></textarea>
-                <p class="settingsFieldNote">Optional temporary harness while AWS target services are not wired. You can paste JSON or the `firebaseConfig = { ... }` snippet.</p>
-              </label>
-            </div>
-            <div class="settingsRowActions">
-              <button class="btn secondaryBlue small" id="firebaseSaveConfigBtn" type="button">Save config</button>
-              <button class="btn small" id="firebaseClearConfigBtn" type="button">Clear config</button>
-              <button class="btn primary small" id="firebaseSignInGoogleBtn" type="button">Sign in with Google (sandbox)</button>
-              <button class="btn small" id="firebaseSignOutBtn" type="button">Sign out</button>
-              <button class="btn secondaryBlue small" id="firebaseHealthcheckBtn" type="button">Run sandbox healthcheck</button>
-            </div>
+          <section class="settingsRow" id="backendImplementationStatus">
+            <div class="settingsLabel">Implementation status</div>
             <div class="settingsStatusLine">
-              <span class="dashboardPill" id="firebaseConnectionPill">Backend sandbox: Not configured</span>
-              <span class="dashboardPill" id="firebaseUserPill">User: Signed out</span>
+              <span class="dashboardPill">Backend runtime: Local-only</span>
+              <span class="dashboardPill">Auth provider: Not wired</span>
+              <span class="dashboardPill">Data persistence: Browser localStorage</span>
             </div>
-            <p class="settingsHint" id="firebaseHealthcheckStatus">Healthcheck: not run.</p>
+            <p class="settingsHint">Next implementation step: wire Cognito + OneLogin SAML and replace local record persistence with API-backed storage.</p>
           </section>
         </div>
       </article>
@@ -1840,10 +1822,6 @@
     <script src="assets/js/question-bank.js"></script>
     <script src="assets/js/content-catalog.js"></script>
     <script src="assets/js/official-blog-rss-fallback.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-    <script src="assets/js/firebase-config.js"></script>
     <script src="assets/js/app.js"></script>
 </body>
 </html>

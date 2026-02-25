@@ -94,20 +94,15 @@
       }
 
       function resolveBackendConnectionMode(raw){
-        return String(raw || '').trim().toLowerCase() === 'on' ? 'on' : 'off';
+        return 'off';
       }
 
       function readBackendConnectionModeFromStorage(){
-        try{
-          const raw = window.localStorage.getItem(BACKEND_CONNECTION_MODE_STORAGE_KEY);
-          return resolveBackendConnectionMode(raw || 'off');
-        }catch(err){
-          return 'off';
-        }
+        return 'off';
       }
 
       function saveBackendConnectionModeToStorage(mode){
-        const next = resolveBackendConnectionMode(mode);
+        const next = 'off';
         try{
           window.localStorage.setItem(BACKEND_CONNECTION_MODE_STORAGE_KEY, next);
         }catch(err){
@@ -117,7 +112,7 @@
       }
 
       function backendConnectionEnabled(){
-        return resolveBackendConnectionMode(firebaseRuntime.connectionMode) === 'on';
+        return false;
       }
 
       function readFirebaseWebConfigFromStorage(){
@@ -265,14 +260,12 @@
       }
 
       function initFirebaseRuntime(){
-        const connectionMode = resolveBackendConnectionMode(firebaseRuntime.connectionMode || readBackendConnectionModeFromStorage());
-        firebaseRuntime.connectionMode = connectionMode;
-        const firebaseSdk = window.firebase;
-        const cfg = resolvedFirebaseWebConfig();
-        firebaseRuntime.configured = !!cfg;
+        firebaseRuntime.connectionMode = 'off';
+        firebaseRuntime.configured = false;
         firebaseRuntime.connected = false;
         firebaseRuntime.user = null;
         firebaseRuntime.lastError = '';
+        firebaseRuntime.lastHealthcheckStatus = '';
         firebaseAppRef = null;
         firebaseAuthRef = null;
         firebaseDbRef = null;
@@ -280,131 +273,23 @@
           firebaseAuthUnsub();
           firebaseAuthUnsub = null;
         }
-
-        if(connectionMode !== 'on'){
-          firebaseRuntime.lastError = '';
-          firebaseRuntime.lastHealthcheckStatus = '';
-          renderFirebaseConnectionUi();
-          return false;
-        }
-        if(!cfg){
-          renderFirebaseConnectionUi();
-          return false;
-        }
-        if(!firebaseSdk || typeof firebaseSdk.initializeApp !== 'function'){
-          firebaseRuntime.lastError = 'Sandbox SDK unavailable in this build.';
-          renderFirebaseConnectionUi();
-          return false;
-        }
-
-        try{
-          firebaseAppRef = (firebaseSdk.apps && firebaseSdk.apps.length)
-            ? firebaseSdk.app()
-            : firebaseSdk.initializeApp(cfg);
-          firebaseAuthRef = firebaseSdk.auth();
-          firebaseDbRef = firebaseSdk.firestore();
-          firebaseRuntime.connected = true;
-          firebaseAuthUnsub = firebaseAuthRef.onAuthStateChanged((user)=>{
-            firebaseRuntime.user = user || null;
-            renderFirebaseConnectionUi();
-          });
-          renderFirebaseConnectionUi();
-          return true;
-        }catch(err){
-          firebaseRuntime.lastError = firebaseErrorMessage(err, 'Failed to initialize backend sandbox.');
-          renderFirebaseConnectionUi();
-          return false;
-        }
+        renderFirebaseConnectionUi();
+        return false;
       }
 
       async function signInWithGoogleFirebase(){
-        if(!backendConnectionEnabled()){
-          toast('Turn backend connection on first.');
-          return false;
-        }
-        if(!firebaseAuthRef || !window.firebase){
-          toast('Sandbox auth is not configured yet.');
-          return false;
-        }
-        try{
-          const provider = new window.firebase.auth.GoogleAuthProvider();
-          await firebaseAuthRef.signInWithPopup(provider);
-          firebaseRuntime.lastError = '';
-          firebaseRuntime.lastHealthcheckStatus = '';
-          renderFirebaseConnectionUi();
-          toast('Signed in to sandbox auth.');
-          return true;
-        }catch(err){
-          const message = firebaseErrorMessage(err, 'Sandbox sign-in failed.');
-          firebaseRuntime.lastError = message;
-          renderFirebaseConnectionUi();
-          toast(message);
-          return false;
-        }
+        toast('Firebase sandbox has been removed. AWS/OneLogin integration is the target.');
+        return false;
       }
 
       async function signOutFirebaseUser(){
-        if(!backendConnectionEnabled()){
-          toast('Backend connection is off.');
-          return false;
-        }
-        if(!firebaseAuthRef){
-          toast('Sandbox auth is not configured yet.');
-          return false;
-        }
-        try{
-          await firebaseAuthRef.signOut();
-          firebaseRuntime.lastError = '';
-          firebaseRuntime.lastHealthcheckStatus = '';
-          renderFirebaseConnectionUi();
-          toast('Signed out.');
-          return true;
-        }catch(err){
-          const message = firebaseErrorMessage(err, 'Sandbox sign-out failed.');
-          firebaseRuntime.lastError = message;
-          renderFirebaseConnectionUi();
-          toast(message);
-          return false;
-        }
+        toast('Firebase sandbox has been removed. AWS/OneLogin integration is the target.');
+        return false;
       }
 
       async function runFirestoreHealthcheck(){
-        if(!backendConnectionEnabled()){
-          toast('Turn backend connection on first.');
-          return false;
-        }
-        if(!firebaseRuntime.user || !firebaseDbRef){
-          toast('Sign in first to run sandbox healthcheck.');
-          return false;
-        }
-        try{
-          const uid = String(firebaseRuntime.user.uid || 'unknown');
-          const docRef = firebaseDbRef.collection('healthchecks').doc(uid);
-          const nowIso = new Date().toISOString();
-          await docRef.set({
-            uid,
-            email: String(firebaseRuntime.user.email || '').trim(),
-            source: 'io-configurator-sandbox',
-            checkedAt: nowIso
-          }, { merge:true });
-          const snap = await docRef.get();
-          const exists = !!(snap && snap.exists);
-          firebaseRuntime.lastHealthcheckAt = Date.now();
-          firebaseRuntime.lastHealthcheckStatus = exists
-            ? `Healthcheck: write/read OK (${nowIso})`
-            : 'Healthcheck: write OK, read returned no document.';
-          firebaseRuntime.lastError = '';
-          renderFirebaseConnectionUi();
-          toast('Sandbox healthcheck passed.');
-          return true;
-        }catch(err){
-          const message = firebaseErrorMessage(err, 'Sandbox healthcheck failed.');
-          firebaseRuntime.lastError = message;
-          firebaseRuntime.lastHealthcheckStatus = `Healthcheck failed: ${message}`;
-          renderFirebaseConnectionUi();
-          toast(message);
-          return false;
-        }
+        toast('Firebase sandbox has been removed. AWS/OneLogin integration is the target.');
+        return false;
       }
 
       let outcomeTopObserver = null;

@@ -564,7 +564,8 @@
       const FIREBASE_WEB_CONFIG_STORAGE_KEY = 'cfg_firebase_web_config_v1';
       const DEFAULT_WORKSPACE_ID = 'workspace-local';
       const RECORD_SCHEMA_VERSION = 'workspace-record.v2';
-      const INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX = 3;
+      const INTERSTITIAL_FOLLOWUP_MAX = 10;
+      const INTERSTITIAL_FOLLOWUP_RECOMMENDED = 3;
       const CUSTOMER_FOLLOWUP_WIDGET_KEYS = new Set([
         'role',
         'fullName',
@@ -939,7 +940,17 @@
 
       function collaborationRoleLabel(role){
         const resolved = resolveCollaboratorRole(role, 'viewer');
-        return COLLAB_ROLE_LABELS[resolved] || 'Viewer';
+        return COLLAB_ROLE_LABELS[resolved] || COLLAB_ROLE_LABELS.viewer || 'Viewer';
+      }
+
+      function collaborationRolePluralLabel(role){
+        const resolved = resolveCollaboratorRole(role, 'viewer');
+        return `${collaborationRoleLabel(resolved)}s`;
+      }
+
+      function privilegedRolePairLabel(separator){
+        const joiner = typeof separator === 'string' ? separator : ' or ';
+        return `${collaborationRoleLabel('owner')}${joiner}${collaborationRoleLabel('admin')}`;
       }
 
       function resolvePermissionTestMode(value){
@@ -6986,6 +6997,11 @@ const evidenceOpts = [
         const actor = activeCollaboratorIdentity();
         const perms = actorPermissionsForThread(source, { actor });
         const role = resolveCollaboratorRole(perms.role, 'viewer');
+        const adminLabel = collaborationRoleLabel('admin');
+        const ownerLabel = collaborationRoleLabel('owner');
+        const editorLabel = collaborationRoleLabel('editor');
+        const sdrLabel = collaborationRoleLabel('sdr');
+        const viewerLabel = collaborationRoleLabel('viewer');
         const lockReadOnly = isThreadReadOnlyForActor(source);
         const permissionReadOnly = !perms.canEditRecord;
         if(lockReadOnly){
@@ -6999,7 +7015,7 @@ const evidenceOpts = [
         if(permissionReadOnly || role === 'viewer'){
           return {
             key: 'viewer',
-            label: 'Viewer',
+            label: viewerLabel,
             tone: 'viewer',
             sortRank: 2
           };
@@ -7007,7 +7023,7 @@ const evidenceOpts = [
         if(role === 'sdr'){
           return {
             key: 'sdr',
-            label: 'SDR',
+            label: sdrLabel,
             tone: 'sdr',
             sortRank: 3
           };
@@ -7015,7 +7031,7 @@ const evidenceOpts = [
         if(role === 'editor'){
           return {
             key: 'editor',
-            label: 'Editor',
+            label: editorLabel,
             tone: 'editor',
             sortRank: 4
           };
@@ -7023,14 +7039,14 @@ const evidenceOpts = [
         if(role === 'owner'){
           return {
             key: 'owner',
-            label: 'Owner',
+            label: ownerLabel,
             tone: 'owner',
             sortRank: 5
           };
         }
         return {
           key: 'admin',
-          label: 'Admin',
+          label: adminLabel,
           tone: 'admin',
           sortRank: 6
         };
@@ -7400,9 +7416,10 @@ const evidenceOpts = [
           return perms.role === 'admin' || perms.role === 'owner';
         });
         if(!manageableIds.length){
+          const privilegedRoles = privilegedRolePairLabel(' or ');
           toast(requestedMode === 'delete'
-            ? 'Only owner or admin can permanently delete archived records.'
-            : 'Only owner or admin can archive or restore records.');
+            ? `Only ${privilegedRoles} can permanently delete archived records.`
+            : `Only ${privilegedRoles} can archive or restore records.`);
           return;
         }
         if(manageableIds.length !== validIds.length){
@@ -7600,19 +7617,25 @@ const evidenceOpts = [
 
       function shareRoleHintByPermissions(perms){
         if(!perms) return 'Add collaborators, set general access, and copy the link.';
+        const adminLabel = collaborationRoleLabel('admin');
+        const ownerLabel = collaborationRoleLabel('owner');
+        const editorLabel = collaborationRoleLabel('editor');
+        const sdrLabel = collaborationRoleLabel('sdr');
+        const viewerPluralLabel = collaborationRolePluralLabel('viewer').toLowerCase();
+        const privilegedPair = privilegedRolePairLabel('/');
         if(perms.role === 'admin'){
-          return 'Admin mode: full sharing control (add/remove users, set any role, and change access).';
+          return `${adminLabel} mode: full sharing control (add/remove users, set any role, and change access).`;
         }
         if(perms.role === 'owner'){
-          return 'Owner mode: full record sharing control (set roles/access and manage collaborators).';
+          return `${ownerLabel} mode: full record sharing control (set roles/access and manage collaborators).`;
         }
         if(perms.role === 'editor'){
-          return 'Editor mode: can edit the record and add viewers. Use Request access if you need owner/admin changes.';
+          return `${editorLabel} mode: can edit the record and add ${viewerPluralLabel}. Use Request access if you need ${privilegedPair} changes.`;
         }
         if(perms.role === 'sdr'){
-          return 'SDR mode: can edit the record and add viewers. Use Request access if you need owner/admin changes.';
+          return `${sdrLabel} mode: can edit the record and add ${viewerPluralLabel}. Use Request access if you need ${privilegedPair} changes.`;
         }
-        return 'Viewer mode: read-only record access with ability to add viewers only. Use Request access to ask for edit rights.';
+        return `${collaborationRoleLabel('viewer')} mode: read-only record access with ability to add ${viewerPluralLabel} only. Use Request access to ask for edit rights.`;
       }
 
       function syncShareModalGuardControls(thread){
@@ -7647,17 +7670,19 @@ const evidenceOpts = [
         if(saveBtn){
           saveBtn.disabled = !perms.canSetGeneralAccess;
           saveBtn.setAttribute('aria-disabled', saveBtn.disabled ? 'true' : 'false');
+          const privilegedRoles = privilegedRolePairLabel(' or ');
           saveBtn.title = perms.canSetGeneralAccess
             ? 'Save sharing settings'
-            : 'Only owner or admin can change general access';
+            : `Only ${privilegedRoles} can change general access`;
         }
         if(requestBtn){
           const showRequest = !perms.canSetGeneralAccess;
           requestBtn.hidden = !showRequest;
           requestBtn.disabled = !showRequest;
           requestBtn.setAttribute('aria-disabled', requestBtn.disabled ? 'true' : 'false');
+          const privilegedRoles = privilegedRolePairLabel('/');
           requestBtn.title = showRequest
-            ? 'Request elevated access from an owner/admin'
+            ? `Request elevated access from a ${privilegedRoles}`
             : '';
         }
       }
@@ -7698,7 +7723,8 @@ const evidenceOpts = [
           );
           let removeLabel = 'Locked';
           if(!perms.canRemoveCollaborators) removeLabel = 'No access';
-          else if(protectedOwner || collaborators.length <= 1) removeLabel = 'Owner';
+          else if(protectedOwner) removeLabel = collaborationRoleLabel(rowRole);
+          else if(collaborators.length <= 1) removeLabel = 'Last collaborator';
           else if(isActorRow) removeLabel = 'You';
           const removeBtn = removeLocked
             ? `<span class="shareCollaboratorRemove" aria-hidden="true" style="opacity:.45; pointer-events:none;">${escapeHtml(removeLabel)}</span>`
@@ -7841,7 +7867,7 @@ const evidenceOpts = [
         if(!thread) return;
         const perms = actorPermissionsForThread(thread);
         if(!perms.canRemoveCollaborators){
-          toast('Only owner or admin can remove collaborators.');
+          toast(`Only ${privilegedRolePairLabel(' or ')} can remove collaborators.`);
           return;
         }
         const actor = activeCollaboratorIdentity();
@@ -7865,7 +7891,7 @@ const evidenceOpts = [
           return;
         }
         if(countPrivilegedCollaborators(next) < 1){
-          toast('At least one owner or admin is required.');
+          toast(`At least one ${privilegedRolePairLabel(' or ')} is required.`);
           return;
         }
         thread.collaborators = normalizeCollaboratorList(next);
@@ -7881,7 +7907,7 @@ const evidenceOpts = [
         if(!thread) return;
         const perms = actorPermissionsForThread(thread);
         if(!perms.canSetCollaboratorRole){
-          toast('Only owner or admin can change collaborator roles.');
+          toast(`Only ${privilegedRolePairLabel(' or ')} can change collaborator roles.`);
           return;
         }
         const actor = activeCollaboratorIdentity();
@@ -7896,7 +7922,7 @@ const evidenceOpts = [
           return;
         }
         if(currentRole === 'admin' && perms.role !== 'admin'){
-          toast('Only admin can change admin role assignments.');
+          toast(`Only ${collaborationRoleLabel('admin')} can change ${collaborationRoleLabel('admin').toLowerCase()} role assignments.`);
           return;
         }
         if(!(perms.assignableRoles || []).includes(nextRole)){
@@ -7906,7 +7932,7 @@ const evidenceOpts = [
         const next = rows.slice();
         next[idx] = Object.assign({}, next[idx], { role: nextRole });
         if(countPrivilegedCollaborators(next) < 1){
-          toast('At least one owner or admin is required.');
+          toast(`At least one ${privilegedRolePairLabel(' or ')} is required.`);
           return;
         }
         thread.collaborators = normalizeCollaboratorList(next);
@@ -7923,7 +7949,7 @@ const evidenceOpts = [
         }
         const perms = actorPermissionsForThread(thread);
         if(!perms.canSetGeneralAccess){
-          toast('Only owner or admin can change general access.');
+          toast(`Only ${privilegedRolePairLabel(' or ')} can change general access.`);
           return;
         }
         const generalAccess = $('#shareGeneralAccess');
@@ -7942,7 +7968,7 @@ const evidenceOpts = [
         }
         const perms = actorPermissionsForThread(thread);
         if(perms.canSetGeneralAccess){
-          toast('You already have owner/admin access on this record.');
+          toast(`You already have ${privilegedRolePairLabel('/').toLowerCase()} access on this record.`);
           return;
         }
         const actor = activeCollaboratorIdentity();
@@ -8490,12 +8516,16 @@ const evidenceOpts = [
         const groups = Array.from(new Set(rows.map((row)=> String((row && row.group) || '').trim() || 'general')));
         const groupLabels = Array.from(new Set(rows.map((row)=> String((row && row.groupLabel) || '').trim() || 'General')));
         const singleGroup = groups.length <= 1;
-        const mixedLimit = INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX;
-        const withinLimit = singleGroup || rows.length <= mixedLimit;
+        const maxLimit = INTERSTITIAL_FOLLOWUP_MAX;
+        const recommendedLimit = INTERSTITIAL_FOLLOWUP_RECOMMENDED;
+        const withinLimit = rows.length <= maxLimit;
+        const overRecommended = rows.length > recommendedLimit;
         return {
           singleGroup,
           withinLimit,
-          mixedLimit,
+          maxLimit,
+          recommendedLimit,
+          overRecommended,
           groups,
           groupLabels
         };
@@ -8713,24 +8743,22 @@ const evidenceOpts = [
           .map((key)=> String(key || '').trim())
           .filter((key)=> eligibleGapByKey.has(key));
         const selectedGapSet = new Set(followupBucket.selectedKeys);
-        const followupGroupCounts = Array.from(eligibleGapByKey.values()).reduce((acc, gap)=> {
-          const groupKey = String((gap && gap.group) || '').trim() || 'general';
-          acc[groupKey] = (Number(acc[groupKey]) || 0) + 1;
-          return acc;
-        }, Object.create(null));
         const hasFollowupTargets = !!(interPerms.canEditRecord && eligibleGapByKey.size > 0);
         const followupComposerHtml = gaps.length
           ? `
-              <div class="interFollowupComposer">
-                <div class="interFollowupMeta">
-                  <span class="interPill" id="interFollowupSelectedCount">0 of ${INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX}</span>
-                  <span class="interPill" id="interFollowupRulePill">Mixed groups: max ${INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX}</span>
-                </div>
-                <p class="interFollowupRule">
-                  Rule: up to ${INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX} questions when mixing groups.
-                  If all selected questions are in one group (for example, Package fit), you can send all of them together.
-                </p>
-                <div class="interFollowupActions">
+                <div class="interFollowupComposer">
+                  <div class="interFollowupMeta">
+                  <span class="interPill" id="interFollowupSelectedCount">0 of ${INTERSTITIAL_FOLLOWUP_MAX}</span>
+                  <span class="interPill" id="interFollowupRulePill">Recommended ${INTERSTITIAL_FOLLOWUP_RECOMMENDED} · Max ${INTERSTITIAL_FOLLOWUP_MAX}</span>
+                  </div>
+                  <p class="interFollowupRule">
+                  Select up to ${INTERSTITIAL_FOLLOWUP_MAX} questions. We recommend ${INTERSTITIAL_FOLLOWUP_RECOMMENDED} for best response rates.
+                  </p>
+                  <p class="interFollowupWarn" id="interFollowupWarn" hidden>
+                    <span class="interFollowupWarnIcon" aria-hidden="true">!</span>
+                    <span>More than ${INTERSTITIAL_FOLLOWUP_RECOMMENDED} may reduce the likelihood of response.</span>
+                  </p>
+                  <div class="interFollowupActions">
                   <button type="button" class="btn small" data-inter-followup-clear>Clear</button>
                   <button type="button" class="btn small primary" data-inter-followup-generate ${hasFollowupTargets ? '' : 'disabled aria-disabled="true"'}>
                     Create follow-up for customer
@@ -8933,6 +8961,7 @@ const evidenceOpts = [
         const followupDraft = $('#interFollowupDraft');
         const followupLink = $('#interFollowupLink');
         const followupMailto = $('#interFollowupMailto');
+        const followupWarn = $('#interFollowupWarn');
         const followupGenerateBtn = $('#interstitialContent [data-inter-followup-generate]');
         const followupClearBtn = $('#interstitialContent [data-inter-followup-clear]');
         const followupCopyBtn = $('#interstitialContent [data-inter-followup-copy]');
@@ -8946,23 +8975,14 @@ const evidenceOpts = [
         const applyFollowupUi = ()=>{
           const selectedRows = selectedFollowupRows();
           const rule = interstitialFollowupRule(selectedRows);
-          let maxAllowed = INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX;
-          if(selectedRows.length && rule.singleGroup){
-            const singleGroupKey = String((rule.groups && rule.groups[0]) || '').trim();
-            maxAllowed = Number(followupGroupCounts[singleGroupKey]) || selectedRows.length;
-          }
           if(followupSelectedCount){
-            followupSelectedCount.textContent = `${selectedRows.length} of ${maxAllowed}`;
+            followupSelectedCount.textContent = `${selectedRows.length} of ${INTERSTITIAL_FOLLOWUP_MAX}`;
           }
           if(followupRulePill){
-            if(!selectedRows.length){
-              followupRulePill.textContent = `Mixed groups: max ${INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX}`;
-            }else if(rule.singleGroup){
-              const label = (rule.groupLabels && rule.groupLabels[0]) ? rule.groupLabels[0] : 'Single group';
-              followupRulePill.textContent = `${label}: up to ${maxAllowed}`;
-            }else{
-              followupRulePill.textContent = `Mixed groups: ${selectedRows.length}/${INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX}`;
-            }
+            followupRulePill.textContent = `Recommended ${INTERSTITIAL_FOLLOWUP_RECOMMENDED} · Max ${INTERSTITIAL_FOLLOWUP_MAX}`;
+          }
+          if(followupWarn){
+            followupWarn.hidden = !rule.overRecommended;
           }
           if(followupGenerateBtn){
             followupGenerateBtn.disabled = !selectedRows.length || !eligibleGapByKey.size;
@@ -8995,7 +9015,7 @@ const evidenceOpts = [
               if(!rule.withinLimit){
                 selectedKeys.delete(key);
                 check.checked = false;
-                toast(`Select up to ${INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX} when mixing groups. Keep one group selected to send more together.`);
+                toast(`Select up to ${INTERSTITIAL_FOLLOWUP_MAX} questions.`);
               }
             }else{
               selectedKeys.delete(key);
@@ -9229,7 +9249,7 @@ const evidenceOpts = [
                   </div>
                 </td>
                 <td><span class="dash-tier" title="${escapeHtml(row.tierLabel || row.tier || 'Tier')}">${escapeHtml(row.tierShort || '—')}</span></td>
-                <td><span class="dash-status" data-tone="${escapeHtml(row.statusTone || 'viewer')}">${escapeHtml(row.statusLabel || 'Viewer')}</span></td>
+                <td><span class="dash-status" data-tone="${escapeHtml(row.statusTone || 'viewer')}">${escapeHtml(row.statusLabel || collaborationRoleLabel('viewer'))}</span></td>
                 <td><span class="dash-outcomes">${escapeHtml(row.outcomes)}</span></td>
                 <td><span class="dash-gaps">${escapeHtml(row.gaps)}</span></td>
                 <td>
@@ -9284,9 +9304,10 @@ const evidenceOpts = [
           archiveBtn.disabled = selectedManageable === 0;
           archiveBtn.dataset.active = selectedManageable > 0 ? 'true' : 'false';
           archiveBtn.classList.toggle('primary', selectedManageable > 0);
+          const privilegedRoles = privilegedRolePairLabel('/');
           archiveBtn.textContent = selectedManageable === selectedCount
             ? 'Archive selected'
-            : 'Archive selected (owner/admin only)';
+            : `Archive selected (${privilegedRoles} only)`;
         }
       }
 
@@ -9357,7 +9378,7 @@ const evidenceOpts = [
                   </div>
                 </td>
                 <td><span class="dash-tier" title="${escapeHtml(row.tierLabel || row.tier || 'Tier')}">${escapeHtml(row.tierShort || '—')}</span></td>
-                <td><span class="dash-status" data-tone="${escapeHtml(row.statusTone || 'viewer')}">${escapeHtml(row.statusLabel || 'Viewer')}</span></td>
+                <td><span class="dash-status" data-tone="${escapeHtml(row.statusTone || 'viewer')}">${escapeHtml(row.statusLabel || collaborationRoleLabel('viewer'))}</span></td>
                 <td><span class="dash-outcomes">${escapeHtml(row.outcomes)}</span></td>
                 <td><span class="dash-gaps">${escapeHtml(row.gaps)}</span></td>
                 <td>
@@ -9399,16 +9420,18 @@ const evidenceOpts = [
         const restoreBtn = $('#archivedRestoreSelected');
         if(restoreBtn){
           restoreBtn.disabled = selectedManageable === 0;
+          const privilegedRoles = privilegedRolePairLabel('/');
           restoreBtn.textContent = selectedManageable === selectedCount
             ? 'Unarchive selected'
-            : 'Unarchive selected (owner/admin only)';
+            : `Unarchive selected (${privilegedRoles} only)`;
         }
         const deleteBtn = $('#archivedDeleteSelected');
         if(deleteBtn){
           deleteBtn.disabled = selectedManageable === 0;
+          const privilegedRoles = privilegedRolePairLabel('/');
           deleteBtn.textContent = selectedManageable === selectedCount
             ? 'Delete selected'
-            : 'Delete selected (owner/admin only)';
+            : `Delete selected (${privilegedRoles} only)`;
         }
       }
 

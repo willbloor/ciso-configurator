@@ -2256,6 +2256,32 @@
       line-height:1.45;
       color: var(--muted);
     }
+    .interFollowupWarn{
+      margin:0;
+      display:flex;
+      align-items:flex-start;
+      gap:7px;
+      font-size:.8rem;
+      line-height:1.4;
+      color: color-mix(in srgb, var(--tangerine) 84%, var(--text) 16%);
+      font-weight:650;
+    }
+    .interFollowupWarnIcon{
+      inline-size:16px;
+      block-size:16px;
+      border-radius:999px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border:1px solid color-mix(in srgb, var(--tangerine) 66%, var(--border));
+      background: color-mix(in srgb, var(--tangerine) 12%, var(--surface));
+      color: color-mix(in srgb, var(--tangerine) 84%, var(--text) 16%);
+      font-size:.72rem;
+      line-height:1;
+      font-weight:800;
+      flex:0 0 16px;
+      margin-top:1px;
+    }
     .interFollowupActions{
       display:flex;
       flex-wrap:wrap;

@@ -336,23 +336,23 @@
               <label class="settingsField">
                 <span class="settingsFieldLabel">Workspace access role</span>
                 <select id="accountWorkspaceRole">
-                  <option value="owner">Owner</option>
-                  <option value="admin">Admin</option>
-                  <option value="editor">Collaborator/editor</option>
+                  <option value="owner">Owner (Director)</option>
+                  <option value="admin">Admin (VP)</option>
+                  <option value="editor">Editor (Customer Success Manager)</option>
                   <option value="sdr">SDR</option>
-                  <option value="viewer">Viewer</option>
+                  <option value="viewer">Viewer (Associate Customer Success Manager)</option>
                 </select>
-                <p class="settingsFieldNote">Admin can add/remove users. Owner can set sharing permissions. Editor, SDR, and viewer can add viewers only.</p>
+                <p class="settingsFieldNote">Admin (VP) can add/remove users. Owner (Director) can set sharing permissions. Editor (Customer Success Manager), SDR, and Viewer (Associate Customer Success Manager) can add viewers only.</p>
               </label>
               <label class="settingsField">
                 <span class="settingsFieldLabel">Testing persona</span>
                 <select id="accountPermissionTestMode">
                   <option value="live">Live membership rules</option>
-                  <option value="force-admin">Admin (Will Bloor)</option>
-                  <option value="force-owner">Owner (Kirsten Foon)</option>
-                  <option value="force-editor">Editor (Tia Schwartz)</option>
+                  <option value="force-admin">Admin (Will Bloor, VP)</option>
+                  <option value="force-owner">Owner (Kirsten Foon, Director)</option>
+                  <option value="force-editor">Editor (Tia Schwartz, Customer Success Manager)</option>
                   <option value="force-sdr">SDR (Miranda Clark)</option>
-                  <option value="force-viewer">Viewer (Katie Price)</option>
+                  <option value="force-viewer">Viewer (Katie Price, Associate Customer Success Manager)</option>
                 </select>
                 <p class="settingsFieldNote" id="accountPermissionSummary">Role matrix applies to sharing and edit controls.</p>
               </label>

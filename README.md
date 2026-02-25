@@ -47,11 +47,18 @@ Updated dashboard status resolution and account testing controls:
 
 - Dashboard `Status` now reflects the active testing persona context (or live mode), so role simulation is visible directly in the table when testing.
 - Reframed account testing control from force-role labels to named personas:
-  - `Admin (Will Bloor)`
-  - `Owner (Kirsten Foon)`
-  - `Editor (Tia Schwartz)`
+  - `Admin (Will Bloor, VP)`
+  - `Owner (Kirsten Foon, Director)`
+  - `Editor (Tia Schwartz, Customer Success Manager)`
   - `SDR (Miranda Clark)`
-  - `Viewer (Katie Price)`
+  - `Viewer (Katie Price, Associate Customer Success Manager)`
+- Added job-title annotations to account workspace-role controls and testing persona labels:
+  - `Admin (VP)`
+  - `Owner (Director)`
+  - `Editor (Customer Success Manager)`
+  - `SDR`
+  - `Viewer (Associate Customer Success Manager)`
+- Dashboard/share status labels remain canonical role statuses (`Admin`, `Owner`, `Editor`, `SDR`, `Viewer`) so permission state is explicit.
 - Persona selection now applies identity + workspace-role presets in the account form, and SDR persona automatically switches configurator mode to SDR (`sdr-lite`) for consistent role/view testing.
 - Added collaborator identity fallback matching by normalized display name and record `updatedBy` identity when `userId/email` are not available, so local actor mapping does not incorrectly collapse to `Viewer` for records owned by the same user.
 - Removed stale Firebase/Google domain allowances from the in-document CSP meta tag to keep runtime policy aligned with AWS-only direction.
@@ -92,14 +99,17 @@ Design and workflow updates deployed for self-service intake and dashboard follo
      - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
      - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
 
-4. Introduced constrained follow-up selection rule
-   - Mixed groups: up to 3 questions in one send.
-   - Single group (for example package-fit-only): allow full group selection.
-   - Selection pill shows `X of Y` to make limits explicit.
+4. Tuned follow-up question selection thresholds
+   - Hard cap is now `10` questions per follow-up send.
+   - Recommended target is `3` questions.
+   - When selection exceeds `3`, the composer shows an inline warning with an exclamation marker:
+     - `More than 3 may reduce the likelihood of response.`
+   - Selection pill still shows `X of Y` to keep limits explicit.
    - Principle:
-     - minimize customer fatigue while allowing deeper focused clarification.
+     - keep a practical upper bound while guiding toward higher response probability.
    - File:
      - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
 
 5. Added widget-to-dashboard record handoff and account-side import fallback
    - Widget submit syncs records into dashboard storage contract (`immersive.launchpad.savedThreads.v1`) for same-origin local testing.

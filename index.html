@@ -8,7 +8,7 @@
   <link rel="icon" type="image/x-icon" href="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/67445c86d118f03d29f3e02f_Immersive%20Favicon.png" />
   <link rel="shortcut icon" type="image/x-icon" href="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/67445c86d118f03d29f3e02f_Immersive%20Favicon.png" />
   <link rel="apple-touch-icon" href="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/67445c8ae1bfcd6cb4106bdc_Immersive%20Webclip.png" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:; connect-src 'self' https://api.allorigins.win https://www.immersivelabs.com https://*.googleapis.com https://*.gstatic.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self' https://accounts.google.com https://*.google.com https://*.firebaseapp.com https://*.web.app; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:; connect-src 'self' https://api.allorigins.win https://www.immersivelabs.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -345,14 +345,14 @@
                 <p class="settingsFieldNote">Admin can add/remove users. Owner can set sharing permissions. Editor, SDR, and viewer can add viewers only.</p>
               </label>
               <label class="settingsField">
-                <span class="settingsFieldLabel">Permission mode (testing)</span>
+                <span class="settingsFieldLabel">Testing persona</span>
                 <select id="accountPermissionTestMode">
                   <option value="live">Live membership rules</option>
-                  <option value="force-admin">Force admin (test)</option>
-                  <option value="force-owner">Force owner (test)</option>
-                  <option value="force-editor">Force editor (test)</option>
-                  <option value="force-sdr">Force SDR (test)</option>
-                  <option value="force-viewer">Force viewer (test)</option>
+                  <option value="force-admin">Admin (Will Bloor)</option>
+                  <option value="force-owner">Owner (Kirsten Foon)</option>
+                  <option value="force-editor">Editor (Tia Schwartz)</option>
+                  <option value="force-sdr">SDR (Miranda Clark)</option>
+                  <option value="force-viewer">Viewer (Katie Price)</option>
                 </select>
                 <p class="settingsFieldNote" id="accountPermissionSummary">Role matrix applies to sharing and edit controls.</p>
               </label>
@@ -415,7 +415,7 @@
           </section>
           <section class="settingsRow" id="accountWorkspaceProfiles">
             <div class="settingsLabel">Workspace profiles</div>
-            <p class="settingsHint">Load a saved profile dataset to switch record portfolios instantly, upload a CSV profile, or export all records for sharing and backup.</p>
+            <p class="settingsHint">Load a saved profile dataset to switch record portfolios instantly, upload a CSV profile, upload self-service JSON records, or export all records for sharing and backup.</p>
             <div class="settingsRowActions">
               <button class="btn secondaryBlue small" id="accountLoadProfileAe" type="button">Load AE demo profile</button>
               <button class="btn secondaryBlue small" id="accountLoadProfileCs" type="button">Load CS demo profile</button>
@@ -425,10 +425,12 @@
               <summary>Advanced settings</summary>
               <div class="settingsAdvancedBody">
                 <button class="btn secondaryBlue small" id="accountOpenCrmExport" type="button" data-action="openCrmExport">Open CRM export</button>
+                <button class="btn secondaryBlue small" id="accountUploadSelfServiceJson" type="button">Upload self-service JSON</button>
                 <button class="btn small" id="accountExportAllCsv" type="button">Export high-fidelity CSV</button>
               </div>
             </details>
             <input id="accountUploadProfileFile" type="file" accept=".csv,text/csv" hidden />
+            <input id="accountUploadSelfServiceJsonFile" type="file" accept=".json,application/json" hidden />
           </section>
           <section class="accountSettingsSection" id="accountWorkspaceSettings">
             <div class="settingsLabel">My settings</div>

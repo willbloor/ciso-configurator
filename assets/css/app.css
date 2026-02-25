@@ -2138,6 +2138,17 @@
       display:grid;
       gap:10px;
     }
+    .interGapFollowupLayout{
+      display:grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(280px, .82fr);
+      gap:12px;
+      align-items:start;
+    }
+    .interFollowupRail{
+      position: sticky;
+      top: 10px;
+      align-self:start;
+    }
     .interGapItem{
       border:1px solid color-mix(in srgb, var(--tangerine) 40%, var(--border));
       border-radius: var(--radius-sm);
@@ -2155,6 +2166,55 @@
       font-size:.95rem;
       font-weight:700;
       letter-spacing:-0.01em;
+    }
+    .interGapTop{
+      display:flex;
+      align-items:flex-start;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .interGapTop .interGapTitle{
+      flex:1 1 260px;
+      min-width: 0;
+    }
+    .interGapGroup{
+      display:inline-flex;
+      align-items:center;
+      border:1px solid color-mix(in srgb, var(--border) 86%, transparent);
+      border-radius:999px;
+      padding:3px 8px;
+      font-size:.72rem;
+      font-weight:700;
+      letter-spacing:.05em;
+      text-transform:uppercase;
+      color: color-mix(in srgb, var(--text) 72%, var(--azure) 28%);
+      background: color-mix(in srgb, var(--surface) 90%, var(--azure) 10%);
+      white-space:nowrap;
+    }
+    .interGapSelect{
+      margin-left:auto;
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      font-size:.8rem;
+      font-weight:700;
+      color: color-mix(in srgb, var(--text) 74%, var(--azure) 26%);
+      white-space:nowrap;
+      cursor:pointer;
+      user-select:none;
+    }
+    .interGapSelect input{
+      margin:0;
+      inline-size:16px;
+      block-size:16px;
+      accent-color: var(--azure);
+    }
+    .interGapSelectHint{
+      margin-left:auto;
+      font-size:.77rem;
+      color: color-mix(in srgb, var(--muted) 84%, var(--text) 16%);
+      font-weight:650;
+      white-space:nowrap;
     }
     .interGapWhy{
       margin:5px 0 0;
@@ -2175,6 +2235,73 @@
       padding:0;
       cursor:pointer;
     }
+    .interFollowupComposer{
+      margin-top:12px;
+      border:1px solid color-mix(in srgb, var(--azure) 24%, var(--border));
+      border-radius: var(--radius-sm);
+      background: color-mix(in srgb, var(--azure) 6%, var(--surface));
+      padding: 11px;
+      display:grid;
+      gap:9px;
+    }
+    .interFollowupMeta{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+    }
+    .interFollowupRule{
+      margin:0;
+      font-size:.85rem;
+      line-height:1.45;
+      color: var(--muted);
+    }
+    .interFollowupActions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+    }
+    .interFollowupOutput{
+      margin-top:2px;
+      border:1px solid color-mix(in srgb, var(--border) 86%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--surface) 95%, var(--azure) 5%);
+      padding: 10px;
+      display:grid;
+      gap:8px;
+    }
+    .interFollowupSubject{
+      margin:0;
+      font-size:.9rem;
+      color: var(--text);
+      font-weight:700;
+    }
+    .interFollowupDraft{
+      margin:0;
+      border:1px solid color-mix(in srgb, var(--border) 86%, transparent);
+      border-radius: 9px;
+      background: color-mix(in srgb, var(--surface) 97%, var(--azure) 3%);
+      padding: 9px 10px;
+      white-space: pre-wrap;
+      font-family: "IBM Plex Mono","SFMono-Regular",Menlo,Consolas,monospace;
+      font-size:.78rem;
+      line-height:1.45;
+      color: color-mix(in srgb, var(--text) 78%, var(--azure) 22%);
+      max-height: 230px;
+      overflow:auto;
+    }
+    .interFollowupLink{
+      display:block;
+      font-size:.8rem;
+      line-height:1.35;
+      color: var(--azure);
+      text-decoration:none;
+      word-break: break-all;
+    }
+    .interFollowupLink:hover{
+      text-decoration: underline;
+    }
     .interEmpty{
       border:1px solid color-mix(in srgb, var(--lime) 40%, var(--border));
       border-radius: var(--radius-sm);
@@ -2188,6 +2315,8 @@
       .grid{ grid-template-columns: 1fr; }
       .sticky{ position: static !important; top:auto !important; }
       .progress{ justify-content:flex-start; }
+      .interGapFollowupLayout{ grid-template-columns: 1fr; }
+      .interFollowupRail{ position: static; }
       .viewActionSlot{
         width:100%;
         justify-content:flex-start;

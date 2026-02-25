@@ -526,6 +526,7 @@
         dashboardRowAnimatedIds: new Set(),
         workspaceCompanyAnimatedIds: new Set(),
         interstitialAnimatedThreadIds: new Set(),
+        interstitialFollowupByThread: Object.create(null),
         navPreviewThreadId: null,
         consultationOpen: false,
         consultationThreadId: 'current',
@@ -563,6 +564,29 @@
       const FIREBASE_WEB_CONFIG_STORAGE_KEY = 'cfg_firebase_web_config_v1';
       const DEFAULT_WORKSPACE_ID = 'workspace-local';
       const RECORD_SCHEMA_VERSION = 'workspace-record.v2';
+      const INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX = 3;
+      const CUSTOMER_FOLLOWUP_WIDGET_KEYS = new Set([
+        'role',
+        'fullName',
+        'company',
+        'companySize',
+        'operatingCountry',
+        'pressureSources',
+        'urgentWin',
+        'riskEnvs',
+        'measuredOn',
+        'orgPain',
+        'groups',
+        'rhythm',
+        'fitRealism',
+        'fitScope',
+        'fitToday',
+        'fitServices',
+        'fitRiskFrame',
+        'industry',
+        'region',
+        'regs'
+      ]);
       const ROUTE_HASH_PREFIX = '#/';
       const AUTO_SAVE_FAST_MS = 30000;
       const AUTO_SAVE_BASE_MS = 60000;
@@ -719,19 +743,25 @@
         const account = (typeof settingsState !== 'undefined' && settingsState && settingsState.account)
           ? settingsState.account
           : {};
+        const permissionTestMode = resolvePermissionTestMode(account.permissionTestMode);
+        const personaPreset = testPersonaPresetFromMode(permissionTestMode);
         const rawName = String(
-          account.fullName
+          (personaPreset && personaPreset.fullName)
+          || account.fullName
           || state.fullName
           || ''
         ).trim();
         const email = String(
-          account.email
+          (personaPreset && personaPreset.email)
+          || account.email
           || state.email
           || ''
         ).trim().toLowerCase();
         const fallbackName = rawName || (email ? email : 'Local collaborator');
-        const workspaceRole = resolveCollaboratorRole(account.workspaceRole, 'owner');
-        const permissionTestMode = resolvePermissionTestMode(account.permissionTestMode);
+        const workspaceRole = resolveCollaboratorRole(
+          (personaPreset && personaPreset.role) || account.workspaceRole,
+          'owner'
+        );
         const firebaseUser = backendConnectionEnabled() && firebaseRuntime && firebaseRuntime.user
           ? firebaseRuntime.user
           : null;
@@ -809,6 +839,38 @@
         'force-sdr',
         'force-viewer'
       ]));
+      const TEST_PERSONA_PRESETS = Object.freeze({
+        'force-admin': Object.freeze({
+          role: 'admin',
+          fullName: 'Will Bloor',
+          email: 'will.bloor@immersivelabs.com',
+          fieldMode: 'guided'
+        }),
+        'force-owner': Object.freeze({
+          role: 'owner',
+          fullName: 'Kirsten Foon',
+          email: 'kirsten.foon@immersivelabs.com',
+          fieldMode: 'guided'
+        }),
+        'force-editor': Object.freeze({
+          role: 'editor',
+          fullName: 'Tia Schwartz',
+          email: 'tia.schwartz@immersivelabs.com',
+          fieldMode: 'guided'
+        }),
+        'force-sdr': Object.freeze({
+          role: 'sdr',
+          fullName: 'Miranda Clark',
+          email: 'miranda.clark@immersivelabs.com',
+          fieldMode: 'sdr-lite'
+        }),
+        'force-viewer': Object.freeze({
+          role: 'viewer',
+          fullName: 'Katie Price',
+          email: 'katie.price@immersivelabs.com',
+          fieldMode: 'guided'
+        })
+      });
       function permissionTestOverridesEnabled(){
         return true;
       }
@@ -887,6 +949,12 @@
         return PERMISSION_TEST_MODES.has(raw) ? raw : 'live';
       }
 
+      function testPersonaPresetFromMode(mode){
+        const resolved = resolvePermissionTestMode(mode);
+        if(resolved === 'live') return null;
+        return TEST_PERSONA_PRESETS[resolved] || null;
+      }
+
       function forcedRoleFromTestMode(mode){
         if(backendConnectionEnabled()){
           return '';
@@ -906,6 +974,15 @@
 
       function normalizeEmail(value){
         return String(value || '').trim().toLowerCase();
+      }
+
+      function normalizeIdentityName(value){
+        return String(value || '')
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
       }
 
       function collaboratorInitials(nameOrEmail){
@@ -1121,10 +1198,13 @@
         if(!row || !actor) return false;
         const actorId = String(actor.userId || '').trim();
         const actorEmail = normalizeEmail(actor.email);
+        const actorName = normalizeIdentityName(actor.displayName);
         const rowId = String(row.userId || '').trim();
         const rowEmail = normalizeEmail(row.email);
+        const rowName = normalizeIdentityName(row.name);
         if(actorId && rowId && actorId === rowId) return true;
         if(actorEmail && rowEmail && actorEmail === rowEmail) return true;
+        if(actorName && rowName && actorName === rowName) return true;
         return false;
       }
 
@@ -1260,6 +1340,16 @@
         const threadUpdatedById = String(sourceThread.updatedById || '').trim();
         const actorId = String(actor.userId || '').trim();
         if(threadUpdatedById && actorId && threadUpdatedById === actorId){
+          return 'owner';
+        }
+        const threadUpdatedByEmail = normalizeEmail(sourceThread.updatedByEmail);
+        const actorEmail = normalizeEmail(actor.email);
+        if(threadUpdatedByEmail && actorEmail && threadUpdatedByEmail === actorEmail){
+          return 'owner';
+        }
+        const threadUpdatedByName = normalizeIdentityName(sourceThread.updatedBy);
+        const actorName = normalizeIdentityName(actor.displayName);
+        if(threadUpdatedByName && actorName && threadUpdatedByName === actorName){
           return 'owner';
         }
 
@@ -3861,7 +3951,15 @@ const evidenceOpts = [
         const requirements = readinessRequirements(source);
         const gaps = requirements
           .filter((req)=> !req.done)
-          .map((req)=> ({ title:req.title, why:req.why, step:req.step }));
+          .map((req)=> ({
+            id: req.id,
+            key: req.key,
+            group: req.group,
+            groupLabel: req.groupLabel,
+            title: req.title,
+            why: req.why,
+            step: req.step
+          }));
         const total = requirements.length;
         const done = total - gaps.length;
         const pct = total ? Math.round((done / total) * 100) : 0;
@@ -6006,6 +6104,206 @@ const evidenceOpts = [
         reader.readAsText(src);
       }
 
+      function selfServiceRowsFromJsonPayload(payload){
+        if(Array.isArray(payload)) return payload;
+        if(payload && typeof payload === 'object'){
+          if(Array.isArray(payload.records)) return payload.records;
+          if(Array.isArray(payload.items)) return payload.items;
+          return [payload];
+        }
+        return [];
+      }
+
+      function selfServiceStringArray(value){
+        if(Array.isArray(value)){
+          return value.map((item)=> String(item || '').trim()).filter(Boolean);
+        }
+        return [];
+      }
+
+      function selfServiceRecordIdFromSource(source, idx){
+        const raw = String((source && (source.recordId || source.id)) || '').trim();
+        if(raw) return raw;
+        const stamp = Date.now().toString(36);
+        const suffix = `${Math.max(1, Number(idx) + 1)}`;
+        return `ssr-${stamp}-${suffix}`;
+      }
+
+      function selfServiceThreadFromJsonRecord(record, idx){
+        const source = (record && typeof record === 'object') ? record : null;
+        if(!source) return null;
+        const profile = (source.profile && typeof source.profile === 'object') ? source.profile : {};
+        const selections = (source.selections && typeof source.selections === 'object') ? source.selections : {};
+        const lead = (source.lead && typeof source.lead === 'object') ? source.lead : {};
+        const scoring = (source.scoring && typeof source.scoring === 'object') ? source.scoring : {};
+        const company = String(profile.company || source.company || '').trim();
+        if(!company){
+          return null;
+        }
+
+        const now = Date.now();
+        const recordId = selfServiceRecordIdFromSource(source, idx);
+        const updatedAt = coerceTimestamp(source.updatedAt) || now;
+        const createdAt = coerceTimestamp(source.createdAt) || coerceTimestamp(source.submittedAt) || updatedAt;
+        const submissionStatus = String(source.submissionStatus || source.status || 'draft_customer').trim() || 'draft_customer';
+        const intentBandRaw = String(scoring.intentBand || source.intentBand || '').trim().toLowerCase();
+        const intentBand = (intentBandRaw === 'high' || intentBandRaw === 'medium' || intentBandRaw === 'low')
+          ? intentBandRaw
+          : 'low';
+        const intentScore = Number(scoring.intentScore || source.intentScore);
+
+        const snapshot = {
+          fieldMode: 'sdr-lite',
+          role: String(profile.role || '').trim(),
+          fullName: String(profile.fullName || '').trim(),
+          company,
+          companySize: String(profile.companySize || '').trim(),
+          operatingCountry: String(profile.operatingCountry || '').trim(),
+          industry: String(profile.industry || '').trim(),
+          region: String(profile.region || '').trim(),
+          pressureSources: selfServiceStringArray(selections.pressureSources),
+          urgentWin: String(selections.urgentWin || '').trim(),
+          riskEnvs: selfServiceStringArray(selections.riskEnvs),
+          measuredOn: String(selections.measuredOn || '').trim(),
+          orgPain: String(selections.orgPain || '').trim(),
+          groups: selfServiceStringArray(selections.groups),
+          rhythm: String(selections.rhythm || '').trim(),
+          measure: String(selections.measure || '').trim(),
+          fitRealism: String(selections.fitRealism || '').trim(),
+          fitScope: String(selections.fitScope || '').trim(),
+          fitToday: String(selections.fitToday || '').trim(),
+          fitServices: String(selections.fitServices || '').trim(),
+          fitRiskFrame: String(selections.fitRiskFrame || '').trim(),
+          regs: selfServiceStringArray(selections.regs),
+          regsTouched: selfServiceStringArray(selections.regs).length > 0,
+          regMode: 'suggested',
+          regModeTouched: false,
+          regSearch: '',
+          stack: [],
+          stackOther: '',
+          currency: 'USD',
+          fx: { USD:1, GBP:0.8, EUR:0.9 },
+          revenueB: 10,
+          investUSD: 250000,
+          investManual: false,
+          teamCyber: 200,
+          teamDev: 1000,
+          teamWf: 3000,
+          teamManual: false,
+          realization: 'conservative',
+          paybackDelayMonths: 3,
+          cyberSalaryUSD: 180000,
+          devSalaryUSD: 160000,
+          email: String(lead.email || '').trim(),
+          phone: String(lead.phone || '').trim(),
+          notes: String(lead.notes || '').trim(),
+          optin: !!lead.optin,
+          activeStep: 1,
+          visited: [1]
+        };
+
+        return sanitizeImportedThreadAuthority({
+          id: recordId,
+          recordId,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          schemaVersion: RECORD_SCHEMA_VERSION,
+          version: Math.max(1, Math.floor(Number(source.version) || 1)),
+          updatedBy: String(profile.fullName || lead.email || 'Website self-serve').trim() || 'Website self-serve',
+          updatedById: '',
+          updatedByEmail: String(lead.email || '').trim(),
+          company,
+          stage: String(source.stage || 'Discovery').trim() || 'Discovery',
+          tier: String(source.tier || 'Core').trim() || 'Core',
+          outcomes: selfServiceStringArray(source.outcomes),
+          outcomesText: String(source.outcomesText || '').trim() || 'Awaiting outcome signals',
+          gapSummary: String(source.gapSummary || '').trim(),
+          gaps: Array.isArray(source.gaps) ? source.gaps : [],
+          modules: Array.isArray(source.modules) ? source.modules : [],
+          viz: (source.viz && typeof source.viz === 'object') ? source.viz : {},
+          snapshot,
+          createdAt,
+          updatedAt,
+          priority: intentBand === 'high',
+          archived: false,
+          archivedAt: 0,
+          source: String(source.source || 'website_widget').trim() || 'website_widget',
+          submissionStatus,
+          submittedAt: source.submittedAt || null,
+          intentScore: Number.isFinite(intentScore) ? intentScore : 0,
+          intentBand,
+          ownerQueue: String(source.ownerQueue || 'ae_queue').trim() || 'ae_queue'
+        }, idx);
+      }
+
+      function upsertThreadList(rows){
+        const list = Array.isArray(rows) ? rows : [];
+        if(!list.length) return { created:0, updated:0 };
+        ensureSavedThreadsLoaded();
+        let created = 0;
+        let updated = 0;
+        list.forEach((thread, idx)=>{
+          const normalized = normalizeThreadModel(thread, idx);
+          const targetId = String((normalized && normalized.id) || '').trim();
+          if(!targetId) return;
+          const existingIdx = (state.savedThreads || []).findIndex((row)=> row && row.id === targetId);
+          if(existingIdx >= 0){
+            const existing = state.savedThreads[existingIdx];
+            const merged = normalizeThreadModel(Object.assign({}, existing, normalized, {
+              createdAt: Number(existing && existing.createdAt) || Number(normalized.createdAt) || Date.now(),
+              version: Math.max(1, Number(existing && existing.version) || 1, Number(normalized.version) || 1)
+            }), existingIdx);
+            state.savedThreads[existingIdx] = merged;
+            updated += 1;
+          }else{
+            state.savedThreads.unshift(normalized);
+            created += 1;
+          }
+        });
+        applyDefaultActorRoleMix(state.savedThreads, { force:false });
+        persistSavedThreads();
+        return { created, updated };
+      }
+
+      function importSelfServiceJsonText(jsonText, sourceName){
+        let payload;
+        try{
+          payload = JSON.parse(String(jsonText || ''));
+        }catch(err){
+          throw new Error('Invalid JSON format.');
+        }
+        const imported = selfServiceRowsFromJsonPayload(payload)
+          .map((row, idx)=> selfServiceThreadFromJsonRecord(row, idx))
+          .filter(Boolean);
+        if(!imported.length){
+          throw new Error('No valid self-service records found. Ensure payload includes at least one company.');
+        }
+        const result = upsertThreadList(imported);
+        const label = String(sourceName || 'JSON').trim() || 'JSON';
+        update();
+        toast(`Imported ${imported.length} self-service record${imported.length === 1 ? '' : 's'} from ${label} (${result.created} new, ${result.updated} updated).`);
+      }
+
+      function importSelfServiceJsonFile(file){
+        const src = file;
+        if(!src) return;
+        if(Number(src.size || 0) > MAX_IMPORT_CSV_BYTES){
+          toast('JSON file is too large. Use a file under 5 MB.');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = ()=>{
+          try{
+            importSelfServiceJsonText(String(reader.result || ''), src.name || 'JSON');
+          }catch(err){
+            toast(err && err.message ? err.message : 'Unable to import self-service JSON.');
+          }
+        };
+        reader.onerror = ()=>{
+          toast('Could not read the selected JSON file.');
+        };
+        reader.readAsText(src);
+      }
+
       function jsonClone(value){
         try{
           return JSON.parse(JSON.stringify(value));
@@ -6050,6 +6348,29 @@ const evidenceOpts = [
           activeStep: clampQuestionStep(Number.isFinite(firstGap) ? firstGap : 1),
           visited: [1]
         };
+      }
+
+      function resolveSubmissionStatus(value){
+        const raw = String(value || '').trim().toLowerCase();
+        const allowed = new Set([
+          'draft_customer',
+          'submitted_customer',
+          'ae_triaged',
+          'ae_in_progress',
+          'shared_back_to_customer',
+          'closed_won',
+          'closed_lost',
+          'closed_no_fit'
+        ]);
+        return allowed.has(raw) ? raw : 'draft_customer';
+      }
+
+      function resolveIntentBand(value){
+        const raw = String(value || '').trim().toLowerCase();
+        if(raw === 'high' || raw === 'medium' || raw === 'low'){
+          return raw;
+        }
+        return 'low';
       }
 
       function normalizeThreadModel(raw, idx){
@@ -6104,6 +6425,15 @@ const evidenceOpts = [
         const lockExpiresAt = Math.max(0, coerceTimestamp(source.lockExpiresAt));
         const collaborators = normalizeCollaboratorList(source.collaborators);
         const shareAccess = resolveShareAccess(source.shareAccess);
+        const submissionStatus = resolveSubmissionStatus(source.submissionStatus || source.status);
+        const submittedAtRaw = source.submittedAt;
+        const submittedAt = coerceTimestamp(submittedAtRaw)
+          || (typeof submittedAtRaw === 'string' && String(submittedAtRaw).trim() ? String(submittedAtRaw).trim() : null)
+          || null;
+        const intentScore = Number.isFinite(Number(source.intentScore)) ? Number(source.intentScore) : 0;
+        const intentBand = resolveIntentBand(source.intentBand);
+        const ownerQueue = String(source.ownerQueue || '').trim() || 'ae_queue';
+        const sourceLabel = String(source.source || '').trim() || 'workspace_local';
 
         return {
           id: normalizedId,
@@ -6146,7 +6476,13 @@ const evidenceOpts = [
           collaborators,
           shareAccess,
           lockOwner,
-          lockExpiresAt
+          lockExpiresAt,
+          source: sourceLabel,
+          submissionStatus,
+          submittedAt,
+          intentScore,
+          intentBand,
+          ownerQueue
         };
       }
 
@@ -6647,7 +6983,8 @@ const evidenceOpts = [
 
       function dashboardStatusMeta(thread){
         const source = (thread && typeof thread === 'object') ? thread : {};
-        const perms = actorPermissionsForThread(source);
+        const actor = activeCollaboratorIdentity();
+        const perms = actorPermissionsForThread(source, { actor });
         const role = resolveCollaboratorRole(perms.role, 'viewer');
         const lockReadOnly = isThreadReadOnlyForActor(source);
         const permissionReadOnly = !perms.canEditRecord;
@@ -8134,6 +8471,112 @@ const evidenceOpts = [
           .join('');
       }
 
+      function interstitialFollowupBucket(threadId){
+        if(!state.interstitialFollowupByThread || typeof state.interstitialFollowupByThread !== 'object'){
+          state.interstitialFollowupByThread = Object.create(null);
+        }
+        const key = String(threadId || 'current').trim() || 'current';
+        if(!state.interstitialFollowupByThread[key]){
+          state.interstitialFollowupByThread[key] = {
+            selectedKeys: [],
+            draft: null
+          };
+        }
+        return state.interstitialFollowupByThread[key];
+      }
+
+      function interstitialFollowupRule(selectedRows){
+        const rows = Array.isArray(selectedRows) ? selectedRows : [];
+        const groups = Array.from(new Set(rows.map((row)=> String((row && row.group) || '').trim() || 'general')));
+        const groupLabels = Array.from(new Set(rows.map((row)=> String((row && row.groupLabel) || '').trim() || 'General')));
+        const singleGroup = groups.length <= 1;
+        const mixedLimit = INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX;
+        const withinLimit = singleGroup || rows.length <= mixedLimit;
+        return {
+          singleGroup,
+          withinLimit,
+          mixedLimit,
+          groups,
+          groupLabels
+        };
+      }
+
+      function interstitialFollowupWidgetUrl(threadId, selectedKeys){
+        const keys = (Array.isArray(selectedKeys) ? selectedKeys : [])
+          .map((key)=> String(key || '').trim())
+          .filter((key)=> key && CUSTOMER_FOLLOWUP_WIDGET_KEYS.has(key));
+        if(!keys.length) return '';
+        let base;
+        if(window.location.protocol === 'file:'){
+          base = new URL('./landing-pages/customer-self-service-widget-prototype.html', window.location.href);
+        }else{
+          base = new URL('/widget', window.location.origin);
+        }
+        base.searchParams.set('recordId', String(threadId || '').trim() || 'record');
+        base.searchParams.set('followup', keys.join(','));
+        return base.toString();
+      }
+
+      function interstitialFollowupContact(thread){
+        const source = (thread && typeof thread === 'object') ? thread : {};
+        const snapshot = (source.snapshot && typeof source.snapshot === 'object') ? source.snapshot : {};
+        const fullName = String(snapshot.fullName || source.updatedBy || '').trim();
+        const firstName = fullName ? fullName.split(/\s+/)[0] : 'there';
+        const email = String(snapshot.email || source.updatedByEmail || '').trim();
+        return { fullName, firstName, email };
+      }
+
+      function interstitialFollowupDraftModel(thread, gapRows){
+        const rows = Array.isArray(gapRows) ? gapRows : [];
+        const threadId = String((thread && thread.id) || '').trim() || 'record';
+        const company = String((thread && thread.company) || '').trim() || 'your team';
+        const contact = interstitialFollowupContact(thread);
+        const rule = interstitialFollowupRule(rows);
+        const link = interstitialFollowupWidgetUrl(threadId, rows.map((row)=> row.key));
+        const grouped = rows.reduce((acc, row)=> {
+          const label = String((row && row.groupLabel) || '').trim() || 'General';
+          if(!acc[label]) acc[label] = [];
+          acc[label].push(row);
+          return acc;
+        }, Object.create(null));
+        const groupOrder = Object.keys(grouped);
+        const questionLines = [];
+        groupOrder.forEach((label)=> {
+          questionLines.push(`${label}:`);
+          grouped[label].forEach((row)=> {
+            questionLines.push(`- ${String((row && row.title) || '').trim()}`);
+          });
+        });
+        const focusLine = (rule.singleGroup && rule.groupLabels.length === 1)
+          ? `We have a few follow-up questions around ${rule.groupLabels[0].toLowerCase()}.`
+          : 'We have a few follow-up questions to complete your package recommendation.';
+        const subject = `Quick follow-up on your configurator submission (${company})`;
+        const bodyLines = [
+          `Hi ${contact.firstName},`,
+          '',
+          'Thanks again for your configurator submission.',
+          focusLine,
+          ...questionLines,
+          '',
+          'Please use this short form to answer these:',
+          link || '(follow-up link unavailable in this environment)',
+          '',
+          'Once completed, we will confirm next steps and suggest the best attendees for a short discovery call.',
+          '',
+          'Thanks,',
+          'Immersive One team'
+        ];
+        const body = bodyLines.join('\n');
+        const mailto = `mailto:${encodeURIComponent(contact.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        return {
+          subject,
+          body,
+          link,
+          mailto,
+          email: contact.email
+        };
+      }
+
       function interVizModel(thread){
         if(thread && thread.id === 'current'){
           const topOutcomes = inferredPrimaryOutcomes(3);
@@ -8256,10 +8699,79 @@ const evidenceOpts = [
           `;
         }).join('');
 
+        const followupThreadId = String((thread && thread.id) || '').trim() || 'current';
+        const followupBucket = interstitialFollowupBucket(followupThreadId);
+        const eligibleGapByKey = new Map(
+          gaps
+            .filter((gap)=> {
+              const key = String((gap && gap.key) || '').trim();
+              return key && CUSTOMER_FOLLOWUP_WIDGET_KEYS.has(key);
+            })
+            .map((gap)=> [String(gap.key).trim(), gap])
+        );
+        followupBucket.selectedKeys = (Array.isArray(followupBucket.selectedKeys) ? followupBucket.selectedKeys : [])
+          .map((key)=> String(key || '').trim())
+          .filter((key)=> eligibleGapByKey.has(key));
+        const selectedGapSet = new Set(followupBucket.selectedKeys);
+        const followupGroupCounts = Array.from(eligibleGapByKey.values()).reduce((acc, gap)=> {
+          const groupKey = String((gap && gap.group) || '').trim() || 'general';
+          acc[groupKey] = (Number(acc[groupKey]) || 0) + 1;
+          return acc;
+        }, Object.create(null));
+        const hasFollowupTargets = !!(interPerms.canEditRecord && eligibleGapByKey.size > 0);
+        const followupComposerHtml = gaps.length
+          ? `
+              <div class="interFollowupComposer">
+                <div class="interFollowupMeta">
+                  <span class="interPill" id="interFollowupSelectedCount">0 of ${INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX}</span>
+                  <span class="interPill" id="interFollowupRulePill">Mixed groups: max ${INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX}</span>
+                </div>
+                <p class="interFollowupRule">
+                  Rule: up to ${INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX} questions when mixing groups.
+                  If all selected questions are in one group (for example, Package fit), you can send all of them together.
+                </p>
+                <div class="interFollowupActions">
+                  <button type="button" class="btn small" data-inter-followup-clear>Clear</button>
+                  <button type="button" class="btn small primary" data-inter-followup-generate ${hasFollowupTargets ? '' : 'disabled aria-disabled="true"'}>
+                    Create follow-up for customer
+                  </button>
+                </div>
+                <div class="interFollowupOutput" id="interFollowupOutput" hidden>
+                  <p class="interFollowupSubject" id="interFollowupSubject">—</p>
+                  <pre class="interFollowupDraft" id="interFollowupDraft">—</pre>
+                  <a class="interFollowupLink" id="interFollowupLink" href="#" target="_blank" rel="noopener"></a>
+                  <div class="interFollowupActions">
+                    <button type="button" class="btn small" data-inter-followup-copy>Email copy</button>
+                    <a class="btn small secondaryBlue" id="interFollowupMailto" href="#">Open in email client</a>
+                  </div>
+                </div>
+              </div>
+            `
+          : '';
+
         const gapItems = gaps.length
           ? gaps.map((gap, idx)=> `
               <div class="interGapItem${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ` style="--inter-enter-delay:${170 + (idx * 46)}ms;"` : ''}>
-                <p class="interGapTitle">${escapeHtml(gap.title)}</p>
+                <div class="interGapTop">
+                  <p class="interGapTitle">${escapeHtml(gap.title)}</p>
+                  ${String((gap && gap.groupLabel) || '').trim() ? `<span class="interGapGroup">${escapeHtml(gap.groupLabel)}</span>` : ''}
+                  ${(() => {
+                    const key = String((gap && gap.key) || '').trim();
+                    if(!interPerms.canEditRecord){
+                      return '<span class="interGapSelectHint">Read-only</span>';
+                    }
+                    if(!key || !CUSTOMER_FOLLOWUP_WIDGET_KEYS.has(key)){
+                      return '<span class="interGapSelectHint">Internal only</span>';
+                    }
+                    const checked = selectedGapSet.has(key) ? 'checked' : '';
+                    return `
+                      <label class="interGapSelect" title="Include this question in customer follow-up">
+                        <input type="checkbox" data-inter-followup-gap="${escapeHtml(key)}" ${checked} />
+                        <span>Follow-up</span>
+                      </label>
+                    `;
+                  })()}
+                </div>
                 <p class="interGapWhy">Why it matters: ${escapeHtml(gap.why || 'Required for confidence in recommendation and plan.')}</p>
                 <div class="interGapActions">
                   <button type="button" class="interEditLink" data-inter-edit-step="${Number(gap.step) || 1}">${interPerms.canEditRecord ? 'Edit this section' : 'View this section'}</button>
@@ -8340,7 +8852,10 @@ const evidenceOpts = [
           <section class="interGrid">
             <article class="interCard interCardWide${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:146ms;"' : ''}>
               <h3>Gaps: what we still need</h3>
-              <div class="interGapList">${gapItems}</div>
+              <div class="interGapFollowupLayout">
+                <div class="interGapList">${gapItems}</div>
+                ${followupComposerHtml ? `<aside class="interFollowupRail">${followupComposerHtml}</aside>` : ''}
+              </div>
             </article>
 
             <article class="interCard interCardWide${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:186ms;"' : ''}>
@@ -8410,6 +8925,140 @@ const evidenceOpts = [
             openThreadConfigurator(thread.id, step);
           });
         });
+        const followupChecks = $$('#interstitialContent [data-inter-followup-gap]');
+        const followupSelectedCount = $('#interFollowupSelectedCount');
+        const followupRulePill = $('#interFollowupRulePill');
+        const followupOutput = $('#interFollowupOutput');
+        const followupSubject = $('#interFollowupSubject');
+        const followupDraft = $('#interFollowupDraft');
+        const followupLink = $('#interFollowupLink');
+        const followupMailto = $('#interFollowupMailto');
+        const followupGenerateBtn = $('#interstitialContent [data-inter-followup-generate]');
+        const followupClearBtn = $('#interstitialContent [data-inter-followup-clear]');
+        const followupCopyBtn = $('#interstitialContent [data-inter-followup-copy]');
+
+        const selectedFollowupRows = ()=> (
+          (Array.isArray(followupBucket.selectedKeys) ? followupBucket.selectedKeys : [])
+            .map((key)=> eligibleGapByKey.get(key))
+            .filter(Boolean)
+        );
+
+        const applyFollowupUi = ()=>{
+          const selectedRows = selectedFollowupRows();
+          const rule = interstitialFollowupRule(selectedRows);
+          let maxAllowed = INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX;
+          if(selectedRows.length && rule.singleGroup){
+            const singleGroupKey = String((rule.groups && rule.groups[0]) || '').trim();
+            maxAllowed = Number(followupGroupCounts[singleGroupKey]) || selectedRows.length;
+          }
+          if(followupSelectedCount){
+            followupSelectedCount.textContent = `${selectedRows.length} of ${maxAllowed}`;
+          }
+          if(followupRulePill){
+            if(!selectedRows.length){
+              followupRulePill.textContent = `Mixed groups: max ${INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX}`;
+            }else if(rule.singleGroup){
+              const label = (rule.groupLabels && rule.groupLabels[0]) ? rule.groupLabels[0] : 'Single group';
+              followupRulePill.textContent = `${label}: up to ${maxAllowed}`;
+            }else{
+              followupRulePill.textContent = `Mixed groups: ${selectedRows.length}/${INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX}`;
+            }
+          }
+          if(followupGenerateBtn){
+            followupGenerateBtn.disabled = !selectedRows.length || !eligibleGapByKey.size;
+          }
+        };
+
+        const hideFollowupDraft = ()=>{
+          followupBucket.draft = null;
+          if(followupOutput) followupOutput.hidden = true;
+          if(followupSubject) followupSubject.textContent = '—';
+          if(followupDraft) followupDraft.textContent = '—';
+          if(followupLink){
+            followupLink.href = '#';
+            followupLink.textContent = '';
+          }
+          if(followupMailto){
+            followupMailto.href = '#';
+          }
+        };
+
+        followupChecks.forEach((check)=> {
+          check.addEventListener('change', ()=>{
+            const key = String(check.getAttribute('data-inter-followup-gap') || '').trim();
+            if(!key || !eligibleGapByKey.has(key)) return;
+            const selectedKeys = new Set(Array.isArray(followupBucket.selectedKeys) ? followupBucket.selectedKeys : []);
+            if(check.checked){
+              selectedKeys.add(key);
+              const candidateRows = Array.from(selectedKeys).map((rowKey)=> eligibleGapByKey.get(rowKey)).filter(Boolean);
+              const rule = interstitialFollowupRule(candidateRows);
+              if(!rule.withinLimit){
+                selectedKeys.delete(key);
+                check.checked = false;
+                toast(`Select up to ${INTERSTITIAL_FOLLOWUP_MIXED_GROUP_MAX} when mixing groups. Keep one group selected to send more together.`);
+              }
+            }else{
+              selectedKeys.delete(key);
+            }
+            followupBucket.selectedKeys = Array.from(selectedKeys);
+            hideFollowupDraft();
+            applyFollowupUi();
+          });
+        });
+
+        if(followupClearBtn){
+          followupClearBtn.addEventListener('click', ()=> {
+            followupBucket.selectedKeys = [];
+            followupChecks.forEach((node)=> {
+              node.checked = false;
+            });
+            hideFollowupDraft();
+            applyFollowupUi();
+          });
+        }
+
+        if(followupGenerateBtn){
+          followupGenerateBtn.addEventListener('click', ()=> {
+            const selectedRows = selectedFollowupRows();
+            if(!selectedRows.length){
+              toast('Select at least one gap to create a follow-up request.');
+              return;
+            }
+            const draft = interstitialFollowupDraftModel(thread, selectedRows);
+            if(!draft.link){
+              toast('Follow-up link unavailable for the selected questions.');
+              return;
+            }
+            followupBucket.draft = draft;
+            if(followupSubject) followupSubject.textContent = draft.subject;
+            if(followupDraft) followupDraft.textContent = draft.body;
+            if(followupLink){
+              followupLink.href = draft.link;
+              followupLink.textContent = draft.link;
+            }
+            if(followupMailto){
+              followupMailto.href = draft.mailto;
+            }
+            if(followupOutput){
+              followupOutput.hidden = false;
+            }
+            toast('Customer follow-up draft generated.');
+          });
+        }
+
+        if(followupCopyBtn){
+          followupCopyBtn.addEventListener('click', ()=> {
+            const draft = followupBucket.draft;
+            if(!draft){
+              toast('Create the follow-up draft first.');
+              return;
+            }
+            const text = `Subject: ${draft.subject}\n\n${draft.body}\n\nFollow-up form: ${draft.link}`;
+            copyToClipboard(text, 'Copied follow-up email.');
+          });
+        }
+
+        applyFollowupUi();
         const interStarBtn = $('#interstitialContent [data-inter-star-id]');
         if(interStarBtn){
           interStarBtn.addEventListener('click', ()=>{
@@ -10399,7 +11048,7 @@ const evidenceOpts = [
               format: 'RSS post',
               formatKey: String(item.format || '').trim().toLowerCase() || 'rss-post',
               title: String(item.title || '').trim() || 'Latest update',
-              summary: rssSummaryFromRaw(item.summary || '', 190) || 'Latest update from the Immersive Labs blog.',
+              summary: rssSummaryFromRaw(item.summary || '', 190) || 'Latest update from the Immersive One blog.',
               url: safeLinkHref(item.url),
               linkLabel: 'Read post',
               publishedOn: String(item.publishedOn || '').trim(),
@@ -10412,7 +11061,7 @@ const evidenceOpts = [
               format: 'RSS post',
               formatKey: String(card && card.formatKey || '').trim().toLowerCase() || 'rss-post',
               title: String(card && card.title || '').trim() || 'Latest update',
-              summary: rssSummaryFromRaw(card && card.summary || '', 190) || 'Latest update from the Immersive Labs blog.',
+              summary: rssSummaryFromRaw(card && card.summary || '', 190) || 'Latest update from the Immersive One blog.',
               url: safeLinkHref(card && card.url),
               linkLabel: 'Read post',
               publishedOn: String(card && card.publishedOn || '').trim(),
@@ -10703,7 +11352,7 @@ const evidenceOpts = [
           ? newsCards
           : cards.slice(0, 3).map((card)=> ({
               title: String(card && card.title || '').trim() || 'Latest update',
-              summary: String(card && card.summary || '').trim() || 'Latest update from Immersive Labs.',
+              summary: String(card && card.summary || '').trim() || 'Latest update from Immersive One.',
               url: safeLinkHref(card && card.url),
               linkLabel: String(card && card.linkLabel || '').trim() || 'Read post',
               publishedOn: String(card && card.publishedOn || '').trim(),
@@ -10714,7 +11363,7 @@ const evidenceOpts = [
           const item = (card && typeof card === 'object') ? card : {};
           const publishedLabel = formatPublishedLabel(item.publishedOn);
           const eyebrow = publishedLabel ? `${publishedLabel} | RSS post` : 'RSS post';
-          const summary = String(item.summary || '').trim() || 'Latest update from the Immersive Labs blog.';
+          const summary = String(item.summary || '').trim() || 'Latest update from the Immersive One blog.';
           const linkLabel = String(item.linkLabel || '').trim() || 'Read post';
           const title = String(item.title || 'Latest post').trim() || 'Latest post';
           const linkHref = safeLinkHref(item.url);
@@ -11111,7 +11760,7 @@ const evidenceOpts = [
         </div>
       </article>
     </section>
-    <footer>Prepared for ${esc(model.company || 'your team')} by Immersive Labs.</footer>
+    <footer>Prepared for ${esc(model.company || 'your team')} by Immersive One.</footer>
   </main>
   <script>
     (function(){
@@ -14600,6 +15249,8 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const accountLoadProfileCsBtn = $('#accountLoadProfileCs');
       const accountUploadProfileCsvBtn = $('#accountUploadProfileCsv');
       const accountUploadProfileFileInput = $('#accountUploadProfileFile');
+      const accountUploadSelfServiceJsonBtn = $('#accountUploadSelfServiceJson');
+      const accountUploadSelfServiceJsonFileInput = $('#accountUploadSelfServiceJsonFile');
       const accountExportAllCsvBtn = $('#accountExportAllCsv');
       const backendConnectionToggleOptions = $$('#backendConnectionToggle [data-backend-connection]');
       const firebaseConfigJsonInput = $('#firebaseConfigJson');
@@ -14696,6 +15347,20 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         return resolvePermissionTestMode(next);
       }
 
+      function applyTestPersonaPresetToSettingsUI(mode){
+        const preset = testPersonaPresetFromMode(mode);
+        if(!preset) return false;
+        if(accountFullNameInput) accountFullNameInput.value = preset.fullName || '';
+        if(accountEmailInput) accountEmailInput.value = preset.email || '';
+        if(accountWorkspaceRoleSelect){
+          accountWorkspaceRoleSelect.value = resolveAccountWorkspaceRole(preset.role);
+        }
+        if(accountFieldModeSelect && preset.fieldMode){
+          accountFieldModeSelect.value = resolveAccountFieldMode(preset.fieldMode);
+        }
+        return true;
+      }
+
       function syncPermissionTestModeOptionsUi(){
         if(!accountPermissionTestModeSelect) return;
         const allowTestOverrides = permissionTestOverridesEnabled() && !backendConnectionEnabled();
@@ -14772,12 +15437,13 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         const acc = normalizeAccountProfile(profile || settingsState.account || {});
         const workspaceRole = resolveAccountWorkspaceRole(acc.workspaceRole);
         const mode = resolveAccountPermissionTestMode(acc.permissionTestMode);
+        const personaPreset = testPersonaPresetFromMode(mode);
         const forcedRole = forcedRoleFromTestMode(mode);
         const effectiveRole = forcedRole || workspaceRole;
         const matrix = COLLAB_PERMISSION_MATRIX[effectiveRole] || COLLAB_PERMISSION_MATRIX.viewer;
         const addMode = (matrix.assignableRoles || ['viewer']).map((role)=> collaborationRoleLabel(role)).join(', ');
         const modeLabel = forcedRole
-          ? `Testing as ${collaborationRoleLabel(forcedRole)}`
+          ? `Testing persona: ${(personaPreset && personaPreset.fullName) ? personaPreset.fullName : collaborationRoleLabel(forcedRole)} (${collaborationRoleLabel(forcedRole)})`
           : `Live role: ${collaborationRoleLabel(workspaceRole)}`;
         const scopeLabel = matrix.canSetGeneralAccess ? 'Can set record access levels.' : 'Cannot set record access levels.';
         return `${modeLabel}. Can add: ${addMode}. ${scopeLabel}`;
@@ -14969,6 +15635,9 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         if(accountRoleSelect) accountRoleSelect.value = acc.defaultRole || '';
         if(accountWorkspaceRoleSelect) accountWorkspaceRoleSelect.value = resolveAccountWorkspaceRole(acc.workspaceRole);
         if(accountPermissionTestModeSelect) accountPermissionTestModeSelect.value = resolveAccountPermissionTestMode(acc.permissionTestMode);
+        if(accountPermissionTestModeSelect){
+          applyTestPersonaPresetToSettingsUI(accountPermissionTestModeSelect.value);
+        }
         if(accountPermissionSummary) accountPermissionSummary.textContent = accountPermissionSummaryText(acc);
         if(accountCountrySelect) accountCountrySelect.value = acc.defaultCountry || '';
         if(accountRegionSelect) accountRegionSelect.value = acc.defaultRegion || '';
@@ -15279,10 +15948,24 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         if(!el) return;
         el.addEventListener('input', persistAccountFromInputs);
       });
-      [accountRoleSelect, accountWorkspaceRoleSelect, accountPermissionTestModeSelect, accountCountrySelect, accountRegionSelect, accountFieldModeSelect, accountLandingViewSelect, accountDashboardDateModeSelect].forEach((el)=>{
+      [accountRoleSelect, accountWorkspaceRoleSelect, accountCountrySelect, accountRegionSelect, accountFieldModeSelect, accountLandingViewSelect, accountDashboardDateModeSelect].forEach((el)=>{
         if(!el) return;
         el.addEventListener('change', persistAccountFromInputs);
       });
+      if(accountPermissionTestModeSelect){
+        accountPermissionTestModeSelect.addEventListener('change', ()=>{
+          const resolved = resolveAccountPermissionTestMode(accountPermissionTestModeSelect.value);
+          accountPermissionTestModeSelect.value = resolved;
+          const hadPreset = applyTestPersonaPresetToSettingsUI(resolved);
+          markAccountChangesDirty();
+          if(hadPreset){
+            const preset = testPersonaPresetFromMode(resolved);
+            if(preset){
+              toast(`Testing persona selected: ${preset.fullName} (${collaborationRoleLabel(preset.role)}).`);
+            }
+          }
+        });
+      }
       accountPrefillOptions.forEach((btn)=>{
         btn.addEventListener('click', ()=>{
           const next = resolveAccountPrefillMode(btn.getAttribute('data-prefill') || 'on');
@@ -15397,6 +16080,17 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           if(!file) return;
           importWorkspaceCsvFile(file);
           accountUploadProfileFileInput.value = '';
+        });
+      }
+      if(accountUploadSelfServiceJsonBtn && accountUploadSelfServiceJsonFileInput){
+        accountUploadSelfServiceJsonBtn.addEventListener('click', ()=>{
+          accountUploadSelfServiceJsonFileInput.click();
+        });
+        accountUploadSelfServiceJsonFileInput.addEventListener('change', ()=>{
+          const file = accountUploadSelfServiceJsonFileInput.files && accountUploadSelfServiceJsonFileInput.files[0];
+          if(!file) return;
+          importSelfServiceJsonFile(file);
+          accountUploadSelfServiceJsonFileInput.value = '';
         });
       }
       if(accountExportAllCsvBtn){

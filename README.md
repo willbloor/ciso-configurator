@@ -24,7 +24,8 @@ Current delivery direction has moved to AWS-first infrastructure ownership:
 - Async jobs target: EventBridge + SQS (retry/idempotent sync).
 
 Note:
-- Firebase sandbox tooling has been removed from UI/runtime as of 2026-02-25. AWS + OneLogin SAML is now the only target direction documented here.
+- Firebase sandbox tooling has been removed from active UI/runtime paths as of 2026-02-25. AWS + OneLogin SAML is now the only target direction documented here.
+- Legacy Firebase compatibility helper functions remain in `/Users/will.bloor/Documents/Configurator/assets/js/app.js` as no-op/off-path code pending cleanup.
 
 ## Firebase Sandbox Removal (2026-02-25)
 
@@ -39,6 +40,110 @@ Current state:
 
 - App remains local-first.
 - Backend setup page now documents AWS/SAML target assumptions and current implementation status.
+
+## Dashboard Status + Persona Testing Fixes (2026-02-25)
+
+Updated dashboard status resolution and account testing controls:
+
+- Dashboard `Status` now reflects the active testing persona context (or live mode), so role simulation is visible directly in the table when testing.
+- Reframed account testing control from force-role labels to named personas:
+  - `Admin (Will Bloor)`
+  - `Owner (Kirsten Foon)`
+  - `Editor (Tia Schwartz)`
+  - `SDR (Miranda Clark)`
+  - `Viewer (Katie Price)`
+- Persona selection now applies identity + workspace-role presets in the account form, and SDR persona automatically switches configurator mode to SDR (`sdr-lite`) for consistent role/view testing.
+- Added collaborator identity fallback matching by normalized display name and record `updatedBy` identity when `userId/email` are not available, so local actor mapping does not incorrectly collapse to `Viewer` for records owned by the same user.
+- Removed stale Firebase/Google domain allowances from the in-document CSP meta tag to keep runtime policy aligned with AWS-only direction.
+- Preserved self-service lifecycle metadata during record normalization so imports keep `submissionStatus`, `submittedAt`, `intentScore`, `intentBand`, and `ownerQueue` instead of dropping them on save/load.
+- File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+- File: `/Users/will.bloor/Documents/Configurator/index.html`
+
+## Recent Changes in Design Principles (2026-02-25)
+
+Design and workflow updates deployed for self-service intake and dashboard follow-up:
+
+1. Added standalone customer self-service widget entrypoint
+   - New page:
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+   - New widget logic:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+   - Route rewrite:
+     - `/widget` -> `/landing-pages/customer-self-service-widget-prototype.html`
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/vercel.json`
+
+2. Applied right-rail interaction model in widget
+   - Widget now keeps core form on the left and live selection/recommendation context on the right.
+   - `AE Queue Preview` is shown below as a separate full-width block.
+   - Principle:
+     - keep primary input density controlled and keep decision context visible.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+
+3. Added dashboard-native follow-up selector in record overview gaps
+   - Each customer-askable gap now supports a follow-up checkbox.
+   - Follow-up composer is placed in a right rail within the same gaps card.
+   - Generates customer follow-up email copy + dynamic follow-up form link.
+   - Principle:
+     - follow-up should be initiated from AE dashboard record context, not from customer intake surface.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+4. Introduced constrained follow-up selection rule
+   - Mixed groups: up to 3 questions in one send.
+   - Single group (for example package-fit-only): allow full group selection.
+   - Selection pill shows `X of Y` to make limits explicit.
+   - Principle:
+     - minimize customer fatigue while allowing deeper focused clarification.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+5. Added widget-to-dashboard record handoff and account-side import fallback
+   - Widget submit syncs records into dashboard storage contract (`immersive.launchpad.savedThreads.v1`) for same-origin local testing.
+   - Added account workspace import action for `self-service JSON` upload when direct same-origin storage handoff is not available.
+   - Principle:
+     - preserve one record lifecycle across customer intake and AE workflow, with a deterministic fallback path.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+
+6. Added customer follow-up form mode on widget route
+   - Follow-up links now carry `recordId` + selected question keys (`followup`) into `/widget`.
+   - Widget renders requested follow-up questions and supports save of follow-up answers.
+   - Principle:
+     - request only missing context in targeted batches and keep customer interaction short.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+
+7. Standardized customer-facing brand copy
+   - Updated flow copy to `Immersive One`.
+   - Principle:
+     - enforce consistent brand naming in generated/customer-facing text.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+
+## README Update Working Rule (2026-02-25)
+
+Team working rule for this repository:
+
+1. Every material product/workflow change must be logged in `README.md` in the same dated schema used above.
+   - Include:
+     - what changed
+     - why/principle
+     - exact files touched
+
+2. Cross-surface hooks must be explicitly documented
+   - If a change in one surface affects another (widget -> dashboard, dashboard -> customer page, account -> import/export), document both ends.
+
+3. Keep entries implementation-accurate
+   - Do not log aspirational behavior as implemented.
+   - Prefer concise, auditable statements tied to concrete paths/functions.
 
 ## Security Sweep (2026-02-24)
 

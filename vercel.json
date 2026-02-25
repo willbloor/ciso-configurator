@@ -1,4 +1,14 @@
 {
+  "rewrites": [
+    {
+      "source": "/widget",
+      "destination": "/landing-pages/customer-self-service-widget-prototype.html"
+    },
+    {
+      "source": "/widget/",
+      "destination": "/landing-pages/customer-self-service-widget-prototype.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

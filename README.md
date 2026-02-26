@@ -1,6 +1,6 @@
 # CISO Configurator
 
-Last updated: 2026-02-25
+Last updated: 2026-02-26
 
 This repository contains the static configurator app used to generate customer dashboard pages.
 
@@ -66,9 +66,29 @@ Updated dashboard status resolution and account testing controls:
 - File: `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
 - File: `/Users/will.bloor/Documents/Configurator/index.html`
 
-## Recent Changes in Design Principles (2026-02-25)
+## Recent Changes in Design Principles (2026-02-26)
 
 Design and workflow updates deployed for self-service intake and dashboard follow-up:
+
+### Record Overview Section Nav (2026-02-26)
+
+- Record overview now includes a dedicated section nav rail:
+  - `Overview`, `Gaps`, `Content`, `Meetings`, `Integrations`
+- Record nav is now route-backed by section mode:
+  - `/records/:id/overview`
+  - `/records/:id/gaps`
+  - `/records/:id/record-content`
+  - `/records/:id/meetings`
+  - `/records/:id/integrations`
+- `Overview` is now a true summary page for the pages below (status rows + open actions), instead of a long mixed scroll.
+- Icons are intentionally neutral (monogram style), not green success checkmarks.
+- Header and section-nav/content are visually detached: section shell now has its own rounded container with spacing from the header for clearer hierarchy.
+- Mobile behavior collapses this to a horizontal scrollable tab row.
+- Removed duplicate configurator share trigger in the header; sharing/add-collaborator remains on the right snapshot rail only.
+- Files:
+  - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+  - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+  - `/Users/will.bloor/Documents/Configurator/index.html`
 
 1. Added standalone customer self-service widget entrypoint
    - New page:
@@ -138,6 +158,396 @@ Design and workflow updates deployed for self-service intake and dashboard follo
      - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
      - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
 
+8. Normalized snapshot labeling in record overview
+   - Updated interstitial wording so snapshot framing is consistent across the full overview surface.
+   - Renamed local card labels to reduce ambiguity:
+     - `ROI snapshot` -> `ROI estimate`
+     - `Snapshot` -> `Record summary`
+   - Principle:
+     - avoid one-off snapshot labels when the whole overview is a snapshot view.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+9. Reframed the recommendations surface as content
+   - Updated content-view UI copy so the flow is consistently described as `content`:
+     - `Resources for ...` -> `Content for ...`
+     - `Recommendations are locked.` -> `Content is locked.`
+     - unlock/help text now references content instead of recommendations/resources
+     - recommendation card eyebrow now uses `Content N`
+     - recommendation-email wording updated to `content email` / `content plan`
+     - breadcrumb label in this view now shows `Content`
+   - Principle:
+     - treat this entire route as the content workflow, with consistent language across heading, gate state, cards, actions, and toasts.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+10. Converted overview summary rows into dashboard cards with visual metrics
+   - Replaced the `Overview status` row list with KPI-style cards for:
+     - `Gaps page`
+     - `Content page`
+     - `Meetings page`
+   - Added data-visual treatment in each card:
+     - completion ring
+     - progress bar
+     - macro metric callout (including oversized macro numeral for gaps count)
+   - Standardized percentage display with explicit `%` symbols across overview card metrics/status signals.
+   - Principle:
+     - treat overview as a compact data-viz layer (GA-style scanability) rather than a plain status list.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+11. Aligned gaps follow-up rail with gap card stack
+   - Removed the vertical offset that pushed the customer follow-up composer below the first gap card.
+   - Updated sticky top alignment so the right rail starts flush with the first gap item row.
+   - Principle:
+     - maintain horizontal alignment between gap cards and follow-up actions for faster scanability.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+12. Reserved `/content` route for the Content page (with legacy recommendations alias)
+   - Updated route generation so the content workflow now uses:
+     - `#/records/:recordId/content`
+   - Kept backward compatibility for existing links:
+     - `#/records/:recordId/recommendations` still resolves to the same Content page.
+   - Moved the interstitial section route segment for the record-content tab to:
+     - `#/records/:recordId/record-content`
+   - Principle:
+     - keep URL semantics consistent by using `content` for the content workflow while avoiding collisions with interstitial section routing.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+13. Moved snapshot summary into Overview and removed Snapshot nav tab
+   - The standalone `Snapshot` section in interstitial has been removed from the left nav.
+   - Snapshot summary content now renders directly on `Overview`, under the overview dashboard/KPI area.
+   - Legacy route handling is preserved:
+     - `#/records/:recordId/snapshot` now resolves to `Overview`.
+   - Principle:
+     - reduce nav fragmentation by keeping high-level record summary with overview context.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+14. Expanded Overview to include full snapshot data blocks
+   - `Overview` now renders the full snapshot data set (not summary-only):
+     - `Organisation`
+     - `Discovery & outcomes`
+     - `Coverage & package fit`
+     - `Context`
+   - These blocks remain accessible via the `Content` section as well for continuity.
+   - Principle:
+     - keep the complete record snapshot visible on Overview for faster executive scan without section switching.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+15. Simplified overview cards to donut-only and promoted overall completion into the grid
+   - Removed per-card horizontal progress bars from `Overview status` cards to avoid double-encoding metrics.
+   - Kept donut/ring visualization as the single progress chart pattern for this panel.
+   - Moved `Overall completion` from the top-right badge into the first card (top-left), so the overview card grid is fully occupied with no empty quadrant.
+   - Principle:
+     - use one chart type per panel and prioritize balanced card layout density.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+16. Follow-up email workflow status (current implementation baseline)
+   - Current implemented behavior:
+     - AE/SDR can select customer-askable gaps in record `Gaps` view.
+     - Composer enforces selection limits (`Recommended 3`, `Max 10`) and warns when over recommended.
+     - Generates:
+       - subject/body draft text
+       - copy-to-clipboard payload
+       - `mailto:` link
+       - customer follow-up form URL (`/widget?recordId=...&followup=...`)
+   - Current limitations (not yet implemented):
+     - no direct email send service integration (currently draft/copy/mailto pattern)
+     - no delivery/open/reply tracking inside the app
+     - no follow-up sequence history/timeline per record
+     - no template/version library for follow-up copy variants
+   - Principle:
+     - preserve a reliable draft-and-link baseline while follow-up messaging and automation are iterated in a dedicated workstream.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+17. Removed interstitial header meta pills for cleaner record view
+   - Removed the header pill row in record overview that repeated:
+     - `Stage`
+     - `Completion`
+     - `Tier`
+     - `Open gaps`
+   - Principle:
+     - reduce duplicate status noise where the same signals are already represented in the overview cards/dashboard context.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+18. Unified Content workflow into the interstitial `Content` subsection
+   - `View content` now routes into the record interstitial `Content` subsection instead of keeping content as a separate standalone page context.
+   - Existing content route handling (`#/records/:recordId/content` and legacy `#/records/:recordId/recommendations`) now lands the user in interstitial `Content`.
+   - The existing content workspace UI (`contentRecommendationsView`) is mounted directly inside the interstitial content subsection so users see the same content controls in one place.
+   - Snapshot data blocks are now overview-owned (not duplicated under the Content subsection).
+   - Principle:
+     - eliminate split-context navigation by co-locating content actions with the record subsection where users expect them.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+19. Normalized legacy content routes to avoid standalone content view fallback
+   - Route parsing now resolves both:
+     - `#/records/:recordId/content`
+     - `#/records/:recordId/recommendations`
+     directly to interstitial `Content` section mode.
+   - Legacy internal `recommendations` view state now normalizes to interstitial `Content`, preventing split-page rendering when old links are opened.
+   - Principle:
+     - guarantee a single content surface regardless of legacy hash or entry path.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+20. Reduced overview card redundancy and tightened to a single desktop row
+   - Overview status cards now use a concise single status line per card (removed duplicated status/detail/percent text blocks).
+   - Desktop overview card grid now renders in one row of four cards:
+     - `Overall completion`, `Gaps page`, `Content page`, `Meetings page`
+   - Added responsive fallback to two columns on narrower desktop widths and one column on mobile.
+   - Principle:
+     - reduce duplicated signals and improve information density without losing page-level scanability.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+21. Added collapsible interstitial section nav rail (icon-first)
+   - Record section rail (`Overview`, `Gaps`, `Content`, `Meetings`) now collapses to icon-only by default on desktop.
+   - Rail expands on hover/focus and auto-collapses on mouse-off, reclaiming horizontal space for page content.
+   - Added button `title`/`aria-label` so collapsed-state navigation remains discoverable and accessible.
+   - Mobile behavior remains unchanged (horizontal nav row under the existing responsive breakpoint).
+   - Principle:
+     - prioritize content real estate while preserving fast section switching.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+22. Simplified content header controls and moved booking action to Meetings
+   - Content subsection header now keeps only:
+     - `Preview customer page`
+     - `Download customer page`
+   - Removed content header clutter:
+     - completion pill
+     - package/outcomes/company/RSS meta pills
+     - `Generate email`
+     - `CRM export`
+     - `Back to overview`
+   - Record top action bar in interstitial now shows only `Edit record` (removed duplicate share/content/consultation actions from that bar).
+   - Added `Book consultation` button inside the `Meetings` section (`Elevator pitch` card) to localize that action to the meetings workflow.
+   - Added `Integrations` section to the interstitial left nav and moved CRM handoff entry there (`Open CRM export`), removing CRM action buttons from the content header.
+   - Fixed content-thread binding in interstitial content mode so the content header resolves to the active record context (prevents stale company labels like `Orchid Corp` when viewing `Blueharbor Logistics`).
+   - Principle:
+     - reduce duplicated controls and keep actions in the section where they are actually used.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+23. Scoped ROI and outcome weighting blocks to Overview only
+   - `ROI estimate` and `Outcome weighting` blocks are now conditionally rendered only when the interstitial section is `Overview`.
+   - They no longer render on `Gaps`, `Content`, `Meetings`, or `Integrations` (not merely hidden by attribute).
+   - Principle:
+     - keep section context clean by showing commercial summary widgets only on the overview surface.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+24. Aligned interstitial and content surfaces to configurator visual language
+   - Re-skinned interstitial record surfaces (`Overview`, `Gaps`, `Content`, `Meetings`, `Integrations`) to use the same card/question-block treatment as the configurator landing flow:
+     - shared gradient card surfaces
+     - shared border/radius/shadow depth
+     - top accent bars on package, KPI, gap, and composer cards
+   - Reduced bespoke interstitial tinting/alternate skin effects so the embedded record views now read as the same product system rather than a separate UI.
+   - Updated embedded content shell/card styling to match the same shared card system for visual continuity when mounted inside interstitial `Content`.
+   - Principle:
+     - one visual system across intake and record workflows reduces cognitive switching and keeps dashboard subsections consistent with configurator styling.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+25. Shifted visual alignment work to the customer follow-up widget and restored gaps treatment
+   - Restored the previous `Gaps` card/follow-up rail visual treatment in interstitial (orange gap-card emphasis + prior composer styling) after regression feedback.
+   - Applied configurator-style visual language directly to the customer follow-up widget (`/widget`):
+     - card/question-block treatment with accent rails
+     - consistent border/radius/shadow system
+     - updated selection/controls styling to match configurator interaction patterns
+   - Added follow-up-mode completion interactions in widget:
+     - per-question `Missing/Complete` state chip on dynamic follow-up items
+     - follow-up completion pill + progress bar for selected outstanding questions
+   - Principle:
+     - prioritize design consistency on the customer-facing follow-up form while preserving established AE-side gaps readability.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+
+26. Matched follow-up cadence interaction to configurator card-choice pattern
+   - Updated widget follow-up dynamic form so `Cyber resilience cadence today (best fit)` renders as two-column selectable cards (radio behavior) instead of a single dropdown.
+   - Added cadence option copy to mirror configurator interaction language:
+     - `Ad hoc`, `Quarterly`, `Monthly`, `Programmatic` with supporting helper lines.
+   - Added card-layout styling hooks for follow-up items (`data-layout="cards"`) so dynamic follow-up controls match the established card interaction style.
+   - Principle:
+     - where the option set is compact and high-signal, use direct card selection over hidden dropdown choices for faster and clearer customer completion.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+
+27. Unified widget option-paradigm with configurator card interactions
+   - Added a shared select-to-card renderer in widget runtime and applied it to option-driven questions so they no longer mix dropdown and card paradigms for the same interaction class.
+   - Widget base form now renders card-selection controls for key select questions (including `Role`, `Cadence`, and other package-fit/context selects) while preserving underlying source fields for payload compatibility.
+   - Dynamic follow-up form now uses the same shared renderer for those same select-backed questions, so `Cadence today` and similar prompts match the configurator interaction style.
+   - Principle:
+     - enforce one interaction paradigm for option selection across widget and follow-up views to reduce UX inconsistency and repeated re-learning.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+
+28. Canonicalized widget question copy/options to match configurator definitions
+   - Updated customer widget base form question wording and answer sets to match configurator copy and taxonomy for:
+     - pressure sources
+     - urgent 90-day win
+     - teams who need to be ready
+     - risk environments
+     - cadence, measurement, pain-point, and package-fit selectors
+   - Expanded widget options to the full configurator set (for example: six urgent-win choices and full team coverage list) so widget and configurator no longer diverge by missing choices.
+   - Updated follow-up dynamic form rendering to reuse option helper text from source controls, so follow-up cards now mirror the same question language and supporting descriptions.
+   - Added legacy value alias normalization in widget runtime so older drafts/records map onto canonical IDs instead of dropping selections when option IDs changed.
+   - Principle:
+     - one canonical question model across intake and follow-up prevents semantic drift and keeps customer-visible prompts consistent with AE configurator workflows.
+   - Cross-surface impact:
+     - widget payloads now align to configurator canonical option IDs, reducing translation friction when records are opened in the dashboard/interstitial flow
+     - previously saved legacy widget values remain readable via alias normalization during load/hydration
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+
+29. Matched widget header to customer dashboard template hierarchy
+   - Updated widget page shell to use the same dominant header pattern as `customer-dashboard-template-Pioneer-Cloud-2026-02-22.html`:
+     - sticky top bar with Immersive logo + right-side CTA
+     - hero card structure with the same class hierarchy and typographic pattern (`eyebrow`, large `h1`, supporting subtitle)
+     - same hero background image treatment and overlay style
+   - Kept the post-header layout as the requested two-column workbench:
+     - left column: customer follow-up questions/form
+     - right column: live snapshot of already answered questions
+   - Principle:
+     - customer-facing pages should share one recognizable header system so the follow-up flow feels like the same product surface as the dashboard templates.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+
+25. Added launch-content structuring flow for integration releases and mapped it into gap logic + catalog outputs
+   - Added a required `Context and tooling` gap question (`rq_stack`) so guided/advanced flows explicitly capture integration stack context.
+   - Expanded stack options and outcome weighting to account for:
+     - `MS Teams`
+     - `REST API / automation`
+     - `Workday Learning`
+     - `SAP SuccessFactors`
+     - `Cornerstone OnDemand`
+   - Extended recommendation keyword/context mapping so integration signals influence content ranking for:
+     - cyber workforce readiness
+     - compliance evidence
+     - secure enterprise outcomes
+   - Cataloged the 2026-02-25 Immersive One integrated cyber readiness launch assets:
+     - blog post
+     - What’s New post
+     - press release
+   - Regenerated runtime content artifacts so catalog and RSS fallback include the launch material for recommendation surfaces.
+   - Principle:
+     - convert unstructured launch updates into deterministic schema fields/tags so content and gap workflows stay aligned per record.
+   - Cross-surface impact:
+     - affects guided/advanced question completion gating and record gap capture
+     - affects recommendation/content selection and RSS fallback behavior in customer record flows
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/data/question-bank.v1.csv`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/question-bank.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/data/immersive-content-master.csv`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/content-catalog.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/data/official-blog-rss-curated.csv`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/official-blog-rss-fallback.js`
+
+29. Added centralized workstream coordination board for parallel chats
+   - Added a live branch/scope/status board:
+     - `/Users/will.bloor/Documents/Configurator/docs/workstreams.md`
+   - Wired README coordination rules to require board updates before edits/handoff/push/deploy requests.
+   - Principle:
+     - keep ownership markers out of source code while giving all chats one shared operational context.
+   - Cross-surface impact:
+     - process-only change affecting all workstreams; no runtime behavior changes.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/docs/workstreams.md`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+
+30. Aligned widget questions to configurator interaction patterns end-to-end
+   - Updated widget question controls so Quick Discovery and follow-up mode use the same interaction paradigms as the configurator for high-signal fields:
+     - `Role` now renders as chip-style selectable options (instead of a dropdown/select-card mismatch)
+     - `Teams who need to be ready` now renders as chip-style multi-select in base widget and dynamic follow-up form
+     - Card-based questions (for example `Cadence` and other select-backed fit/context prompts) continue to use the shared card renderer with consistent label/hint treatment
+   - Simplified follow-up question header metadata:
+     - removed stage badge-driven visual treatment in dynamic follow-up items
+     - retained completion state chips (`Missing` / `Complete`) so customers still get progress feedback without conflicting paradigms
+   - Updated widget chip/card styling tokens so the question blocks and right snapshot rail remain visually consistent with configurator language while preserving the widget two-column layout.
+   - Principle:
+     - one control paradigm per question type across configurator and widget reduces cognitive switching and removes visible "same question, different UI" regressions.
+   - Cross-surface impact:
+     - follow-up links from dashboard `Gaps` now open a customer follow-up form that matches configurator controls more closely, reducing interpretation drift between AE and customer views.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+   - Residual risk / follow-up:
+     - browser `file://` sessions may cache old CSS/JS; hard refresh is required to verify latest control rendering.
+
+31. Switched widget answer-card layout to row-first (no squeezed two-column cards)
+   - Updated widget card-grid behavior so card-style options render as single-column rows instead of side-by-side columns.
+   - Applied row-first layout to both:
+     - static form card questions
+     - dynamically rendered follow-up card questions
+   - Fixed card internal layout so helper text sits below the option label (not compressed alongside it).
+   - Principle:
+     - prioritize readability and scannability over horizontal density; avoid card text compression at medium widths.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+
+32. Release-gate reconciliation + security/logic validation sweep before push
+   - Reconciled source/runtime content catalog drift:
+     - removed two stale `blog-post:*` rows from `/Users/will.bloor/Documents/Configurator/assets/data/immersive-content-master.csv` that had aged out of runtime `content-catalog.js` by the 1095-day recency window.
+     - result: source CSV and runtime catalog now contain the same `313` IDs.
+   - Added/updated live coordination metadata for release-gate execution in:
+     - `/Users/will.bloor/Documents/Configurator/docs/workstreams.md`
+   - Principle:
+     - release decisions must be based on runtime-accurate data and explicit multi-chat ownership state.
+   - Cross-surface impact:
+     - content recommendation surfaces now have no source/runtime ID drift for the active catalog window.
+     - no UI/runtime behavior change outside data consistency and process governance tracking.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/data/immersive-content-master.csv`
+     - `/Users/will.bloor/Documents/Configurator/docs/workstreams.md`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/content-catalog.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/official-blog-rss-fallback.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/question-bank.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/clean_content_csv_by_recency.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/generate_question_bank_js.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/reconcile_content_csvs.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/reconcile_operations_csvs.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/sync_official_blog_rss_curated.mjs`
+     - generated-vs-checked sync:
+       - `question-bank.v1.csv` ↔ `question-bank.js` (PASS)
+       - `official-blog-rss-curated.csv` ↔ `official-blog-rss-fallback.js` (PASS)
+       - `immersive-content-master.csv` ↔ `content-catalog.js` ID set parity (PASS after recency cleanup)
+     - security sweep:
+       - no secrets detected in repo pattern scan
+       - no `eval`/`new Function` introduced in active runtime files
+       - CSP/security headers present in `/Users/will.bloor/Documents/Configurator/vercel.json` and CSP/referrer meta present in `/Users/will.bloor/Documents/Configurator/index.html`
+   - Residual risk / follow-up:
+     - no headless browser E2E test harness is present in-repo, so route/render behavior is validated by static/runtime checks only.
+
 ## README Update Working Rule (2026-02-25)
 
 Team working rule for this repository:
@@ -154,6 +564,50 @@ Team working rule for this repository:
 3. Keep entries implementation-accurate
    - Do not log aspirational behavior as implemented.
    - Prefer concise, auditable statements tied to concrete paths/functions.
+
+4. Multi-chat workstream coordination
+   - Different chats may work in parallel on different UI/system areas (for example: follow-up emails, overview UX, widget intake, CRM export).
+   - Each chat must append a numbered entry in the existing dated schema above before handoff.
+   - If a chat changes shared files (`/assets/js/app.js`, `/assets/css/app.css`, `/index.html`, `/README.md`), it must explicitly note cross-surface impact so the next chat can merge safely.
+   - Live ownership/status board is `/Users/will.bloor/Documents/Configurator/docs/workstreams.md`; each chat must set scope/status there before edits and refresh it at handoff.
+
+## README Update Protocol (Mandatory, 2026-02-26)
+
+This section defines the required process for updates, handoffs, and deploys.
+
+1. Hard gate before push/deploy
+   - No push to shared branches and no deploy from shared branches unless `README.md` is updated in the same workstream.
+   - The README update must describe the real shipped behavior, not planned behavior.
+
+2. When README must be updated
+   - After every material UX, logic, data, security, routing, or export change.
+   - Before handoff to another chat/agent.
+   - Before requesting commit/push.
+   - After any hotfix that changes runtime behavior.
+
+3. Required entry format (use the existing dated numbered schema)
+   - Entry title with date.
+   - What changed (user-visible and logic-level).
+   - Why/principle.
+   - Exact files touched (absolute paths).
+   - Cross-surface impact (if any).
+   - Validation performed (manual checks, `node --check`, tests run/not run).
+   - Any residual risk or follow-up work.
+
+4. Commit discipline
+   - Keep code and README notes in the same commit whenever practical.
+   - If multiple commits are used, the final commit before push must include an up-to-date README entry.
+   - Do not mark anything as complete in README if not implemented in code.
+
+5. Handoff discipline for new chats
+   - New chat must read the latest README sections first.
+   - New chat must continue the same numbered dated change log style.
+   - New chat must preserve prior entries and append only; do not rewrite history unless correcting factual errors.
+
+6. Workstream board discipline (parallel chats)
+   - Before changing files, claim/update the relevant row in `/Users/will.bloor/Documents/Configurator/docs/workstreams.md`.
+   - Before handoff, merge request, commit/push request, or deploy request, update status, timestamp, and current file claims.
+   - If scope collides with another active row, log collision + dependency in the board before editing shared files.
 
 ## Security Sweep (2026-02-24)
 
@@ -733,7 +1187,12 @@ Hash routes supported for major states:
 - `#/export`
 - `#/records/:recordId/overview`
 - `#/records/:recordId/configure?step=1..6`
-- `#/records/:recordId/recommendations`
+- `#/records/:recordId/content` (legacy alias: `#/records/:recordId/recommendations`)
+- `#/records/:recordId/record-content` (interstitial section route)
+- `#/records/:recordId/gaps`
+- `#/records/:recordId/meetings`
+- `#/records/:recordId/integrations`
+- `#/records/:recordId/snapshot` (legacy alias to `#/records/:recordId/overview`)
 - `#/records/:recordId/export`
 
 ### CRM export workflow (manual, integration-ready)
@@ -941,7 +1400,7 @@ Inference from the current codebase: this is the lowest-risk path because the ap
    `/app/dashboard`
    `/app/records/:recordId/overview`
    `/app/records/:recordId/configure?step=1..6`
-   `/app/records/:recordId/recommendations`
+   `/app/records/:recordId/content`
    `/app/records/:recordId/landing-pages/:pageId`
    Keep URL as location/context only, not full form payload.
 5. Phase 4: Landing page publish flow (4-5 days)

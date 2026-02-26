@@ -9,7 +9,8 @@
         recommendationSeen: false,
         generatedRecommendation: null,
         followupSelectedKeys: [],
-        followupModeKeys: []
+        followupModeKeys: [],
+        companyHint: ''
       };
 
       const requiredStageAKeys = [
@@ -23,24 +24,60 @@
         'fitScope'
       ];
 
+      const legacyValueAliases = {
+        rhythm: {
+          ad_hoc: 'adhoc',
+          continuous: 'program'
+        },
+        measuredOn: {
+          completion: 'training',
+          mix: 'notMeasured',
+          performance: 'mttd'
+        },
+        orgPain: {
+          proof: 'externalProof',
+          speed: 'coordination',
+          skills: 'skillsCoverage',
+          reg: 'externalProof'
+        },
+        fitToday: {
+          starting: 'training',
+          developing: 'adhoc',
+          mature: 'scrutiny'
+        },
+        fitRiskFrame: {
+          compliance: 'governance',
+          operational: 'readiness',
+          business: 'governance'
+        },
+        groups: {
+          secops: 'soc',
+          dev: 'appsec',
+          leaders: 'exec',
+          it: 'itops'
+        }
+      };
+
       const labelMaps = {
         role: {
           ciso: 'CISO',
-          secMgr: 'Security manager',
-          practitioner: 'Security practitioner',
-          executive: 'Executive sponsor',
+          secMgr: 'Security Manager',
+          practitioner: 'Practitioner',
+          executive: 'Executive',
           other: 'Other'
         },
         urgentWin: {
-          boardEvidence: 'Board-ready evidence',
-          fasterDecisions: 'Faster response decisions',
-          attackSurface: 'Shrink attack surface',
-          workforce: 'Workforce readiness'
+          boardEvidence: 'Board-ready evidence & benchmarks',
+          fasterDecisions: 'Faster detection/response decisions',
+          attackSurface: 'Shrink attack surface & remediation time',
+          safeAI: 'Safe AI adoption & governance',
+          workforce: 'Workforce readiness & retention',
+          thirdParty: 'Third-party resilience'
         },
         fitScope: {
-          single: 'Single team',
-          multi: 'Multi-team',
-          enterprise: 'Enterprise'
+          single: 'Single team / single function',
+          multi: 'Multiple teams within a function',
+          enterprise: 'Enterprise / multi-region / exec plus technical'
         },
         pressureSources: {
           board: 'Board',
@@ -50,17 +87,25 @@
           internal: 'Internal only'
         },
         groups: {
-          soc: 'SOC / IR',
-          secops: 'Security operations',
-          dev: 'Engineering / DevSecOps',
-          leaders: 'Security leadership',
-          it: 'IT / platform'
+          soc: 'SOC / Incident Response',
+          appsec: 'AppSec / Developers',
+          cloud: 'Cloud security',
+          itops: 'IT ops / infrastructure',
+          identity: 'Identity & access (IAM)',
+          grc: 'GRC / compliance',
+          data: 'Data / privacy',
+          product: 'Product / platform security',
+          exec: 'Executive Crisis Team (CMT)',
+          workforce: 'Wider workforce',
+          third: 'Third-party / supplier readiness'
         },
         riskEnvs: {
-          code: 'Code / app',
+          code: 'Code',
           cloud: 'Cloud',
           identity: 'Identity',
-          socir: 'SOC / IR'
+          ot: 'OT',
+          enterpriseApps: 'Enterprise apps',
+          socir: 'Mostly SOC / IR'
         }
       };
 
@@ -69,19 +114,19 @@
         { key:'fullName', label:'Your name', stage:'Stage A', kind:'text', sourceId:'fullName' },
         { key:'company', label:'Company', stage:'Stage A', kind:'text', sourceId:'company' },
         { key:'operatingCountry', label:'Operating country', stage:'Stage A', kind:'select', sourceId:'operatingCountry' },
-        { key:'pressureSources', label:'Where is pressure coming from? (pick up to 3)', stage:'Stage A', kind:'checkbox', sourceName:'pressureSources', max:3 },
-        { key:'urgentWin', label:'Most urgent 90-day win', stage:'Stage A', kind:'radio', sourceName:'urgentWin' },
-        { key:'groups', label:'Teams in scope', stage:'Stage A', kind:'checkbox', sourceName:'groups' },
-        { key:'fitScope', label:'Scope requirement', stage:'Stage A', kind:'radio', sourceName:'fitScope' },
+        { key:'pressureSources', label:'Where\'s the pressure coming from? (pick up to 3)', stage:'Stage A', kind:'checkbox', sourceName:'pressureSources', max:3 },
+        { key:'urgentWin', label:'What\'s the most urgent 90-day win?', stage:'Stage A', kind:'radio', sourceName:'urgentWin' },
+        { key:'groups', label:'Teams who need to be ready (select any)', stage:'Stage A', kind:'checkbox', sourceName:'groups' },
+        { key:'fitScope', label:'Scope of the program', stage:'Stage A', kind:'radio', sourceName:'fitScope' },
         { key:'companySize', label:'Company size', stage:'Stage B', kind:'select', sourceId:'companySize' },
-        { key:'rhythm', label:'Cadence today', stage:'Stage B', kind:'select', sourceId:'rhythm' },
+        { key:'rhythm', label:'Cyber resilience cadence today (best fit)', stage:'Stage B', kind:'select', sourceId:'rhythm' },
         { key:'riskEnvs', label:'Risk environments (pick up to 2)', stage:'Stage B', kind:'checkbox', sourceName:'riskEnvs', max:2 },
-        { key:'measuredOn', label:'Measured on today', stage:'Stage B', kind:'select', sourceId:'measuredOn' },
-        { key:'orgPain', label:'Biggest pain point', stage:'Stage B', kind:'select', sourceId:'orgPain' },
-        { key:'fitRealism', label:'Realism requirement', stage:'Stage C', kind:'select', sourceId:'fitRealism' },
-        { key:'fitToday', label:'Current state', stage:'Stage C', kind:'select', sourceId:'fitToday' },
-        { key:'fitServices', label:'Delivery support', stage:'Stage C', kind:'select', sourceId:'fitServices' },
-        { key:'fitRiskFrame', label:'Risk framing', stage:'Stage C', kind:'select', sourceId:'fitRiskFrame' },
+        { key:'measuredOn', label:'What are you being measured on today?', stage:'Stage B', kind:'select', sourceId:'measuredOn' },
+        { key:'orgPain', label:'Where are your biggest pain points?', stage:'Stage B', kind:'select', sourceId:'orgPain' },
+        { key:'fitRealism', label:'How realistic do exercises need to be?', stage:'Stage C', kind:'select', sourceId:'fitRealism' },
+        { key:'fitToday', label:'Current state (closest match)', stage:'Stage C', kind:'select', sourceId:'fitToday' },
+        { key:'fitServices', label:'Delivery style they need', stage:'Stage C', kind:'select', sourceId:'fitServices' },
+        { key:'fitRiskFrame', label:'How they describe the problem', stage:'Stage C', kind:'select', sourceId:'fitRiskFrame' },
         { key:'industry', label:'Industry', stage:'Stage C', kind:'text', sourceId:'industry' },
         { key:'region', label:'Region / footprint', stage:'Stage C', kind:'select', sourceId:'region' },
         { key:'regs', label:'Regulatory references', stage:'Stage C', kind:'text', sourceId:'regs' },
@@ -94,7 +139,166 @@
         return acc;
       }, {});
 
+      const widgetSelectCardConfig = {
+        role: {
+          columns: 5,
+          variant: 'chips',
+          options: {
+            ciso: { label:'CISO' },
+            secMgr: { label:'Security Manager' },
+            practitioner: { label:'Practitioner' },
+            executive: { label:'Executive' },
+            other: { label:'Other' }
+          }
+        },
+        companySize: { columns: 2 },
+        rhythm: {
+          columns: 2,
+          options: {
+            adhoc: {
+              label: 'Ad hoc',
+              hint: 'Infrequent / event-driven exercises.'
+            },
+            quarterly: {
+              label: 'Quarterly',
+              hint: 'Some structure, limited cadence.'
+            },
+            monthly: {
+              label: 'Monthly',
+              hint: 'Higher cadence, increasing realism.'
+            },
+            program: {
+              label: 'Programmatic',
+              hint: 'Continuous rhythm + governance + reporting.'
+            }
+          }
+        },
+        measuredOn: {
+          columns: 2,
+          options: {
+            mttd: {
+              label: 'MTTD / MTTR',
+              hint: 'Speed to detect, escalate, and contain is tracked.'
+            },
+            audit: {
+              label: 'Audit evidence',
+              hint: 'Readiness proof and governance evidence are key measures.'
+            },
+            vuln: {
+              label: 'Vulnerability backlog',
+              hint: 'Backlog, fix velocity, and closure cadence are central metrics.'
+            },
+            training: {
+              label: 'Training completion',
+              hint: 'Readiness is mostly tracked as completion today.'
+            },
+            notMeasured: {
+              label: 'Not measured well',
+              hint: 'Metrics are fragmented or not trusted by stakeholders.'
+            }
+          }
+        },
+        orgPain: {
+          columns: 2,
+          options: {
+            skillsCoverage: {
+              label: 'Skills coverage & onboarding',
+              hint: 'Readiness gaps and onboarding speed are hurting execution.'
+            },
+            coordination: {
+              label: 'Cross-team coordination',
+              hint: 'Decision and response handoffs break down under pressure.'
+            },
+            externalProof: {
+              label: 'Proving to external stakeholders',
+              hint: 'Board/regulator/insurer/customer evidence is hard to package.'
+            },
+            vendorRisk: {
+              label: 'Vendor risk',
+              hint: 'Third-party dependency and resilience are primary pain points.'
+            },
+            aiRisk: {
+              label: 'AI risk',
+              hint: 'AI adoption risk exists without clear controls and governance.'
+            }
+          }
+        },
+        fitRealism: {
+          columns: 2,
+          options: {
+            generic: {
+              label: 'Best-practice / generic scenarios are fine',
+              hint: 'Value quickly without mirroring the exact environment.'
+            },
+            tooling: {
+              label: 'Needs to reflect our tooling and processes',
+              hint: 'Bring your own tooling and dynamic realism matters.'
+            },
+            bespoke: {
+              label: 'Must mirror our environment and threat landscape',
+              hint: 'They will not trust results unless it matches their reality.'
+            }
+          }
+        },
+        fitToday: {
+          columns: 2,
+          options: {
+            training: {
+              label: 'Mainly training completion today',
+              hint: 'They lack proof of capability and want to escape checkbox learning.'
+            },
+            adhoc: {
+              label: 'Exercises exist, but they are ad hoc and do not close gaps',
+              hint: 'They want a loop that drives improvement.'
+            },
+            scrutiny: {
+              label: 'Already under scrutiny (audits, board, regulators)',
+              hint: 'They need a repeatable evidence layer.'
+            }
+          }
+        },
+        fitServices: {
+          columns: 2,
+          options: {
+            diy: {
+              label: 'Self-serve / light enablement',
+              hint: 'They can run most of it internally with minimal support.'
+            },
+            guided: {
+              label: 'Guided program support',
+              hint: 'Help building cadence and linking outcomes to improvement.'
+            },
+            whiteglove: {
+              label: 'Dedicated program team + evidence packaging + bespoke realism',
+              hint: 'Managed partnership for custom realism, facilitation, and evidence delivery.'
+            }
+          }
+        },
+        fitRiskFrame: {
+          columns: 2,
+          options: {
+            skills: {
+              label: 'We need stronger skills',
+              hint: 'They frame the issue as practitioner proficiency.'
+            },
+            readiness: {
+              label: 'We need better response outcomes and coordination',
+              hint: 'They care about speed, accuracy, and teamwork under pressure.'
+            },
+            governance: {
+              label: 'We need proof for governance',
+              hint: 'They talk in board and regulatory evidence terms.'
+            }
+          }
+        },
+        region: { columns: 2 }
+      };
+      const widgetSelectCardRenderers = new Map();
+
       const el = {
+        heroEyebrow: document.getElementById('heroEyebrow'),
+        heroTitle: document.getElementById('heroTitle'),
+        heroSubtitle: document.getElementById('heroSubtitle'),
         aeReadyText: document.getElementById('aeReadyText'),
         intentScoreText: document.getElementById('intentScoreText'),
         intentBandText: document.getElementById('intentBandText'),
@@ -111,6 +315,10 @@
         recNextSteps: document.getElementById('recNextSteps'),
         customerFollowupPanel: document.getElementById('customerFollowupPanel'),
         customerFollowupCount: document.getElementById('customerFollowupCount'),
+        customerFollowupCompletion: document.getElementById('customerFollowupCompletion'),
+        customerFollowupProgressLabel: document.getElementById('customerFollowupProgressLabel'),
+        customerFollowupProgressBar: document.getElementById('customerFollowupProgressBar'),
+        customerFollowupSummary: document.getElementById('customerFollowupSummary'),
         customerFollowupIntro: document.getElementById('customerFollowupIntro'),
         customerFollowupForm: document.getElementById('customerFollowupForm'),
         selContact: document.getElementById('selContact'),
@@ -176,6 +384,119 @@
         btnApplyFollowupAnswers: document.getElementById('btnApplyFollowupAnswers')
       };
 
+      function readSearchParam(name){
+        try{
+          const params = new URLSearchParams(window.location.search);
+          return String(params.get(name) || '').trim();
+        }catch(err){
+          return '';
+        }
+      }
+
+      function parseRecordIdFromUrl(){
+        return readSearchParam('recordId');
+      }
+
+      function parseCompanyFromUrl(){
+        return readSearchParam('company');
+      }
+
+      function launchpadRecordById(recordId){
+        const target = String(recordId || '').trim();
+        if(!target) return null;
+        const rows = readStorageArray(LAUNCHPAD_THREAD_KEY);
+        const match = rows.find((row)=> {
+          const rowId = String((row && (row.recordId || row.id)) || '').trim();
+          return rowId === target;
+        });
+        return (match && typeof match === 'object') ? match : null;
+      }
+
+      function applyLaunchpadSnapshot(snapshot){
+        const snap = (snapshot && typeof snapshot === 'object') ? snapshot : null;
+        if(!snap) return;
+        dom.role.value = String(snap.role || dom.role.value || '').trim();
+        dom.fullName.value = String(snap.fullName || dom.fullName.value || '').trim();
+        dom.company.value = String(snap.company || dom.company.value || '').trim();
+        dom.operatingCountry.value = String(snap.operatingCountry || dom.operatingCountry.value || '').trim();
+        dom.companySize.value = String(snap.companySize || dom.companySize.value || '').trim();
+        dom.rhythm.value = normalizeOptionValue('rhythm', String(snap.rhythm || dom.rhythm.value || '').trim());
+        dom.measuredOn.value = normalizeOptionValue('measuredOn', String(snap.measuredOn || dom.measuredOn.value || '').trim());
+        dom.orgPain.value = normalizeOptionValue('orgPain', String(snap.orgPain || dom.orgPain.value || '').trim());
+        dom.fitRealism.value = String(snap.fitRealism || dom.fitRealism.value || '').trim();
+        dom.fitToday.value = normalizeOptionValue('fitToday', String(snap.fitToday || dom.fitToday.value || '').trim());
+        dom.fitServices.value = String(snap.fitServices || dom.fitServices.value || '').trim();
+        dom.fitRiskFrame.value = normalizeOptionValue('fitRiskFrame', String(snap.fitRiskFrame || dom.fitRiskFrame.value || '').trim());
+        dom.industry.value = String(snap.industry || dom.industry.value || '').trim();
+        dom.region.value = String(snap.region || dom.region.value || '').trim();
+        dom.regs.value = Array.isArray(snap.regs) ? snap.regs.join(', ') : String(dom.regs.value || '').trim();
+        dom.email.value = String(snap.email || dom.email.value || '').trim();
+        dom.phone.value = String(snap.phone || dom.phone.value || '').trim();
+        dom.notes.value = String(snap.notes || dom.notes.value || '').trim();
+        dom.optin.checked = !!snap.optin;
+        setCheckedValues('pressureSources', Array.isArray(snap.pressureSources) ? snap.pressureSources : []);
+        setCheckedValues('groups', Array.isArray(snap.groups) ? snap.groups : []);
+        setCheckedValues('riskEnvs', Array.isArray(snap.riskEnvs) ? snap.riskEnvs : []);
+        setRadioValue('urgentWin', String(snap.urgentWin || '').trim());
+        setRadioValue('fitScope', String(snap.fitScope || '').trim());
+      }
+
+      function followupCompanyLabel(){
+        const fromForm = String((dom.company && dom.company.value) || '').trim();
+        if(fromForm) return fromForm;
+        const fromHint = String(state.companyHint || '').trim();
+        if(fromHint) return fromHint;
+        return '';
+      }
+
+      function applyHeroCopy(){
+        const company = followupCompanyLabel();
+        const followupCount = Array.isArray(state.followupModeKeys) ? state.followupModeKeys.length : 0;
+        const followupMode = followupCount > 0;
+        if(el.heroEyebrow){
+          el.heroEyebrow.textContent = company || 'Immersive One';
+        }
+        if(el.heroTitle){
+          el.heroTitle.textContent = followupMode
+            ? (company ? `Outstanding questions for ${company}` : 'Outstanding questions')
+            : 'Discovery follow-up form';
+        }
+        if(el.heroSubtitle){
+          el.heroSubtitle.textContent = followupMode
+            ? `Please complete the ${followupCount} requested question${followupCount === 1 ? '' : 's'}. This helps us align the platform recommendation to your needs.`
+            : 'Please complete the requested questions. This helps us align the platform recommendation to your needs.';
+        }
+        if(el.heroTitle && String(el.heroTitle.textContent || '').trim()){
+          document.title = `${String(el.heroTitle.textContent || '').trim()} | Immersive One`;
+        }
+      }
+
+      function hydrateContextFromUrl(){
+        const recordId = parseRecordIdFromUrl();
+        const companyHint = parseCompanyFromUrl();
+        if(recordId){
+          state.recordId = recordId;
+        }
+        if(companyHint){
+          state.companyHint = companyHint;
+        }
+        const linked = launchpadRecordById(state.recordId);
+        if(linked){
+          const linkedSnapshot = (linked.snapshot && typeof linked.snapshot === 'object') ? linked.snapshot : null;
+          if(linkedSnapshot){
+            applyLaunchpadSnapshot(linkedSnapshot);
+          }
+          state.status = String(linked.submissionStatus || state.status || 'draft_customer').trim() || 'draft_customer';
+          if(!state.companyHint){
+            state.companyHint = String((linkedSnapshot && linkedSnapshot.company) || linked.company || '').trim();
+          }
+        }
+        if(!String((dom.company && dom.company.value) || '').trim() && state.companyHint){
+          dom.company.value = state.companyHint;
+        }
+        applyHeroCopy();
+      }
+
       function getCheckedValues(name){
         return Array.from(document.querySelectorAll(`input[name="${name}"]:checked`)).map((item)=> item.value);
       }
@@ -185,32 +506,182 @@
         return checked ? checked.value : '';
       }
 
+      function normalizeOptionValue(name, value){
+        const key = String(name || '').trim();
+        const raw = String(value || '').trim();
+        if(!raw) return '';
+        const aliases = legacyValueAliases[key] || null;
+        if(!aliases) return raw;
+        return String(aliases[raw] || raw);
+      }
+
+      function normalizeOptionList(name, values){
+        const list = Array.isArray(values) ? values : [];
+        const seen = new Set();
+        const out = [];
+        list.forEach((value)=> {
+          const mapped = normalizeOptionValue(name, value);
+          if(!mapped || seen.has(mapped)) return;
+          seen.add(mapped);
+          out.push(mapped);
+        });
+        return out;
+      }
+
       function setRadioValue(name, value){
+        const target = normalizeOptionValue(name, value);
         Array.from(document.querySelectorAll(`input[name="${name}"]`)).forEach((item)=> {
-          item.checked = item.value === value;
+          item.checked = item.value === target;
         });
       }
 
       function setCheckedValues(name, values){
-        const list = Array.isArray(values) ? values : [];
-        const set = new Set(list.map((v)=> String(v)));
+        const set = new Set(normalizeOptionList(name, values));
         Array.from(document.querySelectorAll(`input[name="${name}"]`)).forEach((item)=> {
           item.checked = set.has(item.value);
         });
       }
 
-      function groupOptionLabel(name, value){
+      function groupOptionMeta(name, value){
         const node = document.querySelector(`input[name="${name}"][value="${CSS.escape(value)}"]`);
-        if(!node) return optionLabel(name, value);
-        const textNode = node.closest('.choice') && node.closest('.choice').querySelector('.choice-row span:last-child');
-        return textNode ? String(textNode.textContent || '').trim() : optionLabel(name, value);
+        if(!node){
+          return {
+            label: optionLabel(name, value),
+            hint: ''
+          };
+        }
+        const choiceNode = node.closest('.choice');
+        const textNode = choiceNode && choiceNode.querySelector('.choice-row span:last-child');
+        const hintNode = choiceNode && choiceNode.querySelector('small');
+        return {
+          label: textNode ? String(textNode.textContent || '').trim() : optionLabel(name, value),
+          hint: hintNode ? String(hintNode.textContent || '').trim() : ''
+        };
+      }
+
+      function groupOptionLabel(name, value){
+        return groupOptionMeta(name, value).label;
       }
 
       function groupOptions(name){
-        return Array.from(document.querySelectorAll(`input[name="${name}"]`)).map((node)=> ({
-          value: node.value,
-          label: groupOptionLabel(name, node.value)
+        return Array.from(document.querySelectorAll(`input[name="${name}"]`)).map((node)=> {
+          const meta = groupOptionMeta(name, node.value);
+          return {
+            value: node.value,
+            label: meta.label,
+            hint: meta.hint
+          };
+        });
+      }
+
+      function widgetSelectCardConfigFor(sourceId){
+        const key = String(sourceId || '').trim();
+        if(!key) return null;
+        return widgetSelectCardConfig[key] || null;
+      }
+
+      function createSelectChoiceGrid(source, cfg, opts){
+        if(!source || !(source instanceof HTMLSelectElement) || !cfg) return null;
+        const options = Array.from(source.options || []).map((opt)=> ({
+          value: String(opt.value || ''),
+          label: String(opt.textContent || '').trim()
         }));
+        const rows = options.filter((opt)=> String(opt.value || '').trim());
+        if(!rows.length) return null;
+
+        const grid = document.createElement('div');
+        const cols = Number(cfg.columns) || 2;
+        const variant = String(cfg.variant || 'cards').trim().toLowerCase();
+        const isChipVariant = variant === 'chips';
+        grid.className = `choice-grid select-card-grid is-${Math.max(2, Math.min(5, cols))}${isChipVariant ? ' chips' : ''}`;
+        const selectedValue = String((opts && opts.selectedValue) || '').trim();
+        const nameKey = String((opts && opts.inputName) || `card_${source.id || source.name || 'select'}`).trim();
+        const onSelect = (opts && typeof opts.onSelect === 'function') ? opts.onSelect : ()=> {};
+
+        rows.forEach((row)=> {
+          const meta = (cfg.options && cfg.options[row.value]) || null;
+          const labelText = String((meta && meta.label) || row.label || row.value).trim();
+          const hintText = String((meta && meta.hint) || '').trim();
+
+          const labelNode = document.createElement('label');
+          labelNode.className = `choice${isChipVariant ? ' chip-choice' : ''}`;
+
+          const rowNode = document.createElement('span');
+          rowNode.className = 'choice-row';
+
+          const input = document.createElement('input');
+          input.type = 'radio';
+          input.name = nameKey;
+          input.value = row.value;
+          input.checked = selectedValue === row.value;
+          input.addEventListener('change', ()=> {
+            if(!input.checked) return;
+            onSelect(row.value);
+          });
+
+          const text = document.createElement('span');
+          text.textContent = labelText;
+          rowNode.appendChild(input);
+          rowNode.appendChild(text);
+          labelNode.appendChild(rowNode);
+
+          if(hintText){
+            const hint = document.createElement('small');
+            hint.textContent = hintText;
+            labelNode.appendChild(hint);
+          }
+
+          grid.appendChild(labelNode);
+        });
+
+        return grid;
+      }
+
+      function applyWidgetSelectCardModes(){
+        Object.keys(widgetSelectCardConfig).forEach((sourceId)=> {
+          const source = document.getElementById(sourceId);
+          if(!source || !(source instanceof HTMLSelectElement)) return;
+          const cfg = widgetSelectCardConfigFor(sourceId);
+          if(!cfg) return;
+
+          let host = source.nextElementSibling;
+          if(!(host && host.classList && host.classList.contains('select-card-host'))){
+            host = document.createElement('div');
+            host.className = 'select-card-host';
+            source.insertAdjacentElement('afterend', host);
+          }
+
+          source.classList.add('select-card-source');
+          source.setAttribute('aria-hidden', 'true');
+          source.tabIndex = -1;
+
+          const render = ()=> {
+            host.innerHTML = '';
+            const grid = createSelectChoiceGrid(source, cfg, {
+              selectedValue: source.value,
+              inputName: `widget_${sourceId}`,
+              onSelect: (value)=> {
+                if(String(source.value || '') === String(value || '')) return;
+                source.value = value;
+                source.dispatchEvent(new Event('change', { bubbles:true }));
+                source.dispatchEvent(new Event('input', { bubbles:true }));
+              }
+            });
+            if(grid) host.appendChild(grid);
+          };
+
+          if(!widgetSelectCardRenderers.has(sourceId)){
+            source.addEventListener('change', render);
+          }
+          widgetSelectCardRenderers.set(sourceId, render);
+          render();
+        });
+      }
+
+      function syncWidgetSelectCardModes(){
+        widgetSelectCardRenderers.forEach((render)=> {
+          if(typeof render === 'function') render();
+        });
       }
 
       function enforceMaxChecks(name, max, target){
@@ -326,10 +797,12 @@
 
       function recLabelFromUrgentWin(urgentWin){
         const labels = {
-          boardEvidence: 'board-ready evidence',
-          fasterDecisions: 'faster response decisions',
+          boardEvidence: 'board-ready evidence and benchmarks',
+          fasterDecisions: 'faster detection and response decisions',
           attackSurface: 'attack-surface reduction',
-          workforce: 'workforce readiness'
+          safeAI: 'safe AI adoption and governance',
+          workforce: 'workforce readiness and retention',
+          thirdParty: 'third-party resilience'
         };
         return labels[String(urgentWin || '').trim()] || 'an immediate readiness outcome';
       }
@@ -416,7 +889,7 @@
       }
 
       function optionLabel(mapName, value){
-        const key = String(value || '').trim();
+        const key = normalizeOptionValue(mapName, value);
         if(!key) return '';
         const map = labelMaps[mapName] || {};
         return map[key] || key;
@@ -448,8 +921,8 @@
         });
       }
 
-      function renderSelectionSummary(snap, scoring){
-        if(!snap || !scoring) return;
+      function renderSelectionSummary(snap, metrics){
+        if(!snap || !metrics) return;
         const contactBits = [snap.fullName, snap.email].filter((item)=> String(item || '').trim());
         setSelectionText(el.selContact, contactBits.join(' · '), 'Not entered yet');
         setSelectionText(el.selRole, optionLabel('role', snap.role), 'Not selected');
@@ -463,11 +936,10 @@
         renderPills(el.selRiskPills, snap.riskEnvs, 'riskEnvs', 'Optional');
 
         if(el.selIntentBand){
-          const band = String(scoring.intentBand || 'low');
-          el.selIntentBand.textContent = band.charAt(0).toUpperCase() + band.slice(1);
+          el.selIntentBand.textContent = `${Math.max(0, Number(metrics.completionPct) || 0)}%`;
         }
         if(el.selAeReady){
-          el.selAeReady.textContent = `${Number(scoring.aeReadyCount) || 0} / ${Number(scoring.aeReadyRequired) || requiredStageAKeys.length}`;
+          el.selAeReady.textContent = `${Math.max(0, Number(metrics.answeredCount) || 0)} / ${Math.max(1, Number(metrics.totalQuestions) || followupCatalog.length)}`;
         }
       }
 
@@ -554,6 +1026,10 @@
         url.hash = '';
         url.searchParams.set('followup', selectedKeys.join(','));
         url.searchParams.set('recordId', recordId);
+        const company = String((dom.company && dom.company.value) || '').trim();
+        if(company){
+          url.searchParams.set('company', company);
+        }
         return url.toString();
       }
 
@@ -589,27 +1065,53 @@
         const wrap = document.createElement('article');
         wrap.className = 'followup-item';
         wrap.dataset.followupKey = item.key;
+        wrap.dataset.followupStage = item.stage;
 
         const head = document.createElement('div');
         head.className = 'followup-item-head';
         const label = document.createElement('label');
         label.textContent = item.label;
-        const stage = document.createElement('span');
-        stage.className = 'followup-stage';
-        stage.textContent = item.stage;
+        const metaWrap = document.createElement('div');
+        metaWrap.className = 'followup-item-meta';
+        const status = document.createElement('span');
+        status.className = 'followup-state';
+        status.textContent = 'Missing';
         head.appendChild(label);
-        head.appendChild(stage);
+        metaWrap.appendChild(status);
+        head.appendChild(metaWrap);
         wrap.appendChild(head);
 
         const sourceValue = snap[item.key];
         if(item.kind === 'select'){
           const source = document.getElementById(item.sourceId);
           if(!source) return null;
+          const cfg = widgetSelectCardConfigFor(item.sourceId);
+          if(cfg){
+            const cfgVariant = String(cfg.variant || 'cards').trim().toLowerCase();
+            wrap.setAttribute('data-layout', cfgVariant === 'chips' ? 'chips' : 'cards');
+            const grid = createSelectChoiceGrid(source, cfg, {
+              selectedValue: sourceValue,
+              inputName: `fu_${item.key}`,
+              onSelect: (value)=> {
+                source.value = value;
+                source.dispatchEvent(new Event('change', { bubbles:true }));
+                updatePreview();
+              }
+            });
+            if(grid){
+              wrap.appendChild(grid);
+              return wrap;
+            }
+          }
+          const options = Array.from(source.options || []).map((opt)=> ({
+            value: String(opt.value || ''),
+            label: String(opt.textContent || '').trim()
+          }));
           const control = document.createElement('select');
-          Array.from(source.options).forEach((opt)=> {
+          options.forEach((opt)=> {
             const option = document.createElement('option');
             option.value = opt.value;
-            option.textContent = opt.textContent;
+            option.textContent = opt.label;
             control.appendChild(option);
           });
           control.value = String(sourceValue || '');
@@ -641,7 +1143,11 @@
           const grid = document.createElement('div');
           grid.className = 'choice-grid two';
           const selected = String(sourceValue || '');
-          groupOptions(item.sourceName).forEach((opt)=> {
+          const options = groupOptions(item.sourceName);
+          if(options.some((opt)=> String(opt.hint || '').trim())){
+            wrap.setAttribute('data-layout', 'cards');
+          }
+          options.forEach((opt)=> {
             const labelNode = document.createElement('label');
             labelNode.className = 'choice';
             const row = document.createElement('span');
@@ -661,6 +1167,11 @@
             row.appendChild(input);
             row.appendChild(text);
             labelNode.appendChild(row);
+            if(opt.hint){
+              const hint = document.createElement('small');
+              hint.textContent = opt.hint;
+              labelNode.appendChild(hint);
+            }
             grid.appendChild(labelNode);
           });
           wrap.appendChild(grid);
@@ -671,9 +1182,18 @@
           const grid = document.createElement('div');
           grid.className = 'choice-grid two';
           const selected = new Set(Array.isArray(sourceValue) ? sourceValue : []);
-          groupOptions(item.sourceName).forEach((opt)=> {
+          const options = groupOptions(item.sourceName);
+          const useChipLayout = item.sourceName === 'groups' && !options.some((opt)=> String(opt.hint || '').trim());
+          if(useChipLayout){
+            grid.className = 'choice-grid chips';
+            wrap.setAttribute('data-layout', 'chips');
+          }
+          if(options.some((opt)=> String(opt.hint || '').trim())){
+            wrap.setAttribute('data-layout', 'cards');
+          }
+          options.forEach((opt)=> {
             const labelNode = document.createElement('label');
-            labelNode.className = 'choice';
+            labelNode.className = `choice${useChipLayout ? ' chip-choice' : ''}`;
             const row = document.createElement('span');
             row.className = 'choice-row';
             const input = document.createElement('input');
@@ -696,6 +1216,11 @@
             row.appendChild(input);
             row.appendChild(text);
             labelNode.appendChild(row);
+            if(opt.hint){
+              const hint = document.createElement('small');
+              hint.textContent = opt.hint;
+              labelNode.appendChild(hint);
+            }
             grid.appendChild(labelNode);
           });
           wrap.appendChild(grid);
@@ -718,21 +1243,69 @@
         });
       }
 
+      function updateFollowupModeProgress(snapInput){
+        const keys = (Array.isArray(state.followupModeKeys) ? state.followupModeKeys : [])
+          .filter((key)=> followupCatalogMap[key]);
+        if(!keys.length) return;
+        const snap = (snapInput && typeof snapInput === 'object') ? snapInput : snapshot();
+        let complete = 0;
+        keys.forEach((key)=> {
+          if(isFilled(snap[key])) complete += 1;
+        });
+        const pct = Math.round((complete / Math.max(1, keys.length)) * 100);
+
+        if(el.customerFollowupCompletion){
+          el.customerFollowupCompletion.textContent = `${complete}/${keys.length} complete`;
+        }
+        if(el.customerFollowupProgressLabel){
+          el.customerFollowupProgressLabel.textContent = `Completion: ${pct}%`;
+        }
+        if(el.customerFollowupProgressBar){
+          el.customerFollowupProgressBar.style.width = `${pct}%`;
+        }
+        if(el.customerFollowupSummary){
+          el.customerFollowupSummary.hidden = false;
+        }
+        if(el.customerFollowupForm){
+          Array.from(el.customerFollowupForm.querySelectorAll('.followup-item[data-followup-key]')).forEach((node)=> {
+            const key = String(node.getAttribute('data-followup-key') || '').trim();
+            if(!key) return;
+            const filled = isFilled(snap[key]);
+            node.setAttribute('data-complete', filled ? 'true' : 'false');
+            const stateChip = node.querySelector('.followup-state');
+            if(stateChip){
+              stateChip.textContent = filled ? 'Complete' : 'Missing';
+            }
+          });
+        }
+      }
+
       function activateFollowupModeFromUrl(){
         const keys = parseFollowupKeysFromUrl();
         if(!keys.length) return;
         state.followupModeKeys = keys;
+        document.body.setAttribute('data-followup-mode', 'true');
         if(el.customerFollowupPanel){
           el.customerFollowupPanel.hidden = false;
         }
         if(el.customerFollowupCount){
-          el.customerFollowupCount.textContent = `${keys.length} question${keys.length === 1 ? '' : 's'}`;
+          el.customerFollowupCount.textContent = `${keys.length} outstanding question${keys.length === 1 ? '' : 's'}`;
         }
         if(el.customerFollowupIntro){
-          el.customerFollowupIntro.textContent = `Please complete these ${keys.length} follow-up question${keys.length === 1 ? '' : 's'} so we can finalize your recommendation.`;
+          el.customerFollowupIntro.textContent = `Please complete these ${keys.length} outstanding question${keys.length === 1 ? '' : 's'} so we can tailor your recommendation.`;
         }
         ensureStageVisibilityForKeys(keys);
         renderCustomerFollowupForm(keys);
+        updateFollowupModeProgress(snapshot());
+        if(el.customerFollowupForm){
+          const firstControl = el.customerFollowupForm.querySelector('select, input, textarea');
+          if(firstControl){
+            window.requestAnimationFrame(()=> {
+              firstControl.focus({ preventScroll: true });
+            });
+          }
+        }
+        applyHeroCopy();
       }
 
       function generateFollowupEmail(){
@@ -1007,34 +1580,43 @@
       }
 
       function updatePreview(){
+        syncWidgetSelectCardModes();
         const snap = snapshot();
         const rec = buildRecord(false);
-        const { aeReadyCount: ready, aeReadyRequired, intentScore: score, intentBand: band } = rec.scoring;
-        const pct = Math.round((ready / aeReadyRequired) * 100);
+        const totalQuestions = followupCatalog.length;
+        const answeredCount = followupCatalog.reduce((count, item)=> count + (isFilled(snap[item.key]) ? 1 : 0), 0);
+        const outstandingCount = Math.max(0, totalQuestions - answeredCount);
+        const completionPct = Math.round((answeredCount / Math.max(1, totalQuestions)) * 100);
 
-        el.aeReadyText.textContent = `${ready} / ${aeReadyRequired}`;
-        el.intentScoreText.textContent = `${score} / 100`;
-        el.intentBandText.textContent = band.charAt(0).toUpperCase() + band.slice(1);
-        el.aeProgressBar.style.width = `${pct}%`;
+        if(el.aeReadyText) el.aeReadyText.textContent = `${answeredCount} / ${totalQuestions}`;
+        if(el.intentScoreText) el.intentScoreText.textContent = `${outstandingCount}`;
+        if(el.intentBandText) el.intentBandText.textContent = `${completionPct}%`;
+        if(el.aeProgressBar) el.aeProgressBar.style.width = `${completionPct}%`;
 
         const pressureCount = (rec.selections.pressureSources || []).length;
-        el.pressureCount.textContent = String(pressureCount);
+        if(el.pressureCount) el.pressureCount.textContent = String(pressureCount);
 
-        el.pillRow.innerHTML = '';
-        [
-          `Status: ${rec.submissionStatus}`,
-          `Band: ${rec.scoring.intentBand}`,
-          `AE-ready: ${ready}/${aeReadyRequired}`
-        ].forEach((text)=> {
-          const span = document.createElement('span');
-          span.className = 'pill';
-          span.textContent = text;
-          el.pillRow.appendChild(span);
-        });
+        if(el.pillRow){
+          el.pillRow.innerHTML = '';
+          [
+            `Status: ${rec.submissionStatus}`,
+            `Outstanding: ${outstandingCount}`,
+            `Completed: ${answeredCount}/${totalQuestions}`
+          ].forEach((text)=> {
+            const span = document.createElement('span');
+            span.className = 'pill';
+            span.textContent = text;
+            el.pillRow.appendChild(span);
+          });
+        }
 
-        el.recordPreview.textContent = JSON.stringify(rec, null, 2);
-        renderSelectionSummary(snap, rec.scoring);
+        if(el.recordPreview){
+          el.recordPreview.textContent = JSON.stringify(rec, null, 2);
+        }
+        renderSelectionSummary(snap, { completionPct, answeredCount, totalQuestions });
+        applyHeroCopy();
         renderInitialRecommendation(rec.recommendation || null);
+        updateFollowupModeProgress(snap);
       }
 
       function validateBeforeSubmit(requireEmail){
@@ -1058,7 +1640,7 @@
       async function submitRecord(){
         const check = validateBeforeSubmit(true);
         if(check.missing.length){
-          showMessage(`Please complete required discovery fields${check.missing.includes('email') ? ' and add business email' : ''}.`, 'error');
+          showMessage(`Please complete the required questions${check.missing.includes('email') ? ' and add your business email' : ''}.`, 'error');
           return;
         }
 
@@ -1085,17 +1667,17 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
         const syncResult = syncToLaunchpadDashboard(payload);
 
-        const notes = ['Submitted for AE review.'];
+        const notes = ['Responses submitted successfully.'];
         if(syncResult.ok){
-          notes.push(`Dashboard record ${syncResult.created ? 'created' : 'updated'}.`);
+          notes.push(`Your record was ${syncResult.created ? 'created' : 'updated'}.`);
         }else{
-          notes.push(`Dashboard sync failed (${syncResult.error}).`);
+          notes.push(`Record sync failed (${syncResult.error}).`);
         }
         if(endpoint){
-          notes.push(endpointError ? `Endpoint push failed (${endpointError}).` : 'Endpoint push sent.');
+          notes.push(endpointError ? `Submission service failed (${endpointError}).` : 'Submission sent.');
         }
         if(window.location.protocol === 'file:'){
-          notes.push('If dashboard does not show it, run both pages via the same local web server origin.');
+          notes.push('If this page does not update, run both pages from the same local web server origin.');
         }
         showMessage(notes.join(' '), (!syncResult.ok || !!endpointError) ? 'error' : 'good');
 
@@ -1128,14 +1710,14 @@
         setRadioValue('fitScope', selections.fitScope || '');
 
         setCheckedValues('riskEnvs', selections.riskEnvs || []);
-        dom.measuredOn.value = selections.measuredOn || '';
-        dom.orgPain.value = selections.orgPain || '';
-        dom.rhythm.value = selections.rhythm || '';
+        dom.measuredOn.value = normalizeOptionValue('measuredOn', selections.measuredOn || '');
+        dom.orgPain.value = normalizeOptionValue('orgPain', selections.orgPain || '');
+        dom.rhythm.value = normalizeOptionValue('rhythm', selections.rhythm || '');
 
         dom.fitRealism.value = selections.fitRealism || '';
-        dom.fitToday.value = selections.fitToday || '';
+        dom.fitToday.value = normalizeOptionValue('fitToday', selections.fitToday || '');
         dom.fitServices.value = selections.fitServices || '';
-        dom.fitRiskFrame.value = selections.fitRiskFrame || '';
+        dom.fitRiskFrame.value = normalizeOptionValue('fitRiskFrame', selections.fitRiskFrame || '');
         dom.regs.value = Array.isArray(selections.regs) ? selections.regs.join(', ') : '';
 
         dom.email.value = lead.email || '';
@@ -1263,12 +1845,12 @@
       controls.btnRecommend.addEventListener('click', ()=> {
         const check = validateBeforeSubmit(false);
         if(check.missing.length){
-          showMessage('Complete the required Stage A fields to generate an initial recommendation.', 'error');
+          showMessage('Complete the required Stage A questions to preview a recommendation.', 'error');
           return;
         }
         state.generatedRecommendation = buildInitialRecommendation(check.snap);
         state.recommendationSeen = true;
-        showMessage('Initial recommendation generated on the right. You can now submit or add optional depth.', 'good');
+        showMessage('Recommendation preview generated. You can now submit or add optional details.', 'good');
         updatePreview();
         if(el.recPanel){
           el.recPanel.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -1291,6 +1873,8 @@
         });
       }
 
+      applyWidgetSelectCardModes();
+      hydrateContextFromUrl();
       activateFollowupModeFromUrl();
       attachInputListeners();
       updatePreview();

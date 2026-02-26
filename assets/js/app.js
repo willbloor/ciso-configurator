@@ -527,6 +527,7 @@
         workspaceCompanyAnimatedIds: new Set(),
         interstitialAnimatedThreadIds: new Set(),
         interstitialFollowupByThread: Object.create(null),
+        interstitialSection: 'overview',
         navPreviewThreadId: null,
         consultationOpen: false,
         consultationThreadId: 'current',
@@ -589,6 +590,17 @@
         'regs'
       ]);
       const ROUTE_HASH_PREFIX = '#/';
+      const INTERSTITIAL_SECTION_MODES = Object.freeze(['overview', 'gaps', 'content', 'meetings', 'integrations']);
+      const INTERSTITIAL_SECTION_ROUTE_MAP = Object.freeze({
+        overview: 'overview',
+        gaps: 'gaps',
+        content: 'record-content',
+        meetings: 'meetings',
+        integrations: 'integrations'
+      });
+      const contentRecommendationsViewEl = $('#contentRecommendationsView');
+      const contentRecommendationsOriginalParent = contentRecommendationsViewEl ? contentRecommendationsViewEl.parentElement : null;
+      const contentRecommendationsOriginalNextSibling = contentRecommendationsViewEl ? contentRecommendationsViewEl.nextElementSibling : null;
       const AUTO_SAVE_FAST_MS = 30000;
       const AUTO_SAVE_BASE_MS = 60000;
       const MAX_IMPORT_CSV_BYTES = 5 * 1024 * 1024;
@@ -2215,6 +2227,7 @@
         { id:'rq_industry', key:'industry', step:4, group:'context_regulatory', groupLabel:'Context and regulatory', title:'Industry not selected', why:'Industry context changes suggested standards and language.', order:190, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_region', key:'region', step:4, group:'context_regulatory', groupLabel:'Context and regulatory', title:'Region not selected', why:'Region influences evidence and audit expectations.', order:200, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_regs', key:'regs', step:4, group:'context_regulatory', groupLabel:'Context and regulatory', title:'Regulatory references not selected', why:'References improve the evidence narrative for stakeholders.', order:210, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
+        { id:'rq_stack', key:'stack', step:4, group:'context_tooling', groupLabel:'Context and tooling', title:'Security tools and platform integrations not selected', why:'Tooling context improves integration-specific content and workflow recommendations.', order:215, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_roi_visited', key:'roiVisited', step:5, group:'roi_business_case', groupLabel:'ROI and business case', title:'ROI estimate not reviewed', why:'ROI inputs are needed for investment and timing decisions.', order:220, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true }
       ]);
 
@@ -2421,6 +2434,7 @@
           case 'industry': return !!ctx.industry;
           case 'region': return !!ctx.region;
           case 'regs': return ctx.regs.size > 0 && !!ctx.regsTouched;
+          case 'stack': return ctx.stack.size > 0 || !!ctx.stackOther;
           case 'roiVisited': return !accountRoiEstimateEnabled() || ctx.visited.has(maxQuestionStep());
           default: return false;
         }
@@ -3055,6 +3069,11 @@ const evidenceOpts = [
         { id:'vuln', label:'Vulnerability mgmt (Tenable / Qualys)' },
         { id:'email', label:'Email security (Proofpoint / MDO)' },
         { id:'network', label:'Network security (Palo Alto / Fortinet)' },
+        { id:'msteams', label:'Microsoft Teams' },
+        { id:'restapi', label:'REST API / automation' },
+        { id:'workday', label:'Workday Learning' },
+        { id:'successfactors', label:'SAP SuccessFactors' },
+        { id:'cornerstone', label:'Cornerstone OnDemand' },
         { id:'ot', label:'OT/ICS' },
         { id:'ai', label:'AI security' },
         { id:'threat', label:'Threat intel & malware' },
@@ -3280,6 +3299,38 @@ const evidenceOpts = [
         }
       }
 
+      function resolveInterstitialSection(value){
+        const raw = String(value || '').trim().toLowerCase();
+        return INTERSTITIAL_SECTION_MODES.includes(raw) ? raw : 'overview';
+      }
+
+      function interstitialSectionRouteSegment(value){
+        const section = resolveInterstitialSection(value);
+        return String(INTERSTITIAL_SECTION_ROUTE_MAP[section] || 'overview');
+      }
+
+      function interstitialSectionFromRouteSegment(value){
+        const raw = String(value || '').trim().toLowerCase();
+        if(!raw) return '';
+        const match = Object.entries(INTERSTITIAL_SECTION_ROUTE_MAP).find(([, segment])=> segment === raw);
+        return match ? String(match[0]) : '';
+      }
+
+      function restoreContentRecommendationsMount(){
+        if(!contentRecommendationsViewEl || !contentRecommendationsOriginalParent) return;
+        if(contentRecommendationsViewEl.parentElement === contentRecommendationsOriginalParent){
+          contentRecommendationsViewEl.classList.remove('interEmbeddedContent');
+          return;
+        }
+        const anchor = contentRecommendationsOriginalNextSibling;
+        if(anchor && anchor.parentElement === contentRecommendationsOriginalParent){
+          contentRecommendationsOriginalParent.insertBefore(contentRecommendationsViewEl, anchor);
+        }else{
+          contentRecommendationsOriginalParent.appendChild(contentRecommendationsViewEl);
+        }
+        contentRecommendationsViewEl.classList.remove('interEmbeddedContent');
+      }
+
       function routeHashFromState(){
         const view = state.currentView || 'dashboard';
         const recordId = String(state.activeThread || 'current').trim() || 'current';
@@ -3294,11 +3345,12 @@ const evidenceOpts = [
           return `${ROUTE_HASH_PREFIX}export`;
         }
         if(view === 'interstitial'){
-          return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recordId)}/overview`;
+          const section = interstitialSectionRouteSegment(state.interstitialSection);
+          return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recordId)}/${encodeRouteSegment(section)}`;
         }
         if(view === 'recommendations'){
           const recThreadId = String(state.recommendationsThreadId || recordId).trim() || recordId;
-          return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recThreadId)}/recommendations`;
+          return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recThreadId)}/record-content`;
         }
         return `${ROUTE_HASH_PREFIX}records/${encodeRouteSegment(recordId)}/configure?step=${clampConfiguratorStep(state.activeStep)}`;
       }
@@ -3338,8 +3390,13 @@ const evidenceOpts = [
 
         const recordId = decodeRouteSegment(segs[1]) || 'current';
         const mode = String(segs[2] || '').toLowerCase();
-        if(mode === 'overview') return { view:'interstitial', recordId };
-        if(mode === 'recommendations') return { view:'recommendations', recordId };
+        if(!mode) return { view:'interstitial', recordId, section:'overview' };
+        if(mode === 'content' || mode === 'recommendations') return { view:'interstitial', recordId, section:'content' };
+        if(mode === 'snapshot') return { view:'interstitial', recordId, section:'overview' };
+        const interstitialSection = interstitialSectionFromRouteSegment(mode);
+        if(interstitialSection){
+          return { view:'interstitial', recordId, section: interstitialSection };
+        }
         if(mode === 'export') return { view:'export', recordId };
         if(mode === 'configure'){
           const step = clampConfiguratorStep(Number(query.get('step')) || 1);
@@ -3373,11 +3430,11 @@ const evidenceOpts = [
             return true;
           }
           if(route.view === 'interstitial'){
-            openThreadOverview(route.recordId || 'current');
+            openThreadOverview(route.recordId || 'current', { section: route.section });
             return true;
           }
           if(route.view === 'recommendations'){
-            openRecommendationsForThread(route.recordId || 'current', { returnView:'interstitial' });
+            openThreadOverview(route.recordId || 'current', { section:'content' });
             return true;
           }
           if(route.view === 'configurator'){
@@ -3408,7 +3465,14 @@ const evidenceOpts = [
       function setView(view, opts){
         const cfg = Object.assign({ render: true, syncRoute: true }, opts || {});
         const prev = state.currentView || 'dashboard';
-        const next = (view === 'dashboard' || view === 'archived' || view === 'interstitial' || view === 'account' || view === 'backend' || view === 'recommendations' || view === 'export') ? view : 'configurator';
+        if(view === 'recommendations'){
+          state.interstitialSection = 'content';
+          view = 'interstitial';
+        }
+        const next = (view === 'dashboard' || view === 'archived' || view === 'interstitial' || view === 'account' || view === 'backend' || view === 'export') ? view : 'configurator';
+        if(next !== 'interstitial'){
+          restoreContentRecommendationsMount();
+        }
         if(prev === 'configurator' && next !== 'configurator'){
           const prevRecordId = String(state.activeThread || '').trim();
           if(prevRecordId && prevRecordId !== 'current'){
@@ -3485,9 +3549,6 @@ const evidenceOpts = [
         const createBtn = $('#globalCreateRecord');
         const deleteBtn = $('#globalDeleteRecord');
         const editBtn = $('#globalEditConfigurator');
-        const shareBtn = $('#globalShareRecord');
-        const recsBtn = $('#globalViewRecommendations');
-        const bookBtn = $('#globalBookConsultation');
         const view = state.currentView || 'configurator';
         const interThread = (view === 'interstitial') ? activeThreadModel() : null;
         const interPerms = interThread ? actorPermissionsForThread(interThread) : actorPermissionsForThread(null);
@@ -3498,12 +3559,8 @@ const evidenceOpts = [
           && findSavedThread(interThread.id)
           && (interPerms.role === 'admin' || interPerms.role === 'owner')
         );
-        const canShareThread = !!(interThread && interThread.id && interThread.id !== 'current');
         const interArchived = !!(interThread && interThread.archived);
         const interArchiveOnly = view === 'interstitial' && interArchived;
-        const interRecsGate = (view === 'interstitial' && interThread)
-          ? recommendationsGateFromThread(interThread)
-          : null;
 
         const setActionBtnVisible = (el, visible)=>{
           if(!el) return;
@@ -3512,20 +3569,8 @@ const evidenceOpts = [
           el.style.display = on ? '' : 'none';
         };
         setActionBtnVisible(createBtn, view === 'dashboard');
-        setActionBtnVisible(deleteBtn, view === 'interstitial' && canManageThread && !interArchiveOnly);
+        setActionBtnVisible(deleteBtn, false);
         setActionBtnVisible(editBtn, view === 'interstitial' && (!interArchiveOnly || canManageThread));
-        setActionBtnVisible(shareBtn, view === 'interstitial' && canShareThread && !interArchiveOnly);
-        setActionBtnVisible(recsBtn, view === 'interstitial' && !interArchiveOnly);
-        setActionBtnVisible(bookBtn, view === 'interstitial' && !interArchiveOnly);
-        if(recsBtn){
-          const unlocked = !!(interRecsGate && interRecsGate.eligible);
-          recsBtn.disabled = false;
-          recsBtn.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
-          recsBtn.dataset.locked = unlocked ? 'false' : 'true';
-          recsBtn.title = unlocked
-            ? 'Open recommended resources'
-            : `Locked until completion reaches 90% (current: ${(interRecsGate && interRecsGate.completion) || '0/22 (0%)'})`;
-        }
         if(editBtn){
           if(interArchiveOnly){
             editBtn.textContent = 'Unarchive';
@@ -3538,11 +3583,6 @@ const evidenceOpts = [
             editBtn.disabled = false;
             editBtn.setAttribute('aria-disabled', 'false');
           }
-        }
-        if(shareBtn){
-          shareBtn.disabled = !interPerms.canShareRecord;
-          shareBtn.setAttribute('aria-disabled', shareBtn.disabled ? 'true' : 'false');
-          shareBtn.title = interPerms.canShareRecord ? 'Open sharing controls' : 'Sharing is not available for this role';
         }
         if(deleteBtn){
           const actionLabel = interArchived ? 'Unarchive record' : 'Archive record';
@@ -3610,7 +3650,7 @@ const evidenceOpts = [
           const company = String((thread && thread.company) || '').trim() || 'Record';
           const threadId = String((thread && thread.id) || state.recommendationsThreadId || 'current');
           items.push({ label:company, action:'interstitial-thread', threadId, current:false });
-          items.push({ label:'Resources', action:'recommendations', current:true });
+          items.push({ label:'Content', action:'recommendations', current:true });
         }else if(view === 'export'){
           const activeId = String(state.activeThread || '').trim();
           const thread = activeId && activeId !== 'current'
@@ -3932,6 +3972,8 @@ const evidenceOpts = [
           fitRiskFrame: String(src.fitRiskFrame || '').trim(),
           industry: String(src.industry || '').trim(),
           region: String(src.region || '').trim(),
+          stack: setFromCollection(src.stack),
+          stackOther: String(src.stackOther || '').trim(),
           regsTouched: hasRegsTouchedFlag ? !!src.regsTouched : regsRaw.length > 0,
           regs: new Set(regsRaw),
           visited: setFromCollection(src.visited)
@@ -8008,7 +8050,8 @@ const evidenceOpts = [
         toast(`Access request sent to ${targetLabel}.`);
       }
 
-      function openThreadOverview(threadId){
+      function openThreadOverview(threadId, opts){
+        const cfg = Object.assign({ section:'overview' }, opts || {});
         const currentRecordId = currentEditableRecordId();
         if(currentRecordId){
           releaseRecordLock(currentRecordId, { force:false });
@@ -8025,6 +8068,7 @@ const evidenceOpts = [
         }else{
           state.navPreviewThreadId = null;
         }
+        state.interstitialSection = resolveInterstitialSection(cfg.section);
         setView('interstitial');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
@@ -8531,7 +8575,8 @@ const evidenceOpts = [
         };
       }
 
-      function interstitialFollowupWidgetUrl(threadId, selectedKeys){
+      function interstitialFollowupWidgetUrl(threadId, selectedKeys, opts){
+        const cfg = Object.assign({ company:'' }, opts || {});
         const keys = (Array.isArray(selectedKeys) ? selectedKeys : [])
           .map((key)=> String(key || '').trim())
           .filter((key)=> key && CUSTOMER_FOLLOWUP_WIDGET_KEYS.has(key));
@@ -8544,6 +8589,10 @@ const evidenceOpts = [
         }
         base.searchParams.set('recordId', String(threadId || '').trim() || 'record');
         base.searchParams.set('followup', keys.join(','));
+        const company = String(cfg.company || '').trim();
+        if(company){
+          base.searchParams.set('company', company);
+        }
         return base.toString();
       }
 
@@ -8562,7 +8611,7 @@ const evidenceOpts = [
         const company = String((thread && thread.company) || '').trim() || 'your team';
         const contact = interstitialFollowupContact(thread);
         const rule = interstitialFollowupRule(rows);
-        const link = interstitialFollowupWidgetUrl(threadId, rows.map((row)=> row.key));
+        const link = interstitialFollowupWidgetUrl(threadId, rows.map((row)=> row.key), { company });
         const grouped = rows.reduce((acc, row)=> {
           const label = String((row && row.groupLabel) || '').trim() || 'General';
           if(!acc[label]) acc[label] = [];
@@ -8674,15 +8723,58 @@ const evidenceOpts = [
         if(!(state.interstitialAnimatedThreadIds instanceof Set)){
           state.interstitialAnimatedThreadIds = new Set();
         }
+        if(!(state.completionRingAnimatedIds instanceof Set)){
+          state.completionRingAnimatedIds = new Set();
+        }
         const interAnimKey = String((thread && thread.id) || 'current');
         const shouldAnimateInter = !state.interstitialAnimatedThreadIds.has(interAnimKey);
         const progress = threadReadinessProgress(thread);
         const viz = interVizModel(thread);
         const pitch = buildInterstitialPitchModel(thread, progress, viz);
+        const activeInterSection = resolveInterstitialSection(state.interstitialSection);
         const gaps = progress.gaps || [];
+        const gapCount = gaps.length;
+        const showOverviewSection = activeInterSection === 'overview';
+        const showGapsSection = activeInterSection === 'gaps';
+        const showContentSection = activeInterSection === 'content';
+        const showMeetingsSection = activeInterSection === 'meetings';
+        const showIntegrationsSection = activeInterSection === 'integrations';
+        const showSnapshotDataSection = showOverviewSection;
+        restoreContentRecommendationsMount();
         const pkg = packageOverviewForTier(thread.tier);
         const interPerms = actorPermissionsForThread(thread);
         const companyDisplay = String((thread && thread.company) || '').trim() || 'Untitled company';
+        const snapshotComplete = String((thread.outcomesText || '')).trim().length > 0;
+        const contentModules = [
+          { key:'organisation', label:'Organisation', rows:(thread.modules && thread.modules.organisation) || [] },
+          { key:'discovery', label:'Discovery', rows:(thread.modules && thread.modules.discovery) || [] },
+          { key:'coverage', label:'Coverage', rows:[...((thread.modules && thread.modules.coverage) || []), ...((thread.modules && thread.modules.packageFit) || [])] },
+          { key:'context', label:'Context', rows:(thread.modules && thread.modules.context) || [] }
+        ];
+        const contentCompleteCount = contentModules.reduce((count, mod)=> {
+          const hasValue = (Array.isArray(mod.rows) ? mod.rows : []).some((row)=> {
+            const value = String((row && row.value) || '').trim();
+            if(!value || value === '—') return false;
+            if(value.toLowerCase() === 'not selected') return false;
+            return true;
+          });
+          return count + (hasValue ? 1 : 0);
+        }, 0);
+        const completionMatch = String(progress.completion || '').match(/(\d+)\s*\/\s*(\d+)/);
+        const readinessDone = completionMatch ? (Number(completionMatch[1]) || 0) : 0;
+        const readinessTotal = completionMatch ? (Number(completionMatch[2]) || 0) : 0;
+        const readinessPct = clamp(completionPctFromSummary(progress.completion), 0, 100);
+        const snapshotSignals = [
+          String((thread.outcomesText || '')).trim().length > 0,
+          Array.isArray(thread.outcomes) && thread.outcomes.length > 0,
+          Number.isFinite(viz.roiPct)
+        ];
+        const snapshotSignalCount = snapshotSignals.filter(Boolean).length;
+        const snapshotProgressPct = clamp(Math.round((snapshotSignalCount / snapshotSignals.length) * 100), 0, 100);
+        const contentSectionCount = Math.max(1, contentModules.length);
+        const contentProgressPct = clamp(Math.round((contentCompleteCount / contentSectionCount) * 100), 0, 100);
+        const meetingProgressPct = pitch.isFinal ? 100 : clamp(Number(pitch.completionPct) || 0, 0, 100);
+        const meetingStatusText = pitch.isFinal ? 'Ready' : `Draft (${meetingProgressPct}%)`;
         const canTogglePriority = !!(thread && thread.id && thread.id !== 'current' && !!findSavedThread(thread.id));
         const animateInterStar = canTogglePriority && !!state.starPulseQueue && state.starPulseQueue.has(thread.id);
         const interTitleStar = canTogglePriority
@@ -8807,9 +8899,139 @@ const evidenceOpts = [
               </div>
             `).join('')
           : '<div class="interEmpty">No open gaps. This thread is ready for package confirmation.</div>';
+        const sectionNavRows = [
+          { section:'overview', icon:'OV', label:'Overview', meta:`Status summary (${INTERSTITIAL_SECTION_MODES.length - 1} pages)` },
+          { section:'gaps', icon:'GP', label:'Gaps', meta:gapCount ? `${gapCount} open` : 'No open gaps' },
+          { section:'content', icon:'CT', label:'Content', meta:`${contentCompleteCount}/${contentSectionCount} sections captured` },
+          { section:'meetings', icon:'MT', label:'Meetings', meta:meetingStatusText },
+          { section:'integrations', icon:'IN', label:'Integrations', meta:'CRM export & handoff' }
+        ];
+        const overviewSummaryRows = [
+          {
+            section: 'overview',
+            label: 'Overall completion',
+            status: readinessTotal ? `${readinessDone}/${readinessTotal} questions captured` : 'Question capture pending',
+            tone: readinessPct >= 90 ? 'ready' : 'open',
+            metricValue: `${readinessPct}%`,
+            metricLabel: 'Profile completeness',
+            progressPct: readinessPct,
+            canOpen: false
+          },
+          {
+            section: 'gaps',
+            label: 'Gaps page',
+            status: gapCount ? `${gapCount} open gaps` : 'No open gaps',
+            tone: gapCount ? 'open' : 'ready',
+            metricValue: String(gapCount),
+            metricLabel: 'Open gaps',
+            progressPct: readinessPct
+          },
+          {
+            section: 'content',
+            label: 'Content page',
+            status: `${contentCompleteCount}/${contentSectionCount} sections captured`,
+            tone: contentCompleteCount >= (contentSectionCount - 1) ? 'ready' : 'open',
+            metricValue: `${contentProgressPct}%`,
+            metricLabel: 'Content completeness',
+            progressPct: contentProgressPct
+          },
+          {
+            section: 'meetings',
+            label: 'Meetings page',
+            status: pitch.isFinal ? 'Initial recommendation generated' : 'Draft in progress',
+            tone: pitch.isFinal ? 'ready' : 'open',
+            metricValue: `${meetingProgressPct}%`,
+            metricLabel: pitch.isFinal ? 'Pitch quality' : 'Draft confidence',
+            progressPct: meetingProgressPct
+          }
+        ];
+        const overviewSummaryHtml = `
+          <article id="interSectionOverviewSummary" class="interCard interCardWide interSectionAnchor"${showOverviewSection ? '' : ' hidden'}>
+            <div class="interOverviewHead">
+              <div>
+                <h3>Overview status</h3>
+                <p class="interOverviewSub">Summary of the pages below. Use open to jump into each page.</p>
+              </div>
+            </div>
+            <div class="interOverviewStatusCards">
+              ${overviewSummaryRows.map((row)=> `
+                ${(() => {
+                  const ringId = `inter-overview:${interAnimKey}:${row.section}`;
+                  const pct = clamp(Number(row.progressPct) || 0, 0, 100);
+                  const shouldAnimateRing = !state.completionRingAnimatedIds.has(ringId);
+                  return `
+                    <article class="interOverviewCard" data-tone="${escapeHtml(row.tone || 'open')}" data-section="${escapeHtml(row.section)}">
+                      <div class="interOverviewCardTop">
+                        <span class="interOverviewStatusLabel">${escapeHtml(row.label)}</span>
+                        ${row.canOpen === false
+                          ? '<span class="interOverviewActionSpacer" aria-hidden="true"></span>'
+                          : `<button type="button" class="btn small" data-inter-open-section="${escapeHtml(row.section)}">Open</button>`
+                        }
+                      </div>
+                      <div class="interOverviewVizRow">
+                        <span class="dashCompletionRing interOverviewRing${shouldAnimateRing ? ' is-enter' : ''}" data-ring-id="${escapeHtml(ringId)}" data-target-pct="${pct}" data-animate="${shouldAnimateRing ? 'true' : 'false'}" style="--pct:${shouldAnimateRing ? 0 : pct};">
+                          <span>${shouldAnimateRing ? '0%' : `${pct}%`}</span>
+                        </span>
+                        <div class="interOverviewMetricWrap">
+                          <p class="interOverviewMacro${row.section === 'gaps' ? ' is-gaps' : ''}">${escapeHtml(String(row.metricValue || '0'))}</p>
+                          <p class="interOverviewMacroLabel">${escapeHtml(String(row.metricLabel || 'Metric'))}</p>
+                        </div>
+                      </div>
+                      <p class="interOverviewStatusMeta">${escapeHtml(String(row.status || 'Pending'))}</p>
+                    </article>
+                  `;
+                })()}
+              `).join('')}
+            </div>
+          </article>
+        `;
+        const overviewSnapshotHtml = `
+          <article id="interSectionOverviewSnapshot" class="interCard interCardWide interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:186ms;"' : ''}${showOverviewSection ? '' : ' hidden'}>
+            <h3>Record summary</h3>
+            <div class="interKvs">
+              <div class="interKv">
+                <span class="interKvLabel">Primary outcomes</span>
+                <span class="interKvVal">${escapeHtml(thread.outcomesText || '—')}</span>
+              </div>
+              <div class="interKv">
+                <span class="interKvLabel">Current status</span>
+                <span class="interKvVal">${escapeHtml(progress.gapSummary || 'No open gaps')}</span>
+              </div>
+              <div class="interKv">
+                <span class="interKvLabel">Snapshot confidence</span>
+                <span class="interKvVal">${escapeHtml(snapshotComplete ? 'Ready' : 'Needs outcome confirmation')} (${snapshotProgressPct}% · ${snapshotSignalCount}/${snapshotSignals.length} signals)</span>
+              </div>
+            </div>
+          </article>
+        `;
+        const sectionNavHtml = `
+          <div class="interSectionShell">
+            <aside class="interSectionNavWrap" aria-label="Record section navigation">
+              <nav class="interSectionNav">
+                ${sectionNavRows.map((row, idx)=> `
+                  <button
+                    type="button"
+                    class="interSectionNavBtn"
+                    data-inter-nav-section="${escapeHtml(row.section)}"
+                    data-active="${row.section === activeInterSection ? 'true' : 'false'}"
+                    aria-current="${row.section === activeInterSection ? 'true' : 'false'}"
+                    aria-label="${escapeHtml(row.label)}"
+                    title="${escapeHtml(row.label)}"
+                  >
+                    <span class="interSectionNavIcon" aria-hidden="true">${escapeHtml(row.icon)}</span>
+                    <span class="interSectionNavCopy">
+                      <span class="interSectionNavLabel">${escapeHtml(row.label)}</span>
+                      <span class="interSectionNavMeta">${escapeHtml(row.meta)}</span>
+                    </span>
+                  </button>
+                `).join('')}
+              </nav>
+            </aside>
+            <div class="interSectionBody">
+        `;
 
-        host.innerHTML = `
-          <header class="interHead">
+	        host.innerHTML = `
+	          <header class="interHead">
             <div class="interTitleRow">
               <div>
                 <div class="interTitleMain" id="interTitleMain">
@@ -8826,107 +9048,104 @@ const evidenceOpts = [
                   ${renameActions}
                   ${interCollabTools}
                 </div>
-                <p class="interSub">Our understanding of your business. Use Edit to jump directly to incomplete sections.</p>
+                <p class="interSub">Snapshot of our understanding of your business. Use Edit to jump directly to incomplete sections.</p>
               </div>
               <div class="interActions viewActionSlot" id="interstitialActionSlot"></div>
             </div>
-            <div class="interMeta">
-              <span class="interPill">Stage: ${escapeHtml(thread.stage || 'Discovery')}</span>
-              <span class="interPill">Completion: ${escapeHtml(progress.completion)}</span>
-              <span class="interPill">Tier: ${escapeHtml(thread.tier)}</span>
-              <span class="interPill">Open gaps: ${gaps.length}</span>
-            </div>
-          </header>
+	          </header>
+	          ${sectionNavHtml}
 
-          <section class="interPackageHero${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:26ms;"' : ''} data-tier-key="${escapeHtml(pkg.key)}">
-            <p class="interPackageKicker">Package</p>
-            <h3 class="interPackageTitle">${escapeHtml(pkg.title)}</h3>
-            <p class="interPackageBody">${escapeHtml(pkg.body)}</p>
-          </section>
+            ${showOverviewSection ? `
+	            <section id="interSectionOverview" class="interPackageHero interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:26ms;"' : ''} data-tier-key="${escapeHtml(pkg.key)}">
+	              <p class="interPackageKicker">Package</p>
+	              <h3 class="interPackageTitle">${escapeHtml(pkg.title)}</h3>
+	              <p class="interPackageBody">${escapeHtml(pkg.body)}</p>
+	            </section>
 
-          <section class="interViz">
-            <article class="interVizCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:70ms;"' : ''}>
-              <h3 class="interVizTitle">ROI snapshot</h3>
-              <p class="interVizSub">Directional signal for commercial confidence, based on the current record profile.</p>
-              <div class="interRoiGrid">
-                <div class="interRoiMetric">
-                  <p class="interRoiMetricLabel">3-year ROI</p>
-                  <p class="interRoiMetricValue" id="interRoiPctValue">—</p>
+	            <section class="interViz">
+              <article class="interVizCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:70ms;"' : ''}>
+                <h3 class="interVizTitle">ROI estimate</h3>
+                <p class="interVizSub">Directional signal for commercial confidence, based on the current record profile.</p>
+                <div class="interRoiGrid">
+                  <div class="interRoiMetric">
+                    <p class="interRoiMetricLabel">3-year ROI</p>
+                    <p class="interRoiMetricValue" id="interRoiPctValue">—</p>
+                  </div>
+                  <div class="interRoiMetric">
+                    <p class="interRoiMetricLabel">3-year NPV</p>
+                    <p class="interRoiMetricValue" id="interNpvValue">—</p>
+                  </div>
+                  <div class="interRoiMetric">
+                    <p class="interRoiMetricLabel">Payback</p>
+                    <p class="interRoiMetricValue" id="interPaybackValue">—</p>
+                  </div>
+                  <div class="interRoiMetric">
+                    <p class="interRoiMetricLabel">Indicative spend</p>
+                    <p class="interRoiMetricValue" id="interSpendValue">—</p>
+                  </div>
                 </div>
-                <div class="interRoiMetric">
-                  <p class="interRoiMetricLabel">3-year NPV</p>
-                  <p class="interRoiMetricValue" id="interNpvValue">—</p>
+              </article>
+
+              <article class="interVizCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:108ms;"' : ''}>
+                <h3 class="interVizTitle">Outcome weighting</h3>
+                <p class="interVizSub">Relative confidence split across the leading outcomes for this record.</p>
+                <div class="interOutcomeList">
+                  ${outcomeRows}
                 </div>
-                <div class="interRoiMetric">
-                  <p class="interRoiMetricLabel">Payback</p>
-                  <p class="interRoiMetricValue" id="interPaybackValue">—</p>
-                </div>
-                <div class="interRoiMetric">
-                  <p class="interRoiMetricLabel">Indicative spend</p>
-                  <p class="interRoiMetricValue" id="interSpendValue">—</p>
-                </div>
-              </div>
-            </article>
+              </article>
+            </section>
+            ` : ''}
 
-            <article class="interVizCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:108ms;"' : ''}>
-              <h3 class="interVizTitle">Outcome weighting</h3>
-              <p class="interVizSub">Relative confidence split across the leading outcomes for this record.</p>
-              <div class="interOutcomeList">
-                ${outcomeRows}
-              </div>
-            </article>
-          </section>
+	          <section class="interGrid">
+	            ${overviewSummaryHtml}
+              ${overviewSnapshotHtml}
+	            <article id="interSectionGaps" class="interCard interCardWide interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:146ms;"' : ''}${showGapsSection ? '' : ' hidden'}>
+	              <h3>Gaps: what we still need</h3>
+	              <div class="interGapFollowupLayout">
+	                <div class="interGapList">${gapItems}</div>
+	                ${followupComposerHtml ? `<aside class="interFollowupRail">${followupComposerHtml}</aside>` : ''}
+	              </div>
+	            </article>
 
-          <section class="interGrid">
-            <article class="interCard interCardWide${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:146ms;"' : ''}>
-              <h3>Gaps: what we still need</h3>
-              <div class="interGapFollowupLayout">
-                <div class="interGapList">${gapItems}</div>
-                ${followupComposerHtml ? `<aside class="interFollowupRail">${followupComposerHtml}</aside>` : ''}
-              </div>
-            </article>
+              <article id="interSectionContent" class="interCard interCardWide interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:224ms;"' : ''}${showContentSection ? '' : ' hidden'}>
+                <div id="interEmbeddedContentHost"></div>
+              </article>
 
-            <article class="interCard interCardWide${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:186ms;"' : ''}>
-              <h3>Snapshot</h3>
-              <div class="interKvs">
-                <div class="interKv">
-                  <span class="interKvLabel">Primary outcomes</span>
-                  <span class="interKvVal">${escapeHtml(thread.outcomesText || '—')}</span>
-                </div>
-                <div class="interKv">
-                  <span class="interKvLabel">Current status</span>
-                  <span class="interKvVal">${escapeHtml(progress.gapSummary || 'No open gaps')}</span>
-                </div>
-              </div>
-            </article>
+	            <article id="interSectionSnapshotOrganisation" class="interCard interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:224ms;"' : ''}${showSnapshotDataSection ? '' : ' hidden'}>
+	              <h3>Organisation</h3>
+	              <div class="interKvs">${renderInterstitialKvs((thread.modules && thread.modules.organisation) || [])}</div>
+	            </article>
 
-            <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:224ms;"' : ''}>
-              <h3>Organisation</h3>
-              <div class="interKvs">${renderInterstitialKvs((thread.modules && thread.modules.organisation) || [])}</div>
-            </article>
+	            <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:262ms;"' : ''}${showSnapshotDataSection ? '' : ' hidden'}>
+	              <h3>Discovery & outcomes</h3>
+	              <div class="interKvs">${renderInterstitialKvs((thread.modules && thread.modules.discovery) || [])}</div>
+	            </article>
 
-            <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:262ms;"' : ''}>
-              <h3>Discovery & outcomes</h3>
-              <div class="interKvs">${renderInterstitialKvs((thread.modules && thread.modules.discovery) || [])}</div>
-            </article>
+	            <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:300ms;"' : ''}${showSnapshotDataSection ? '' : ' hidden'}>
+	              <h3>Coverage & package fit</h3>
+	              <div class="interKvs">${renderInterstitialKvs([...(thread.modules?.coverage || []), ...(thread.modules?.packageFit || [])])}</div>
+	            </article>
 
-            <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:300ms;"' : ''}>
-              <h3>Coverage & package fit</h3>
-              <div class="interKvs">${renderInterstitialKvs([...(thread.modules?.coverage || []), ...(thread.modules?.packageFit || [])])}</div>
-            </article>
+	            <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:338ms;"' : ''}${showSnapshotDataSection ? '' : ' hidden'}>
+	              <h3>Context</h3>
+	              <div class="interKvs">${renderInterstitialKvs((thread.modules && thread.modules.context) || [])}</div>
+	            </article>
 
-            <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:338ms;"' : ''}>
-              <h3>Context</h3>
-              <div class="interKvs">${renderInterstitialKvs((thread.modules && thread.modules.context) || [])}</div>
-            </article>
-
-            <article class="interCard interCardWide${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:376ms;"' : ''}>
-              <div class="interPitchHead">
-                <h3>Elevator pitch</h3>
-                <span class="interPitchStatus" data-final="${pitch.isFinal ? 'true' : 'false'}">${pitch.isFinal ? 'Final (ready)' : `Draft (${pitch.completionPct}% complete)`}</span>
+	            <article id="interSectionMeetings" class="interCard interCardWide interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:376ms;"' : ''}${showMeetingsSection ? '' : ' hidden'}>
+	              <div class="interPitchHead">
+	                <h3>Elevator pitch</h3>
+                  <div class="interPitchActions">
+	                <span class="interPitchStatus" data-final="${pitch.isFinal ? 'true' : 'false'}">${pitch.isFinal ? 'Final (ready)' : `Draft (${pitch.completionPct}% complete)`}</span>
+                    <button
+                      type="button"
+                      class="btn secondaryBlue small"
+                      data-action="openConsultation"
+                      ${thread.archived ? 'disabled aria-disabled="true"' : ''}
+                    >Book consultation</button>
+                  </div>
               </div>
               <p class="interPitchSub">${pitch.isFinal ? 'Generated from current package fit, outcome weighting, and ROI signals.' : `Working draft while inputs are incomplete (${pitch.openGapCount} open gaps).`}</p>
-              <div class="interPitchGrid">
+	              <div class="interPitchGrid">
                 <section class="interPitchItem">
                   <p class="interPitchLabel">15s</p>
                   <p class="interPitchText">${escapeHtml(pitch.pitch15)}</p>
@@ -8940,11 +9159,30 @@ const evidenceOpts = [
                   <p class="interPitchText">${escapeHtml(pitch.pitch60)}</p>
                 </section>
               </div>
-            </article>
-          </section>
+	            </article>
+
+              <article id="interSectionIntegrations" class="interCard interCardWide interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:414ms;"' : ''}${showIntegrationsSection ? '' : ' hidden'}>
+                <h3>Integrations</h3>
+                <p class="interPitchSub">Use CRM export for HubSpot/Salesforce handoff and downstream workflow integrations.</p>
+                <button type="button" class="btn secondaryBlue small" data-action="openCrmExport">Open CRM export</button>
+              </article>
+	          </section>
+	          </div>
+	        </div>
         `;
         if(shouldAnimateInter){
           state.interstitialAnimatedThreadIds.add(interAnimKey);
+        }
+        if(showContentSection && contentRecommendationsViewEl){
+          const embeddedContentHost = $('#interEmbeddedContentHost');
+          if(embeddedContentHost){
+            contentRecommendationsViewEl.classList.add('interEmbeddedContent');
+            embeddedContentHost.appendChild(contentRecommendationsViewEl);
+            const contentThreadId = String((thread && thread.id) || state.recommendationsThreadId || 'current').trim() || 'current';
+            state.recommendationsThreadId = contentThreadId;
+            state.recommendationsReturnView = 'interstitial';
+            renderContentRecommendationsView(recommendationsGateFromThread(resolveRecommendationThread(contentThreadId)));
+          }
         }
 
         $$('#interstitialContent .interGapList [data-inter-edit-step]').forEach((btn)=>{
@@ -9066,8 +9304,8 @@ const evidenceOpts = [
           });
         }
 
-        if(followupCopyBtn){
-          followupCopyBtn.addEventListener('click', ()=> {
+	        if(followupCopyBtn){
+	          followupCopyBtn.addEventListener('click', ()=> {
             const draft = followupBucket.draft;
             if(!draft){
               toast('Create the follow-up draft first.');
@@ -9076,11 +9314,38 @@ const evidenceOpts = [
             const text = `Subject: ${draft.subject}\n\n${draft.body}\n\nFollow-up form: ${draft.link}`;
             copyToClipboard(text, 'Copied follow-up email.');
           });
-        }
+	        }
 
-        applyFollowupUi();
-        const interStarBtn = $('#interstitialContent [data-inter-star-id]');
-        if(interStarBtn){
+	        applyFollowupUi();
+	        const interSectionNavBtns = $$('#interstitialContent [data-inter-nav-section]');
+	        const interOverviewOpenBtns = $$('#interstitialContent [data-inter-open-section]');
+	        const switchInterstitialSection = (section, opts)=> {
+	          const cfg = Object.assign({ pushRoute:false }, opts || {});
+	          const resolvedSection = resolveInterstitialSection(section);
+	          if(resolvedSection === resolveInterstitialSection(state.interstitialSection)){
+	            return;
+	          }
+	          state.interstitialSection = resolvedSection;
+	          syncRouteWithState({ replace: !cfg.pushRoute });
+	          update();
+	          window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+	        };
+	        interSectionNavBtns.forEach((btn)=> {
+	          btn.addEventListener('click', ()=> {
+	            const section = String(btn.getAttribute('data-inter-nav-section') || '').trim();
+	            if(!section) return;
+	            switchInterstitialSection(section, { pushRoute:true });
+	          });
+	        });
+	        interOverviewOpenBtns.forEach((btn)=> {
+	          btn.addEventListener('click', ()=> {
+	            const section = String(btn.getAttribute('data-inter-open-section') || '').trim();
+	            if(!section) return;
+	            switchInterstitialSection(section, { pushRoute:true });
+	          });
+	        });
+	        const interStarBtn = $('#interstitialContent [data-inter-star-id]');
+	        if(interStarBtn){
           interStarBtn.addEventListener('click', ()=>{
             const id = interStarBtn.getAttribute('data-inter-star-id') || '';
             if(id) toggleThreadPriority(id);
@@ -9165,6 +9430,7 @@ const evidenceOpts = [
           { duration: 520, formatSig: `inter-spend-${state.currency}` }
         );
 
+        animateDashboardCompletionRings(host);
         $$('#interstitialContent .interOutcomeFill').forEach((fill)=>{
           const pct = clamp(Number(fill.dataset.target) || 0, 0, 100);
           fill.style.width = '0%';
@@ -9891,14 +10157,25 @@ const evidenceOpts = [
         ['nist800161','dfars7012','cmmc'].forEach(id => addWhen(hasReg(id), 'supplyChain', 0.5));
         ['iec62443','nist800218','nist800207','owasptop10'].forEach(id => addWhen(hasReg(id), 'secureEnterprise', 0.35));
 
-        ['appsec','cloud','identity','network','ot'].forEach(id => addWhen(hasStack(id), 'secureEnterprise', 0.45));
+        ['appsec','cloud','identity','network','ot','github'].forEach(id => addWhen(hasStack(id), 'secureEnterprise', 0.45));
         addWhen(hasStack('threat'), 'fasterResponse', 0.45);
         addWhen(hasStack('range'), 'cyberWorkforce', 0.55);
         addWhen(hasStack('ai'), 'secureAI', 0.7);
+        addWhen(hasStack('msteams'), 'cyberWorkforce', 0.5);
+        addWhen(hasStack('msteams'), 'fasterResponse', 0.2);
+        addWhen(hasStack('restapi'), 'complianceEvidence', 0.45);
+        addWhen(hasStack('restapi'), 'cyberWorkforce', 0.35);
+        ['workday','successfactors','cornerstone'].forEach((id)=>{
+          addWhen(hasStack(id), 'cyberWorkforce', 0.6);
+          addWhen(hasStack(id), 'complianceEvidence', 0.3);
+        });
 
         const stackOtherTxt = String(state.stackOther || '').toLowerCase();
         addWhen(stackOtherTxt.includes('ai'), 'secureAI', 0.4);
         addWhen(stackOtherTxt.includes('supplier') || stackOtherTxt.includes('third'), 'supplyChain', 0.4);
+        addWhen(stackOtherTxt.includes('teams'), 'cyberWorkforce', 0.35);
+        addWhen(stackOtherTxt.includes('rest api') || stackOtherTxt.includes('api automation') || stackOtherTxt.includes('provisioning'), 'complianceEvidence', 0.35);
+        addWhen(stackOtherTxt.includes('workday') || stackOtherTxt.includes('successfactors') || stackOtherTxt.includes('cornerstone') || stackOtherTxt.includes('lms'), 'cyberWorkforce', 0.45);
 
         // Outcome drill-down answers: light confidence boost
         Object.entries(state.outcomeDrilldowns || {}).forEach(([outcomeId, answerId])=>{
@@ -10057,10 +10334,10 @@ const evidenceOpts = [
       };
       const outcomeContentKeywordMap = {
         fasterResponse: ['incident response', 'response', 'detection', 'soc', 'threat', 'exercise', 'simulation', 'mttr', 'mttd'],
-        secureEnterprise: ['appsec', 'secure development', 'cloud', 'identity', 'vulnerability', 'devsecops', 'enterprise', 'security stack'],
+        secureEnterprise: ['appsec', 'secure development', 'cloud', 'identity', 'vulnerability', 'devsecops', 'enterprise', 'security stack', 'github', 'branch protection'],
         secureAI: ['ai', 'artificial intelligence', 'llm', 'model', 'genai', 'safe ai'],
-        complianceEvidence: ['compliance', 'regulatory', 'audit', 'framework', 'nist', 'dora', 'evidence', 'board', 'benchmark'],
-        cyberWorkforce: ['workforce', 'skills', 'upskill', 'training', 'certification', 'readiness', 'resilience'],
+        complianceEvidence: ['compliance', 'regulatory', 'audit', 'framework', 'nist', 'dora', 'evidence', 'board', 'benchmark', 'governance', 'auditable'],
+        cyberWorkforce: ['workforce', 'skills', 'upskill', 'training', 'certification', 'readiness', 'resilience', 'lms', 'workday', 'successfactors', 'cornerstone', 'microsoft teams', 'rest api'],
         supplyChain: ['third-party', 'third party', 'supplier', 'supply chain', 'vendor', 'procurement']
       };
       const outcomePreferredFormats = {
@@ -10643,13 +10920,19 @@ const evidenceOpts = [
         return cachedContentCatalogRows;
       }
 
-      function keywordsForOutcome(meta){
+      function keywordsForOutcome(meta, extraKeywords){
+        const extras = Array.isArray(extraKeywords)
+          ? extraKeywords.map((value)=> String(value || '').trim()).filter(Boolean)
+          : [];
         const id = String((meta && meta.id) || '').trim();
-        if(id && Array.isArray(outcomeContentKeywordMap[id])) return outcomeContentKeywordMap[id];
+        if(id && Array.isArray(outcomeContentKeywordMap[id])){
+          return Array.from(new Set([...(outcomeContentKeywordMap[id] || []), ...extras]));
+        }
         const raw = `${String((meta && meta.label) || '')} ${String((meta && meta.short) || '')}`.trim();
-        return normalizeContentToken(raw)
+        const inferred = normalizeContentToken(raw)
           .split(' ')
           .filter((token)=> token && token.length > 3);
+        return Array.from(new Set([...inferred, ...extras]));
       }
 
       function preferredFormatsForOutcome(meta){
@@ -10711,10 +10994,10 @@ const evidenceOpts = [
         return contentFormatLabels[key] || 'Content';
       }
 
-      function pickCatalogItemsForOutcome(meta, usedIds, limit){
+      function pickCatalogItemsForOutcome(meta, usedIds, limit, contextKeywords){
         const rows = catalogItems();
         if(!rows.length) return [];
-        const keywords = keywordsForOutcome(meta);
+        const keywords = keywordsForOutcome(meta, contextKeywords);
         const preferredFormats = preferredFormatsForOutcome(meta);
         const available = rows.filter((row)=> !usedIds.has(row.id));
         if(!available.length) return [];
@@ -10792,11 +11075,21 @@ const evidenceOpts = [
         };
       }
 
+      function contentContextKeywordsForGate(gate){
+        const raw = Array.isArray(gate && gate.stackSignals) ? gate.stackSignals : [];
+        return Array.from(new Set(
+          raw
+            .map((value)=> String(value || '').trim())
+            .filter(Boolean)
+        ));
+      }
+
       function recommendationCardsForGate(gate){
         const outcomes = Array.isArray(gate && gate.topOutcomes) ? gate.topOutcomes : [];
         const activeOutcomes = outcomes.length
           ? outcomes
           : [{ id:'', label:'Priority outcome', short:'Priority outcome' }];
+        const contextKeywords = contentContextKeywordsForGate(gate);
         const usedContentIds = new Set();
         const maxCards = 6;
         const minCards = 3;
@@ -10808,7 +11101,7 @@ const evidenceOpts = [
           if(cards.length >= desiredCards) return;
           const meta = outcomeById(outcome && outcome.id) || outcome || {};
           const remaining = desiredCards - cards.length;
-          const picks = pickCatalogItemsForOutcome(meta, usedContentIds, Math.min(perOutcomeLimit, remaining));
+          const picks = pickCatalogItemsForOutcome(meta, usedContentIds, Math.min(perOutcomeLimit, remaining), contextKeywords);
           picks.forEach((item)=>{
             const card = recommendationCardBlueprint(outcome, item);
             if(card) cards.push(card);
@@ -10821,7 +11114,8 @@ const evidenceOpts = [
           const extras = pickCatalogItemsForOutcome(
             { id: '', label: 'Priority outcome', short: 'Priority outcome' },
             usedContentIds,
-            remaining
+            remaining,
+            contextKeywords
           );
           extras.forEach((item)=>{
             const card = recommendationCardBlueprint(fallbackOutcome, item);
@@ -12679,6 +12973,27 @@ const evidenceOpts = [
         const progress = threadReadinessProgress(target);
         const completion = String(progress.completion || target.completion || '0/22 (0%)');
         const completionPct = completionPctFromSummary(completion);
+        const snapshot = (target.snapshot && typeof target.snapshot === 'object') ? target.snapshot : {};
+        const stackIds = listFromCollection(snapshot.stack).filter(Boolean);
+        const stackSignals = [];
+        const stackKeywordMap = {
+          github: ['github', 'secure coding', 'branch protection', 'sdlc'],
+          msteams: ['microsoft teams', 'ms teams', 'teams notifications', 'workflow'],
+          restapi: ['rest api', 'api automation', 'programmatic provisioning', 'user management'],
+          workday: ['workday', 'workday learning', 'lms'],
+          successfactors: ['sap successfactors', 'successfactors', 'lms'],
+          cornerstone: ['cornerstone', 'cornerstone ondemand', 'lms']
+        };
+        stackIds.forEach((id)=>{
+          const label = optionLabel(stackMaster, id);
+          if(label) stackSignals.push(label);
+          const mapped = stackKeywordMap[id];
+          if(Array.isArray(mapped)) stackSignals.push(...mapped);
+        });
+        const stackOther = String(snapshot.stackOther || '').trim();
+        if(stackOther){
+          stackSignals.push(...stackOther.split(/[,\n;]+/).map((part)=> part.trim()).filter(Boolean));
+        }
         let topOutcomes = inferredConsultationOutcomes(target);
         if(!topOutcomes.length){
           const fallbackOutcomeLabels = Array.from(new Set(
@@ -12703,7 +13018,8 @@ const evidenceOpts = [
           completion,
           completionPct,
           eligible: completionPct >= 90,
-          topOutcomes
+          topOutcomes,
+          stackSignals: Array.from(new Set(stackSignals.map((value)=> String(value || '').trim()).filter(Boolean)))
         };
       }
 
@@ -12729,8 +13045,8 @@ const evidenceOpts = [
         }
         if(hint){
           hint.textContent = gate.eligible
-            ? `Unlocked at ${gate.completion}. Open recommendations for this package and profile.`
-            : `Complete at least 90% to unlock recommendations (current: ${gate.completion}).`;
+            ? `Unlocked at ${gate.completion}. Open content for this package and profile.`
+            : `Complete at least 90% to unlock content (current: ${gate.completion}).`;
         }
       }
 
@@ -12747,18 +13063,6 @@ const evidenceOpts = [
           el.textContent = String(value || '');
         };
 
-        const backBtn = $('#contentRecommendationsBackBtn');
-        if(backBtn){
-          backBtn.textContent = (state.recommendationsReturnView === 'interstitial') ? 'Back to overview' : 'Back to review';
-        }
-        const emailBtn = $('#generateRecommendationEmailBtn');
-        if(emailBtn){
-          emailBtn.disabled = !gate.eligible;
-          emailBtn.dataset.locked = gate.eligible ? 'false' : 'true';
-          emailBtn.title = gate.eligible
-            ? 'Generate recommendation email draft'
-            : `Locked until completion reaches 90% (current: ${gate.completion})`;
-        }
         const customerPageBtn = $('#generateCustomerPageTemplateBtn');
         const previewPageBtn = $('#previewCustomerPageTemplateBtn');
         if(customerPageBtn){
@@ -12779,23 +13083,13 @@ const evidenceOpts = [
           }
         }
 
-        const tierName = gate.tier || 'Core';
         const companyName = gate.company || 'Untitled company';
-        const topOutcomeText = gate.topOutcomes.length
-          ? gate.topOutcomes.map((row)=> (row && (row.short || row.label)) || '').filter(Boolean).join(' · ')
-          : 'Outcome signals still forming';
-
-        setText('#contentRecommendationsCompletion', `Completion: ${gate.completion}`);
-        setText('#contentRecommendationsTier', `Package: ${tierName}`);
-        setText('#contentRecommendationsOutcomes', `Outcomes: ${topOutcomeText}`);
-        setText('#contentRecommendationsAudience', `Company: ${companyName}`);
-        setText('#contentRecommendationsTitle', `Resources for ${companyName}`);
-        setText('#contentRecommendationsRss', recommendationRssStatusText());
+        setText('#contentRecommendationsTitle', `Content for ${companyName}`);
         setText(
           '#contentRecommendationsSub',
           gate.eligible
-            ? `A curated mix of resources tailored for ${companyName}.`
-            : 'Resources unlock once profile completion reaches at least 90%.'
+            ? `A curated content plan tailored for ${companyName}.`
+            : 'Content unlocks once profile completion reaches at least 90%.'
         );
 
         const gateEl = $('#contentRecommendationsGate');
@@ -12805,14 +13099,10 @@ const evidenceOpts = [
         if(!gate.eligible){
           gateEl.hidden = false;
           gateEl.innerHTML = `
-            <strong>Recommendations are locked.</strong>
-            <p>Current completion is ${escapeHtml(gate.completion)}. Reach at least 90% to unlock this page.</p>
+            <strong>Content is locked.</strong>
+            <p>Current completion is ${escapeHtml(gate.completion)}. Reach at least 90% to unlock content.</p>
           `;
           gridEl.innerHTML = '';
-          if(emailBtn){
-            emailBtn.disabled = true;
-            emailBtn.dataset.locked = 'true';
-          }
           renderCustomerTemplatePreview();
           return;
         }
@@ -12821,28 +13111,17 @@ const evidenceOpts = [
         gateEl.innerHTML = '';
 
         const cards = recommendationCardsForGate(gate);
-        setText('#contentRecommendationsRss', recommendationRssStatusText(cards));
 
         if(!cards.length){
           gridEl.innerHTML = `
             <article class="contentRecCard">
               <p class="contentRecEyebrow">No mapped content found</p>
               <h3>No existing assets matched this profile yet</h3>
-              <p class="contentRecSummary">No strong recommendations are available for this profile yet. Add or refresh source content and try again.</p>
+              <p class="contentRecSummary">No strong content matches are available for this profile yet. Add or refresh source content and try again.</p>
             </article>
           `;
-          if(emailBtn){
-            emailBtn.disabled = true;
-            emailBtn.dataset.locked = 'true';
-            emailBtn.title = 'No mapped recommendations available to build an email yet.';
-          }
           renderCustomerTemplatePreview();
           return;
-        }
-        if(emailBtn){
-          emailBtn.disabled = false;
-          emailBtn.dataset.locked = 'false';
-          emailBtn.title = 'Generate recommendation email draft';
         }
 
         gridEl.innerHTML = cards.map((card, idx)=>{
@@ -12851,7 +13130,7 @@ const evidenceOpts = [
           const cardHref = safeLinkHref(card && card.url);
           return `
             <article class="contentRecCard">
-              <p class="contentRecEyebrow">Recommendation ${idx + 1} · ${escapeHtml(card.format)}</p>
+              <p class="contentRecEyebrow">Content ${idx + 1} · ${escapeHtml(card.format)}</p>
               <h3>${escapeHtml(card.title)}</h3>
               <p class="contentRecOutcome"><strong>Outcome:</strong> ${escapeHtml(card.outcomeLabel)}</p>
               <p class="contentRecSummary">${escapeHtml(card.summary)}</p>
@@ -12920,7 +13199,7 @@ const evidenceOpts = [
           .filter(Boolean)
           .slice(0, 5);
 
-        const subject = `Immersive content recommendations for ${gate.company} (${gate.tier})`;
+        const subject = `Immersive content plan for ${gate.company} (${gate.tier})`;
         const lines = [];
         lines.push('Hi {{First Name}},');
         lines.push('');
@@ -12976,7 +13255,7 @@ const evidenceOpts = [
         };
 
         setText('#emailBuilderCompany', model.company);
-        setText('#emailBuilderSub', `Structured email draft assembled from package, profile selections, and mapped content for ${model.company}.`);
+        setText('#emailBuilderSub', `Structured email draft assembled from package, profile selections, and mapped content plan for ${model.company}.`);
         setText('#emailBuilderTierPill', `Tier: ${model.tier}`);
         setText('#emailBuilderCompletionPill', `Completion: ${model.completion}`);
         setText('#emailBuilderOutcomePill', `Outcomes: ${model.outcomes.length ? model.outcomes.join(' · ') : '—'}`);
@@ -13012,18 +13291,16 @@ const evidenceOpts = [
         const resolvedThreadId = String(threadId || '').trim();
         const thread = resolveRecommendationThread(resolvedThreadId || 'current');
         if(thread && thread.id && thread.id !== 'current' && thread.archived){
-          toast('Unarchive this record to view recommendations.');
+          toast('Unarchive this record to view content.');
           return false;
         }
         const gate = recommendationsGateFromThread(thread);
         state.recommendationsThreadId = gate.threadId;
-        state.recommendationsReturnView = String(cfg.returnView || ((state.currentView === 'interstitial') ? 'interstitial' : 'configurator'));
-        renderContentRecommendationsView(gate);
-        setView('recommendations');
+        state.recommendationsReturnView = 'interstitial';
+        openThreadOverview(gate.threadId, { section:'content' });
         if(!gate.eligible){
-          toast(`Recommendations are locked until 90% completion (current: ${gate.completion}).`);
+          toast(`Content is locked until 90% completion (current: ${gate.completion}).`);
         }
-        window.scrollTo({ top: 0, behavior: 'smooth' });
         return gate.eligible;
       }
 
@@ -13031,12 +13308,12 @@ const evidenceOpts = [
         const resolvedThreadId = String(threadId || '').trim();
         const thread = resolveRecommendationThread(resolvedThreadId || state.recommendationsThreadId || state.activeThread || 'current');
         if(thread && thread.id && thread.id !== 'current' && thread.archived){
-          toast('Unarchive this record to generate a recommendation email.');
+          toast('Unarchive this record to generate a content email.');
           return false;
         }
         const gate = recommendationsGateFromThread(thread);
         if(!gate.eligible){
-          toast(`Recommendations are locked until 90% completion (current: ${gate.completion}).`);
+          toast(`Content is locked until 90% completion (current: ${gate.completion}).`);
           return false;
         }
         state.recommendationsThreadId = gate.threadId;
@@ -14151,7 +14428,9 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         syncRecommendationAccessCta(recommendationGate);
         const recThread = (state.currentView === 'recommendations')
           ? resolveRecommendationThread(state.recommendationsThreadId || 'current')
-          : currentThreadModel();
+          : ((state.currentView === 'interstitial' && resolveInterstitialSection(state.interstitialSection) === 'content')
+              ? activeThreadModel()
+              : currentThreadModel());
         renderContentRecommendationsView(recommendationsGateFromThread(recThread));
 
         // Coverage
@@ -14894,8 +15173,6 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const globalCreateRecord = $('#globalCreateRecord');
       const globalDeleteRecord = $('#globalDeleteRecord');
       const globalEditConfigurator = $('#globalEditConfigurator');
-      const globalViewRecommendations = $('#globalViewRecommendations');
-      const globalBookConsultation = $('#globalBookConsultation');
       const consultationPanel = $('#consultationPanel');
       const closeConsultationBtn = $('#closeConsultation');
       const emailBuilderPanel = $('#emailBuilderPanel');
@@ -14978,8 +15255,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
             return;
           }
           if(action === 'recommendations'){
-            setView('recommendations');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            openRecommendationsForThread(threadId || state.recommendationsThreadId || state.activeThread || 'current', { returnView:'interstitial' });
             return;
           }
           if(action === 'export'){
@@ -15024,18 +15300,6 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           }
           const nextMode = thread.archived ? 'restore' : 'archive';
           openArchivePrompt([thread.id], nextMode);
-        });
-      }
-      if(globalBookConsultation){
-        globalBookConsultation.addEventListener('click', ()=>{
-          const thread = activeThreadModel();
-          openThreadBooking((thread && thread.id) ? thread.id : (state.activeThread || 'current'));
-        });
-      }
-      if(globalViewRecommendations){
-        globalViewRecommendations.addEventListener('click', ()=>{
-          const thread = activeThreadModel();
-          openRecommendationsForThread((thread && thread.id) ? thread.id : 'current', { returnView:'interstitial' });
         });
       }
       if(closeConsultationBtn){
@@ -16982,7 +17246,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         }
         if(action === 'copyRecommendationEmail'){
           const model = recommendationEmailModelForThread(state.emailBuilderThreadId || state.recommendationsThreadId || state.activeThread || 'current');
-          copyToClipboard(model.fullText, 'Copied recommendation email.');
+          copyToClipboard(model.fullText, 'Copied content email.');
         }
         if(action === 'copyRecommendationSubject'){
           const model = recommendationEmailModelForThread(state.emailBuilderThreadId || state.recommendationsThreadId || state.activeThread || 'current');

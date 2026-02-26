@@ -3,99 +3,251 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Customer Self-Service Widget Prototype</title>
-  <meta name="description" content="Standalone customer self-service configurator widget prototype." />
+  <title>Immersive One Follow-Up Questions</title>
+  <meta name="description" content="Customer follow-up form for outstanding discovery questions." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg-0: #f3f6fb;
+      --primary-colours--black: #17181c;
+      --primary-colours--azure: #3c64ff;
+      --primary-colours--white: #ffffff;
+      --background-color--alternate-25: #f5f5f9;
+      --background-color--alternate-60: #d7d7e7;
+      --bg-0: #f6f7fb;
       --bg-1: #ffffff;
-      --ink-0: #0f1c33;
-      --ink-1: #405377;
-      --line: #d8e2f2;
-      --accent: #0b6bcb;
-      --accent-2: #0a8f7b;
-      --warn: #b53a2f;
-      --good: #0a7a56;
-      --shadow: 0 22px 45px rgba(17, 45, 89, 0.12);
-      --radius-lg: 20px;
-      --radius-md: 12px;
-      --radius-sm: 9px;
+      --bg-2: #f2f4fa;
+      --ink-0: #0f172a;
+      --ink-1: #5b677a;
+      --surface: #ffffff;
+      --text: #17181c;
+      --muted: rgba(23, 24, 28, 0.8);
+      --onyx: #17181c;
+      --border: rgba(23, 24, 28, 0.14);
+      --border-strong: rgba(23, 24, 28, 0.24);
+      --accentSoft: color-mix(in srgb, #ffffff 88%, var(--accent) 12%);
+      --line: rgba(15, 23, 42, 0.1);
+      --line-strong: rgba(15, 23, 42, 0.16);
+      --accent: #3c64ff;
+      --accent-soft: rgba(60, 100, 255, 0.12);
+      --accent-2: #12dd7e;
+      --warn: #f23f55;
+      --good: #12dd7e;
+      --shadow: 0 14px 40px rgba(15, 23, 42, 0.1);
+      --shadow-xl: 0 28px 64px rgba(15, 23, 42, 0.14);
+      --radius-lg: 14px;
+      --radius-md: 10px;
+      --radius-sm: 8px;
       --card-pad: clamp(16px, 2.2vw, 24px);
       --ease: cubic-bezier(.2,.8,.2,1);
+      --container: 1680px;
+      --radius-btn: 4px;
+      --font: "Geologica", Arial, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, sans-serif;
     }
 
     * { box-sizing: border-box; }
 
-    html,
     body {
       margin: 0;
       padding: 0;
       color: var(--ink-0);
-      background:
-        radial-gradient(900px 500px at -10% -15%, rgba(11, 107, 203, 0.16), transparent 60%),
-        radial-gradient(850px 500px at 110% -20%, rgba(10, 143, 123, 0.14), transparent 60%),
-        linear-gradient(180deg, #f7f9fe 0%, #eef3fa 100%);
-      font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
+      background: var(--background-color--alternate-25);
+      font-family: var(--font);
+      font-weight: 300;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      color: var(--ink-0);
+      font-weight: 500;
+      letter-spacing: -0.02em;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.96);
+      border-bottom: 1px solid var(--background-color--alternate-60);
+    }
+
+    .topbarInner {
+      max-width: var(--container);
+      width: 100%;
+      margin: 0 auto;
+      padding: 0 64px;
+      height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .9rem;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .brand img {
+      display: block;
+      height: 28px;
+      width: auto;
+    }
+
+    .topContactBtn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      padding: 10px 16px;
+      border-radius: var(--radius-btn);
+      border: 1px solid var(--primary-colours--azure);
+      background: var(--primary-colours--azure);
+      color: #fff;
+      font-size: 16px;
+      line-height: 20px;
+      font-weight: 400;
+      text-decoration: none;
+    }
+
+    .topContactBtn:hover {
+      background: rgb(86, 119, 248);
+      border-color: rgb(86, 119, 248);
+      color: #fff;
     }
 
     .shell {
-      width: min(1200px, 94vw);
-      margin: 32px auto 64px;
+      max-width: var(--container);
+      width: 100%;
+      margin: 20px auto 64px;
+      padding: 0 64px;
       display: grid;
       gap: 18px;
     }
 
     .hero {
-      background: linear-gradient(115deg, #122646 0%, #193d72 54%, #1f507f 100%);
-      color: #f3f9ff;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow);
-      padding: clamp(18px, 3.5vw, 34px);
-      overflow: clip;
+      margin-top: 0;
+    }
+
+    .padding-global.padding-24 {
+      padding: 0;
+    }
+
+    .container-large {
+      max-width: 100%;
+      margin: 0 auto;
+    }
+
+    .padding-section-24.platform-hero {
+      padding: 0;
+    }
+
+    .header90_component {
+      width: 100%;
+    }
+
+    .header90_card.platform {
       position: relative;
+      display: block;
+      min-height: 430px;
+      background: #07122d;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-xl);
+      overflow: hidden;
       isolation: isolate;
     }
 
-    .hero::after {
+    .header90_card.platform::before {
       content: "";
       position: absolute;
-      inset: auto -15% -40% auto;
-      width: 380px;
-      aspect-ratio: 1;
-      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.24), rgba(255,255,255,0));
+      inset: 0;
+      z-index: 2;
+      background: linear-gradient(90deg, rgba(4, 10, 26, 0.82) 0%, rgba(4, 10, 26, 0.64) 40%, rgba(4, 10, 26, 0.3) 66%, rgba(4, 10, 26, 0.18) 100%);
       pointer-events: none;
-      z-index: -1;
     }
 
-    .hero-eyebrow {
+    .header90_card-content {
+      position: relative;
+      z-index: 3;
+      padding: 44px 44px 42px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      max-width: min(780px, 62%);
+      background: transparent;
+    }
+
+    .max-width-medium--lp {
+      max-width: 62ch;
+    }
+
+    .margin-bottom.margin-small {
+      margin-bottom: 14px;
+    }
+
+    .margin-bottom-16.margin-small {
+      margin-bottom: 16px;
+    }
+
+    .tag-17.is-text {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 7px 10px;
+      min-height: 26px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.4);
       border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.22);
+      background: rgba(9, 17, 40, 0.26);
       font-size: 12px;
-      letter-spacing: .08em;
+      line-height: 1;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
-      opacity: .95;
-      background: rgba(255,255,255,0.08);
+      color: rgba(236, 244, 255, 0.94);
+      font-weight: 400;
     }
 
-    .hero h1 {
-      margin: 14px 0 10px;
-      font-size: clamp(1.55rem, 3.2vw, 2.35rem);
-      line-height: 1.16;
-      max-width: 24ch;
-      letter-spacing: -0.02em;
-    }
-
-    .hero p {
+    .heading-style-h1.landing-page {
       margin: 0;
-      max-width: 76ch;
-      color: rgba(240, 247, 255, 0.9);
-      font-size: clamp(.95rem, 1.65vw, 1.05rem);
-      line-height: 1.55;
+      max-width: 14ch;
+      font-size: clamp(40px, 4.8vw, 62px);
+      line-height: 1.03;
+      letter-spacing: -0.02em;
+      color: #fff;
+      font-weight: 500;
+      text-shadow: rgba(0, 0, 0, 0.22) 0 2px 10px;
+    }
+
+    .text-size-regular.text-color-secondary.max-width-prove {
+      margin: 0;
+      max-width: 54ch;
+      color: rgba(236, 244, 255, 0.92);
+      font-size: 18px;
+      line-height: 1.35;
+      text-shadow: rgba(0, 0, 0, 0.2) 0 1px 6px;
+    }
+
+    .header90_background-image-wrapper-platform.improve {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      overflow: hidden;
+      background: transparent;
+      pointer-events: none;
+    }
+
+    .improve-lp-hero-image {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center center;
     }
 
     .main {
@@ -114,10 +266,23 @@
     .panel {
       border: 1px solid var(--line);
       border-radius: var(--radius-lg);
-      background: var(--bg-1);
-      box-shadow: var(--shadow);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 96%, var(--accent) 4%), var(--bg-1));
+      box-shadow: var(--shadow-xl);
       padding: var(--card-pad);
       animation: pop .45s var(--ease) both;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--bg-1)));
+      opacity: 0.7;
     }
 
     .panel h2 {
@@ -145,7 +310,8 @@
       border: 1px solid var(--line);
       border-radius: var(--radius-md);
       padding: 10px;
-      background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 96%, var(--accent) 4%), var(--bg-1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
     }
 
     .kpi .k {
@@ -168,22 +334,34 @@
       border-radius: 999px;
       height: 12px;
       overflow: hidden;
-      background: #e9eff8;
+      background: color-mix(in srgb, var(--line) 44%, var(--bg-1));
     }
 
     .progress-bar {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, var(--accent), #45a8f5);
+      background: linear-gradient(90deg, var(--accent), color-mix(in srgb, #b06fff 62%, var(--accent)));
       transition: width .25s var(--ease);
     }
 
     .section {
       margin-top: 14px;
-      border: 1px solid var(--line);
+      border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
       border-radius: var(--radius-md);
       overflow: clip;
-      background: #fcfdff;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 96%, var(--accent) 4%), var(--bg-1));
+      position: relative;
+    }
+
+    .section::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--bg-1)));
+      opacity: 0.66;
     }
 
     .section-head {
@@ -193,7 +371,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      background: linear-gradient(180deg, #fafdff 0%, #f4f8ff 100%);
+      background: transparent;
     }
 
     .section-head h3 {
@@ -202,13 +380,21 @@
       letter-spacing: .01em;
     }
 
+    .section-head-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
     .tag {
       font-size: 11px;
       border-radius: 999px;
       padding: 4px 8px;
       border: 1px solid var(--line);
       color: var(--ink-1);
-      background: #fff;
+      background: color-mix(in srgb, var(--bg-1) 80%, var(--accent) 20%);
       white-space: nowrap;
     }
 
@@ -238,9 +424,9 @@
     select,
     textarea {
       width: 100%;
-      border: 1px solid #c7d5ea;
+      border: 1px solid var(--line);
       border-radius: var(--radius-sm);
-      background: #fff;
+      background: var(--bg-1);
       color: var(--ink-0);
       padding: 11px 12px;
       font: inherit;
@@ -257,8 +443,8 @@
     input:focus,
     select:focus,
     textarea:focus {
-      border-color: rgba(11, 107, 203, 0.72);
-      box-shadow: 0 0 0 3px rgba(11, 107, 203, 0.16);
+      border-color: color-mix(in srgb, var(--accent) 68%, var(--line));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
       outline: none;
     }
 
@@ -271,20 +457,53 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .select-card-source {
+      position: absolute !important;
+      inline-size: 1px !important;
+      block-size: 1px !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      margin: 0 !important;
+      border: 0 !important;
+      padding: 0 !important;
+    }
+
+    .select-card-host {
+      display: grid;
+      gap: 8px;
+    }
+
+    .select-card-grid.is-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .select-card-grid.is-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .select-card-grid.is-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .select-card-grid.is-5 {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
     .choice {
-      border: 1px solid #cfdbef;
+      border: 1px solid var(--line);
       border-radius: 10px;
       padding: 9px 10px;
-      background: #fff;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 96%, var(--accent) 4%), var(--bg-1));
       display: grid;
       gap: 6px;
-      transition: border-color .2s ease, background .2s ease;
+      transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
       position: relative;
     }
 
     .choice:has(input:checked) {
-      border-color: #2a84dd;
-      background: #f4faff;
+      border-color: var(--accent);
+      background: var(--bg-1);
+      box-shadow: 0 0 0 3px var(--accent-soft);
     }
 
     .choice input {
@@ -313,9 +532,9 @@
     }
 
     details {
-      border: 1px dashed #c5d4ea;
+      border: 1px dashed color-mix(in srgb, var(--line) 74%, transparent);
       border-radius: var(--radius-md);
-      background: linear-gradient(180deg, #fcfeff 0%, #f7faff 100%);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 97%, var(--accent) 3%), var(--bg-1));
       overflow: hidden;
     }
 
@@ -333,7 +552,7 @@
     }
 
     details[open] > summary {
-      border-bottom: 1px solid #d9e4f4;
+      border-bottom: 1px solid var(--line);
       background: rgba(255,255,255,0.78);
     }
 
@@ -351,30 +570,32 @@
     }
 
     button {
-      border: 1px solid #c4d3e8;
+      border: 1px solid var(--line);
       background: #fff;
-      color: #17355f;
+      color: var(--ink-0);
       font: inherit;
       border-radius: 10px;
       padding: 10px 14px;
       cursor: pointer;
-      transition: transform .15s ease, background .2s ease, border-color .2s ease;
+      transition: transform .15s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
+      font-weight: 620;
     }
 
     button:hover {
       transform: translateY(-1px);
-      background: #f8fbff;
-      border-color: #9eb5d7;
+      background: var(--bg-2);
+      border-color: var(--line-strong);
     }
 
     button.primary {
-      background: linear-gradient(180deg, #0d76d4 0%, #0a61b0 100%);
-      border-color: #08559d;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 78%, #ffffff 22%) 0%, var(--accent) 100%);
+      border-color: color-mix(in srgb, var(--accent) 75%, #1f3d9d);
       color: #fff;
     }
 
     button.primary:hover {
-      background: linear-gradient(180deg, #0e81e7 0%, #0a66ba 100%);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 84%, #ffffff 16%) 0%, color-mix(in srgb, var(--accent) 92%, #173a9a) 100%);
+      border-color: color-mix(in srgb, var(--accent) 78%, #173a9a);
     }
 
     button.success {
@@ -519,10 +740,10 @@
     }
 
     .selection-cell {
-      border: 1px solid #d8e4f5;
-      border-radius: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
       padding: 10px;
-      background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 96%, var(--accent) 4%), var(--bg-1));
       min-height: 72px;
     }
 
@@ -548,9 +769,9 @@
     }
 
     .selection-block {
-      border: 1px solid #d7e3f4;
+      border: 1px solid var(--line);
       border-radius: 11px;
-      background: #fbfdff;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 97%, var(--accent) 3%), var(--bg-1));
       padding: 10px;
       display: grid;
       gap: 7px;
@@ -590,46 +811,532 @@
       gap: 8px;
     }
 
-    .followup-customer {
-      border-color: #c9ddf7;
-      background: linear-gradient(180deg, #f9fcff 0%, #f4f9ff 100%);
+    /* Configurator parity layer for body questions + snapshot */
+    .customer-panel {
+      background: var(--surface);
+      border-color: var(--border);
+      box-shadow: 0 10px 28px rgba(7, 18, 44, 0.08);
     }
 
-    .followup-dynamic-form {
+    .customer-panel::before {
+      opacity: .58;
+      height: 3px;
+    }
+
+    .customer-panel label {
+      display: block;
+      margin: 0 0 8px;
+      font-size: .95rem;
+      color: var(--muted);
+      font-weight: 650;
+      letter-spacing: normal;
+    }
+
+    .customer-panel input[type="text"],
+    .customer-panel input[type="email"],
+    .customer-panel input[type="tel"],
+    .customer-panel select,
+    .customer-panel textarea {
+      border-radius: 12px;
+      border-color: color-mix(in srgb, var(--border) 92%, transparent);
+      background: color-mix(in srgb, var(--surface) 95%, var(--accent) 5%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .76);
+      padding: 12px 14px;
+      font-size: 1rem;
+      transition: border-color .14s ease, box-shadow .14s ease, background .14s ease;
+    }
+
+    .customer-panel input:hover,
+    .customer-panel select:hover,
+    .customer-panel textarea:hover {
+      border-color: var(--border-strong);
+    }
+
+    .customer-panel input:focus,
+    .customer-panel select:focus,
+    .customer-panel textarea:focus {
+      border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+      background-color: var(--surface);
+    }
+
+    .customer-panel details {
+      border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+      border-radius: 12px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 97%, var(--accent) 3%), var(--surface));
+      overflow: hidden;
+    }
+
+    .customer-panel summary {
+      cursor: pointer;
+      padding: 12px 14px;
+      font-size: .95rem;
+      font-weight: 750;
+      color: color-mix(in srgb, var(--text) 82%, var(--accent) 18%);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      list-style: none;
+      user-select: none;
+    }
+
+    .customer-panel summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .customer-panel details[open] > summary {
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+    }
+
+    .customer-panel details .detail-body {
+      padding: 12px 14px 14px;
       display: grid;
+      gap: 12px;
+    }
+
+    .customer-panel .section {
+      margin-top: 16px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      overflow: visible;
+    }
+
+    .customer-panel .section::before {
+      display: none;
+    }
+
+    .customer-panel .section-head {
+      padding: 0 2px 10px;
+      border-bottom: 0;
+      background: transparent;
+      justify-content: flex-start;
+    }
+
+    .customer-panel .section-head h3 {
+      font-size: .95rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      font-weight: 750;
+      color: color-mix(in srgb, var(--text) 82%, var(--accent) 18%);
+    }
+
+    .customer-panel .section-head .tag {
+      margin-left: auto;
+    }
+
+    .customer-panel .section-body {
+      padding: 0;
+      gap: 12px;
+    }
+
+    .customer-panel fieldset {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      min-width: 0;
+    }
+
+    .customer-panel .qBlock {
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .85);
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .customer-panel .qBlock::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 4px;
+      opacity: .82;
+      border-radius: 12px 12px 0 0;
+      background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--surface)));
+    }
+
+    .customer-panel .qBlock > * {
+      position: relative;
+    }
+
+    .customer-panel .qBlock > label {
+      font-size: 1.045rem;
+      font-weight: 700;
+      color: color-mix(in srgb, var(--text) 65%, var(--muted) 35%);
+      margin-bottom: 8px;
+    }
+
+    .customer-panel .choice-grid {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .customer-panel .choice-grid.two {
+      grid-template-columns: 1fr;
+    }
+
+    .customer-panel .select-card-grid.is-2,
+    .customer-panel .select-card-grid.is-3,
+    .customer-panel .select-card-grid.is-4,
+    .customer-panel .select-card-grid.is-5 {
+      grid-template-columns: 1fr;
+    }
+
+    .customer-panel .choice {
+      display: grid;
+      align-items: start;
+      gap: 8px;
+      border: 1px solid color-mix(in srgb, var(--border) 92%, transparent);
+      border-radius: 12px;
+      padding: 13px 14px;
+      background: color-mix(in srgb, var(--surface) 96%, var(--accent) 4%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8);
+      transition: border-color .12s ease, box-shadow .12s ease, background .12s ease, transform .08s ease;
+      position: relative;
+    }
+
+    .customer-panel .choice:hover {
+      border-color: var(--border-strong);
+      box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
+      transform: translateY(-1px);
+    }
+
+    .customer-panel .choice:has(input:checked) {
+      border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+      background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), color-mix(in srgb, var(--accent) 6%, var(--surface)));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent), 0 10px 24px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    .customer-panel .choice-row {
+      display: flex;
+      align-items: flex-start;
       gap: 11px;
     }
 
-    .followup-item {
-      border: 1px solid #d7e5f7;
-      border-radius: 10px;
-      background: #fff;
+    .customer-panel .choice input {
+      margin: 2px 0 0;
+      inline-size: 20px;
+      block-size: 20px;
+      flex: 0 0 auto;
+    }
+
+    .customer-panel .choice-row > span:last-child {
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      color: var(--onyx);
+      line-height: 1.2;
+    }
+
+    .customer-panel .choice small {
+      margin: 0 0 0 31px;
+      font-size: 1rem;
+      line-height: 1.35;
+      color: var(--muted);
+    }
+
+    .customer-panel .choice-grid.chips,
+    .customer-panel .select-card-grid.chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      grid-template-columns: none;
+      margin-top: 10px;
+    }
+
+    .customer-panel .choice.chip-choice {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      border-radius: 999px;
+      padding: 9px 14px;
+      background: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .82);
+      width: auto;
+    }
+
+    .customer-panel .choice.chip-choice .choice-row {
+      align-items: center;
+      gap: 0;
+    }
+
+    .customer-panel .choice.chip-choice .choice-row > span:last-child {
+      font-size: .98rem;
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--onyx);
+    }
+
+    .customer-panel .choice.chip-choice input {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      opacity: 0;
+      pointer-events: none;
+      margin: 0;
+    }
+
+    .customer-panel .choice.chip-choice small {
+      display: none;
+    }
+
+    .customer-panel .choice.chip-choice:hover {
+      border-color: var(--border-strong);
+      background: color-mix(in srgb, var(--surface) 90%, var(--accent) 10%);
+      box-shadow: 0 8px 18px rgba(15, 23, 42, .09);
+    }
+
+    .customer-panel .choice.chip-choice:has(input:checked) {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+      background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+    }
+
+    .selection-panel {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: 0 10px 28px rgba(7, 18, 44, 0.08);
+    }
+
+    .selection-panel h2 {
+      font-size: .95rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      font-weight: 750;
+      color: color-mix(in srgb, var(--text) 82%, var(--accent) 18%);
+    }
+
+    .selection-grid {
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
+
+    .selection-cell {
+      border: 0;
+      border-bottom: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+      border-radius: 0;
+      background: transparent;
+      min-height: 0;
+      padding: 8px 0;
+      box-shadow: none;
+    }
+
+    .selection-cell:last-child {
+      border-bottom: 0;
+    }
+
+    .selection-k {
+      font-size: .76rem;
+      letter-spacing: .08em;
+      color: color-mix(in srgb, var(--muted) 80%, var(--accent) 20%);
+    }
+
+    .selection-v {
+      margin-top: 4px;
+      font-size: 1rem;
+      color: var(--onyx);
+    }
+
+    .selection-block {
+      border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+      border-radius: 12px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .85);
+      padding: 12px;
+    }
+
+    .selection-row {
+      grid-template-columns: 118px 1fr;
+      font-size: .92rem;
+      border-bottom: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+      padding: 4px 0;
+    }
+
+    .selection-row:last-child {
+      border-bottom: 0;
+    }
+
+    .selection-row b {
+      color: color-mix(in srgb, var(--muted) 84%, var(--accent) 16%);
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      font-size: .75rem;
+    }
+
+    .selection-row span {
+      color: var(--onyx);
+      font-weight: 650;
+    }
+
+    .selection-stack .pill {
+      border-color: color-mix(in srgb, var(--border) 75%, transparent);
+      background: color-mix(in srgb, var(--surface) 80%, var(--accent) 20%);
+      color: color-mix(in srgb, var(--text) 82%, var(--accent) 18%);
+      font-weight: 700;
+      font-size: .8rem;
+      padding: 5px 9px;
+    }
+
+    .followup-customer {
+      border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 95%, var(--accent) 5%), var(--bg-1));
+    }
+
+    .followup-customer::before {
+      opacity: 0.86;
+    }
+
+    .followup-summary {
+      border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+      border-radius: var(--radius-sm);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 97%, var(--accent) 3%), var(--bg-1));
       padding: 10px;
       display: grid;
       gap: 8px;
     }
 
-    .followup-item-head {
+    .followup-summary-top {
       display: flex;
-      align-items: center;
       justify-content: space-between;
       gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .followup-progress-wrap {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      height: 10px;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--line) 42%, var(--bg-1));
+    }
+
+    .followup-progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), color-mix(in srgb, #b06fff 62%, var(--accent)));
+      transition: width .24s var(--ease);
+    }
+
+    .followup-dynamic-form {
+      display: grid;
+      gap: 12px;
+    }
+
+    .followup-item {
+      border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+      border-radius: var(--radius-sm);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 96%, var(--accent) 4%), var(--bg-1));
+      padding: 11px;
+      display: grid;
+      gap: 8px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.84);
+    }
+
+    .followup-item::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--bg-1)));
+      opacity: 0.78;
+    }
+
+    .followup-item[data-complete="true"] {
+      border-color: color-mix(in srgb, var(--good) 44%, var(--line));
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 97%, var(--good) 3%), var(--bg-1));
+    }
+
+    .followup-item[data-complete="true"]::before {
+      background: linear-gradient(90deg, var(--good), color-mix(in srgb, var(--good) 55%, var(--bg-1)));
+    }
+
+    .followup-item-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     .followup-item-head label {
       margin: 0;
-      font-weight: 600;
-      color: #1d3f70;
+      font-weight: 620;
+      color: var(--ink-0);
     }
 
-    .followup-stage {
+    .followup-item-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .followup-state {
       font-size: 11px;
       border-radius: 999px;
       padding: 4px 8px;
-      border: 1px solid #cbdcf2;
-      background: #f4f8ff;
-      color: #3f6190;
+      border: 1px solid color-mix(in srgb, var(--warn) 36%, var(--line));
+      background: color-mix(in srgb, var(--warn) 8%, var(--bg-1));
+      color: color-mix(in srgb, var(--warn) 82%, var(--ink-0));
       white-space: nowrap;
+      line-height: 1;
+      font-weight: 650;
+    }
+
+    .followup-item[data-complete="true"] .followup-state {
+      border-color: color-mix(in srgb, var(--good) 42%, var(--line));
+      background: color-mix(in srgb, var(--good) 12%, var(--bg-1));
+      color: color-mix(in srgb, var(--good) 82%, var(--ink-0));
+    }
+
+    .followup-item[data-layout="cards"] .followup-item-head label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: color-mix(in srgb, var(--ink-0) 74%, var(--accent) 26%);
+    }
+
+    .followup-item[data-layout="cards"] .choice {
+      padding: 11px 12px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 97%, var(--accent) 3%), var(--bg-1));
+    }
+
+    .followup-item[data-layout="cards"] .choice-row {
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .followup-item[data-layout="cards"] .choice-row > span:last-child {
+      font-size: 1.02rem;
+      font-weight: 620;
+      line-height: 1.2;
+      color: var(--ink-0);
+    }
+
+    .followup-item[data-layout="cards"] .choice small {
+      margin: 1px 0 0 26px;
+      color: var(--ink-1);
+      font-size: .93rem;
+      line-height: 1.4;
+    }
+
+    .followup-stage {
+      display: none;
     }
 
     .followup-checklist {
@@ -654,9 +1361,9 @@
     }
 
     .followup-output {
-      border: 1px solid #cfe0f6;
-      border-radius: 10px;
-      background: #f8fbff;
+      border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+      border-radius: var(--radius-sm);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 97%, var(--accent) 3%), var(--bg-1));
       padding: 10px;
       display: grid;
       gap: 8px;
@@ -708,7 +1415,55 @@
       white-space: pre;
     }
 
+    body[data-followup-mode="true"] .hideInFollowup {
+      display: none !important;
+    }
+
+    @media (max-width: 1280px) {
+      .shell {
+        padding: 0 40px;
+      }
+
+      .topbarInner {
+        padding: 0 40px;
+      }
+
+      .header90_card-content {
+        padding: 38px 36px;
+        max-width: min(700px, 68%);
+      }
+    }
+
     @media (max-width: 1080px) {
+      .shell {
+        padding: 0 24px;
+      }
+
+      .topbarInner {
+        padding: 0 24px;
+        height: 68px;
+      }
+
+      .topContactBtn {
+        font-size: 14px;
+        line-height: 18px;
+        padding: 8px 12px;
+        min-height: 40px;
+      }
+
+      .header90_card.platform {
+        min-height: 0;
+      }
+
+      .header90_card.platform::before {
+        background: linear-gradient(180deg, rgba(4, 10, 26, 0.82) 0%, rgba(4, 10, 26, 0.56) 72%, rgba(4, 10, 26, 0.34) 100%);
+      }
+
+      .header90_card-content {
+        padding: 32px 26px;
+        max-width: none;
+      }
+
       .workbench {
         grid-template-columns: 1fr;
       }
@@ -729,11 +1484,50 @@
         grid-template-columns: 1fr;
       }
 
+      .select-card-grid.is-3,
+      .select-card-grid.is-4,
+      .select-card-grid.is-5 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       .recCols {
         grid-template-columns: 1fr;
       }
 
       .kpis {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .shell {
+        padding: 0 16px;
+      }
+
+      .topbarInner {
+        padding: 0 16px;
+      }
+
+      .header90_card-content {
+        padding: 26px 20px;
+      }
+
+      .tag-17.is-text {
+        font-size: 11px;
+      }
+
+      .heading-style-h1.landing-page {
+        font-size: 34px;
+      }
+
+      .text-size-regular.text-color-secondary.max-width-prove {
+        font-size: 17px;
+      }
+
+      .select-card-grid.is-2,
+      .select-card-grid.is-3,
+      .select-card-grid.is-4,
+      .select-card-grid.is-5 {
         grid-template-columns: 1fr;
       }
     }
@@ -751,34 +1545,70 @@
   </style>
 </head>
 <body>
+  <header class="topbar">
+    <div class="topbarInner">
+      <a class="brand" href="https://www.immersivelabs.com/" target="_blank" rel="noopener noreferrer" aria-label="Immersive">
+        <img src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg" alt="Immersive" />
+      </a>
+      <a class="topContactBtn" href="#widgetHeading">Contact us</a>
+    </div>
+  </header>
+
   <div class="shell">
-    <header class="hero">
-      <span class="hero-eyebrow">Standalone prototype</span>
-      <h1>Customer Self-Service Discovery Widget</h1>
-      <p>
-        This is intentionally separate from the current app. A customer can complete quick discovery on your website,
-        and the output becomes an AE-ready record for follow-up.
-      </p>
-    </header>
+    <section class="hero">
+      <div class="padding-global padding-24">
+        <div class="container-large">
+          <div class="padding-section-24 platform-hero">
+            <div class="header90_component">
+              <div class="header90_card platform">
+                <div class="header90_card-content">
+                  <div class="max-width-medium--lp">
+                    <div class="margin-bottom margin-small">
+                      <div class="max-width-large-4">
+                        <div class="tag-17 is-text" id="heroEyebrow">Immersive One</div>
+                      </div>
+                    </div>
+                    <div class="margin-bottom-16 margin-small">
+                      <h1 class="heading-style-h1 landing-page" id="heroTitle">Outstanding questions</h1>
+                    </div>
+                    <p class="text-size-regular text-color-secondary max-width-prove" id="heroSubtitle">
+                      Please complete the requested questions. This helps us align the platform recommendation to your needs.
+                    </p>
+                  </div>
+                </div>
+                <div class="header90_background-image-wrapper-platform improve" aria-hidden="true">
+                  <img
+                    src="https://cdn.prod.website-files.com/6735fba9a631272fb4513263/678646ce52898299cc1134be_HERO%20IMAGE%20LABS.webp"
+                    loading="eager"
+                    alt=""
+                    class="improve-lp-hero-image"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <main class="main">
       <div class="workbench">
       <section class="panel customer-panel" aria-labelledby="widgetHeading">
-        <h2 id="widgetHeading">Customer Discovery</h2>
-        <p class="sub">Progressive disclosure: start lean, then add depth only if useful.</p>
+        <h2 id="widgetHeading">Follow-up form</h2>
+        <p class="sub">Answer the outstanding questions below and submit when complete.</p>
 
-        <div class="kpis" aria-label="readiness summary">
+        <div class="kpis" aria-label="form progress summary">
           <article class="kpi">
-            <p class="k">AE-ready progress</p>
+            <p class="k">Questions completed</p>
             <p class="v" id="aeReadyText">0 / 8</p>
           </article>
           <article class="kpi">
-            <p class="k">Intent score</p>
-            <p class="v" id="intentScoreText">0 / 100</p>
+            <p class="k">Outstanding questions</p>
+            <p class="v" id="intentScoreText">0</p>
           </article>
           <article class="kpi">
-            <p class="k">Intent band</p>
-            <p class="v" id="intentBandText">Low</p>
+            <p class="k">Completion</p>
+            <p class="v" id="intentBandText">0%</p>
           </article>
         </div>
 
@@ -788,39 +1618,50 @@
 
         <section class="section followup-customer" id="customerFollowupPanel" hidden>
           <div class="section-head">
-            <h3>Follow-up questions</h3>
-            <span class="tag" id="customerFollowupCount">0 questions</span>
+            <h3>Outstanding questions</h3>
+            <div class="section-head-meta">
+              <span class="tag" id="customerFollowupCount">0 questions</span>
+              <span class="tag" id="customerFollowupCompletion">0/0 complete</span>
+            </div>
           </div>
           <div class="section-body">
             <p class="help" id="customerFollowupIntro">
-              A follow-up request was sent for this record. Please complete the short list below.
+              Please complete the short list below so we can tailor your recommendation.
             </p>
+            <div class="followup-summary" id="customerFollowupSummary">
+              <div class="followup-summary-top">
+                <span class="tag" id="customerFollowupProgressLabel">Completion: 0%</span>
+              </div>
+              <div class="followup-progress-wrap" aria-hidden="true">
+                <div class="followup-progress-bar" id="customerFollowupProgressBar"></div>
+              </div>
+            </div>
             <form id="customerFollowupForm" class="followup-dynamic-form"></form>
             <div class="actions" style="margin-top:0;">
-              <button type="button" id="btnApplyFollowupAnswers" class="primary">Save follow-up answers</button>
+              <button type="button" id="btnApplyFollowupAnswers" class="primary">Save answers</button>
             </div>
           </div>
         </section>
 
         <div class="section" id="stageA">
           <div class="section-head">
-            <h3>Stage A · Quick discovery (required)</h3>
+            <h3>Stage A · Quick discovery</h3>
             <span class="tag">2-3 min</span>
           </div>
           <div class="section-body">
-            <div>
+            <div class="qBlock">
               <label for="role">1) Which best describes your role?</label>
               <select id="role" data-required="true">
                 <option value="">Select role...</option>
                 <option value="ciso">CISO</option>
-                <option value="secMgr">Security manager</option>
-                <option value="practitioner">Security practitioner</option>
-                <option value="executive">Executive sponsor</option>
+                <option value="secMgr">Security Manager</option>
+                <option value="practitioner">Practitioner</option>
+                <option value="executive">Executive</option>
                 <option value="other">Other</option>
               </select>
             </div>
 
-            <div class="grid-2">
+            <div class="grid-2 qBlock">
               <div>
                 <label for="fullName">2) Your name</label>
                 <input id="fullName" type="text" placeholder="Jane Doe" data-required="true" />
@@ -831,69 +1672,119 @@
               </div>
             </div>
 
-            <div>
+            <div class="qBlock">
               <label for="operatingCountry">4) Operating country</label>
               <select id="operatingCountry" data-required="true">
                 <option value="">Select country...</option>
-                <option>United States</option>
-                <option>United Kingdom</option>
-                <option>Germany</option>
-                <option>France</option>
-                <option>Canada</option>
-                <option>Australia</option>
-                <option>Singapore</option>
-                <option>Japan</option>
-                <option>Other / multiple</option>
+                <option value="United States">United States</option>
+                <option value="United Kingdom">United Kingdom</option>
+                <option value="Ireland">Ireland</option>
+                <option value="Canada">Canada</option>
+                <option value="Germany">Germany</option>
+                <option value="France">France</option>
+                <option value="Netherlands">Netherlands</option>
+                <option value="Spain">Spain</option>
+                <option value="Italy">Italy</option>
+                <option value="Sweden">Sweden</option>
+                <option value="Norway">Norway</option>
+                <option value="Denmark">Denmark</option>
+                <option value="Switzerland">Switzerland</option>
+                <option value="Australia">Australia</option>
+                <option value="Singapore">Singapore</option>
+                <option value="Japan">Japan</option>
+                <option value="India">India</option>
+                <option value="Other">Other / multiple</option>
               </select>
             </div>
 
-            <fieldset id="pressureSourcesFieldset">
-              <label>5) Where is pressure coming from? (pick up to 3)</label>
+            <fieldset id="pressureSourcesFieldset" class="qBlock">
+              <label>5) Where's the pressure coming from? (pick up to 3)</label>
               <div class="choice-grid two">
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="pressureSources" value="board" /><span>Board</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="pressureSources" value="regulator" /><span>Regulator</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="pressureSources" value="insurer" /><span>Insurer</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="pressureSources" value="customers" /><span>Customers</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="pressureSources" value="internal" /><span>Internal only</span></span></label>
+                <label class="choice">
+                  <span class="choice-row"><input type="checkbox" name="pressureSources" value="board" /><span>Board</span></span>
+                  <small>Board-level pressure for defensible readiness and decisions.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="checkbox" name="pressureSources" value="regulator" /><span>Regulator</span></span>
+                  <small>Regulatory or audit expectations are driving urgency.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="checkbox" name="pressureSources" value="insurer" /><span>Insurer</span></span>
+                  <small>Insurance evidence requirements are shaping priorities.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="checkbox" name="pressureSources" value="customers" /><span>Customers</span></span>
+                  <small>Customer assurance and due diligence are forcing pace.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="checkbox" name="pressureSources" value="internal" /><span>Internal only</span></span>
+                  <small>Pressure is internal, not yet externally driven.</small>
+                </label>
               </div>
               <p class="help">Selected: <span id="pressureCount">0</span> / 3</p>
             </fieldset>
 
-            <fieldset id="urgentWinFieldset">
-              <label>6) Most urgent 90-day win</label>
+            <fieldset id="urgentWinFieldset" class="qBlock">
+              <label>6) What's the most urgent 90-day win?</label>
               <div class="choice-grid two">
-                <label class="choice"><span class="choice-row"><input type="radio" name="urgentWin" value="boardEvidence" /><span>Board-ready evidence</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="radio" name="urgentWin" value="fasterDecisions" /><span>Faster response decisions</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="radio" name="urgentWin" value="attackSurface" /><span>Shrink attack surface</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="radio" name="urgentWin" value="workforce" /><span>Workforce readiness</span></span></label>
+                <label class="choice">
+                  <span class="choice-row"><input type="radio" name="urgentWin" value="boardEvidence" /><span>Board-ready evidence &amp; benchmarks</span></span>
+                  <small>Translate readiness into board-defensible proof and clear benchmark position.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="radio" name="urgentWin" value="fasterDecisions" /><span>Faster detection/response decisions</span></span>
+                  <small>Improve MTTD/MTTR and crisis decision quality under pressure.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="radio" name="urgentWin" value="attackSurface" /><span>Shrink attack surface &amp; remediation time</span></span>
+                  <small>Cut exploitable risk in code, cloud, identity, and network faster.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="radio" name="urgentWin" value="safeAI" /><span>Safe AI adoption &amp; governance</span></span>
+                  <small>Adopt AI with tested controls, clear guardrails, and accountable governance.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="radio" name="urgentWin" value="workforce" /><span>Workforce readiness &amp; retention</span></span>
+                  <small>Increase role readiness, accelerate onboarding, and retain key talent.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="radio" name="urgentWin" value="thirdParty" /><span>Third-party resilience</span></span>
+                  <small>Improve supplier resilience and vendor incident containment confidence.</small>
+                </label>
               </div>
             </fieldset>
 
-            <fieldset id="groupsFieldset">
-              <label>7) Teams in scope</label>
-              <div class="choice-grid two">
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="groups" value="soc" /><span>SOC / IR</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="groups" value="secops" /><span>Security operations</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="groups" value="dev" /><span>Engineering / DevSecOps</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="groups" value="leaders" /><span>Security leadership</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="groups" value="it" /><span>IT / platform</span></span></label>
+            <fieldset id="groupsFieldset" class="qBlock">
+              <label>7) Teams who need to be ready (select any)</label>
+              <div class="choice-grid chips">
+                <label class="choice chip-choice"><span class="choice-row"><input type="checkbox" name="groups" value="soc" /><span>SOC / Incident Response</span></span></label>
+                <label class="choice chip-choice"><span class="choice-row"><input type="checkbox" name="groups" value="appsec" /><span>AppSec / Developers</span></span></label>
+                <label class="choice chip-choice"><span class="choice-row"><input type="checkbox" name="groups" value="cloud" /><span>Cloud security</span></span></label>
+                <label class="choice chip-choice"><span class="choice-row"><input type="checkbox" name="groups" value="itops" /><span>IT ops / infrastructure</span></span></label>
+                <label class="choice chip-choice"><span class="choice-row"><input type="checkbox" name="groups" value="identity" /><span>Identity &amp; access (IAM)</span></span></label>
+                <label class="choice chip-choice"><span class="choice-row"><input type="checkbox" name="groups" value="grc" /><span>GRC / compliance</span></span></label>
+                <label class="choice chip-choice"><span class="choice-row"><input type="checkbox" name="groups" value="data" /><span>Data / privacy</span></span></label>
+                <label class="choice chip-choice"><span class="choice-row"><input type="checkbox" name="groups" value="product" /><span>Product / platform security</span></span></label>
+                <label class="choice chip-choice"><span class="choice-row"><input type="checkbox" name="groups" value="exec" /><span>Executive Crisis Team (CMT)</span></span></label>
+                <label class="choice chip-choice"><span class="choice-row"><input type="checkbox" name="groups" value="workforce" /><span>Wider workforce</span></span></label>
+                <label class="choice chip-choice"><span class="choice-row"><input type="checkbox" name="groups" value="third" /><span>Third-party / supplier readiness</span></span></label>
               </div>
             </fieldset>
 
-            <fieldset id="fitScopeFieldset">
-              <label>8) Scope requirement</label>
+            <fieldset id="fitScopeFieldset" class="qBlock">
+              <label>8) Scope of the program</label>
               <div class="choice-grid two">
                 <label class="choice">
-                  <span class="choice-row"><input type="radio" name="fitScope" value="single" /><span>Single team</span></span>
-                  <small>Focused use case</small>
+                  <span class="choice-row"><input type="radio" name="fitScope" value="single" /><span>Single team / single function</span></span>
+                  <small>Contained rollout focused on one benefitting group.</small>
                 </label>
                 <label class="choice">
-                  <span class="choice-row"><input type="radio" name="fitScope" value="multi" /><span>Multi-team</span></span>
-                  <small>Cross-functional rollout</small>
+                  <span class="choice-row"><input type="radio" name="fitScope" value="multi" /><span>Multiple teams within a function</span></span>
+                  <small>Needs coordination across squads or sub-teams.</small>
                 </label>
                 <label class="choice">
-                  <span class="choice-row"><input type="radio" name="fitScope" value="enterprise" /><span>Enterprise</span></span>
-                  <small>Broad regional/business coverage</small>
+                  <span class="choice-row"><input type="radio" name="fitScope" value="enterprise" /><span>Enterprise / multi-region / exec plus technical</span></span>
+                  <small>Coverage expands across functions, regions, and leaders.</small>
                 </label>
               </div>
             </fieldset>
@@ -903,58 +1794,81 @@
         <details id="stageB">
           <summary>Stage B · Qualification depth (optional)</summary>
           <div class="detail-body">
-            <div class="grid-2">
+            <div class="grid-2 qBlock">
               <div>
                 <label for="companySize">Company size</label>
                 <select id="companySize">
                   <option value="">Select...</option>
-                  <option value="lt500">&lt; 500</option>
-                  <option value="500-2k">500 - 2,000</option>
-                  <option value="2k-10k">2,000 - 10,000</option>
-                  <option value="10k-50k">10,000 - 50,000</option>
+                  <option value="lt500">&lt; 500 employees</option>
+                  <option value="500-2k">500-2,000</option>
+                  <option value="2k-10k">2,000-10,000</option>
+                  <option value="10k-50k">10,000-50,000</option>
                   <option value="50kplus">50,000+</option>
                 </select>
               </div>
               <div>
-                <label for="rhythm">Cadence today</label>
+                <label for="rhythm">Cyber resilience cadence today (best fit)</label>
                 <select id="rhythm">
                   <option value="">Select...</option>
-                  <option value="ad_hoc">Ad hoc</option>
+                  <option value="adhoc">Ad hoc</option>
                   <option value="quarterly">Quarterly</option>
                   <option value="monthly">Monthly</option>
-                  <option value="continuous">Continuous</option>
+                  <option value="program">Programmatic</option>
                 </select>
               </div>
             </div>
 
-            <fieldset>
-              <label>Risk environments (pick up to 2)</label>
+            <fieldset id="riskEnvsFieldset" class="qBlock">
+              <label>Which environment is driving risk? (pick up to 2)</label>
               <div class="choice-grid two">
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="riskEnvs" value="code" /><span>Code / app</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="riskEnvs" value="cloud" /><span>Cloud</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="riskEnvs" value="identity" /><span>Identity</span></span></label>
-                <label class="choice"><span class="choice-row"><input type="checkbox" name="riskEnvs" value="socir" /><span>SOC / IR</span></span></label>
+                <label class="choice">
+                  <span class="choice-row"><input type="checkbox" name="riskEnvs" value="code" /><span>Code</span></span>
+                  <small>Application and SDLC risk is driving urgency.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="checkbox" name="riskEnvs" value="cloud" /><span>Cloud</span></span>
+                  <small>Cloud exposure and misconfiguration are core concerns.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="checkbox" name="riskEnvs" value="identity" /><span>Identity</span></span>
+                  <small>Credential abuse and IAM weaknesses are driving risk.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="checkbox" name="riskEnvs" value="ot" /><span>OT</span></span>
+                  <small>Operational technology / ICS risk needs coverage.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="checkbox" name="riskEnvs" value="enterpriseApps" /><span>Enterprise apps</span></span>
+                  <small>Business-critical app estate is increasing risk.</small>
+                </label>
+                <label class="choice">
+                  <span class="choice-row"><input type="checkbox" name="riskEnvs" value="socir" /><span>Mostly SOC / IR</span></span>
+                  <small>The pressure is mainly in detection, response, and coordination.</small>
+                </label>
               </div>
             </fieldset>
 
-            <div class="grid-2">
+            <div class="grid-2 qBlock">
               <div>
-                <label for="measuredOn">Measured on today</label>
+                <label for="measuredOn">What are you being measured on today?</label>
                 <select id="measuredOn">
                   <option value="">Select...</option>
-                  <option value="completion">Completion only</option>
-                  <option value="mix">Completion + some performance</option>
-                  <option value="performance">Performance outcomes</option>
+                  <option value="mttd">MTTD / MTTR</option>
+                  <option value="audit">Audit evidence</option>
+                  <option value="vuln">Vulnerability backlog</option>
+                  <option value="training">Training completion</option>
+                  <option value="notMeasured">Not measured well</option>
                 </select>
               </div>
               <div>
-                <label for="orgPain">Biggest pain point</label>
+                <label for="orgPain">Where are your biggest pain points?</label>
                 <select id="orgPain">
                   <option value="">Select...</option>
-                  <option value="proof">Cannot prove readiness</option>
-                  <option value="speed">Slow response decisions</option>
-                  <option value="skills">Skills and readiness gaps</option>
-                  <option value="reg">Audit or regulator pressure</option>
+                  <option value="skillsCoverage">Skills coverage &amp; onboarding</option>
+                  <option value="coordination">Cross-team coordination</option>
+                  <option value="externalProof">Proving to external stakeholders</option>
+                  <option value="vendorRisk">Vendor risk</option>
+                  <option value="aiRisk">AI risk</option>
                 </select>
               </div>
             </div>
@@ -964,48 +1878,48 @@
         <details id="stageC">
           <summary>Stage C · Solution shaping (optional)</summary>
           <div class="detail-body">
-            <div class="grid-2">
+            <div class="grid-2 qBlock">
               <div>
-                <label for="fitRealism">Realism requirement</label>
+                <label for="fitRealism">How realistic do exercises need to be?</label>
                 <select id="fitRealism">
                   <option value="">Select...</option>
-                  <option value="generic">Generic scenarios</option>
-                  <option value="tooling">Tooling-aware scenarios</option>
-                  <option value="bespoke">Mirror environment</option>
+                  <option value="generic">Best-practice / generic scenarios are fine</option>
+                  <option value="tooling">Needs to reflect our tooling and processes</option>
+                  <option value="bespoke">Must mirror our environment and threat landscape</option>
                 </select>
               </div>
               <div>
-                <label for="fitToday">Current state</label>
+                <label for="fitToday">Current state (closest match)</label>
                 <select id="fitToday">
                   <option value="">Select...</option>
-                  <option value="starting">Early stage</option>
-                  <option value="developing">Developing practice</option>
-                  <option value="mature">Mature, scaling further</option>
+                  <option value="training">Mainly training completion today</option>
+                  <option value="adhoc">Exercises exist, but they are ad hoc and do not close gaps</option>
+                  <option value="scrutiny">Already under scrutiny (audits, board, regulators)</option>
                 </select>
               </div>
             </div>
-            <div class="grid-2">
+            <div class="grid-2 qBlock">
               <div>
-                <label for="fitServices">Delivery support</label>
+                <label for="fitServices">Delivery style they need</label>
                 <select id="fitServices">
                   <option value="">Select...</option>
-                  <option value="diy">Self-serve</option>
+                  <option value="diy">Self-serve / light enablement</option>
                   <option value="guided">Guided program support</option>
-                  <option value="whiteglove">Managed partnership</option>
+                  <option value="whiteglove">Dedicated program team + evidence packaging + bespoke realism</option>
                 </select>
               </div>
               <div>
-                <label for="fitRiskFrame">Risk framing</label>
+                <label for="fitRiskFrame">How they describe the problem</label>
                 <select id="fitRiskFrame">
                   <option value="">Select...</option>
-                  <option value="compliance">Compliance-driven</option>
-                  <option value="operational">Operational resilience</option>
-                  <option value="business">Business risk and value</option>
+                  <option value="skills">We need stronger skills</option>
+                  <option value="readiness">We need better response outcomes and coordination</option>
+                  <option value="governance">We need proof for governance</option>
                 </select>
               </div>
             </div>
 
-            <div class="grid-2">
+            <div class="grid-2 qBlock">
               <div>
                 <label for="industry">Industry</label>
                 <input id="industry" type="text" placeholder="e.g. Financial services" />
@@ -1016,14 +1930,14 @@
                   <option value="">Select...</option>
                   <option value="NA">North America</option>
                   <option value="UKI">UK &amp; Ireland</option>
-                  <option value="EU">Europe</option>
+                  <option value="EU">Europe (EU)</option>
                   <option value="APAC">APAC</option>
-                  <option value="Other">Other / global</option>
+                  <option value="Other">Other / Global</option>
                 </select>
               </div>
             </div>
 
-            <div>
+            <div class="qBlock">
               <label for="regs">Regulatory references (comma separated)</label>
               <input id="regs" type="text" placeholder="e.g. DORA, NIS2, ISO 27001" />
             </div>
@@ -1031,9 +1945,9 @@
         </details>
 
         <details id="stageD">
-          <summary>Stage D · Contact and handoff (submit stage)</summary>
+          <summary>Stage D · Contact details (submit stage)</summary>
           <div class="detail-body">
-            <div class="grid-2">
+            <div class="grid-2 qBlock">
               <div>
                 <label for="email">Business email (required to submit)</label>
                 <input id="email" type="email" placeholder="name@company.com" />
@@ -1043,8 +1957,8 @@
                 <input id="phone" type="tel" placeholder="+1 555 123 4567" />
               </div>
             </div>
-            <div>
-              <label for="notes">Notes for AE (optional)</label>
+            <div class="qBlock">
+              <label for="notes">Additional notes (optional)</label>
               <textarea id="notes" placeholder="Upcoming milestones, timeline, stakeholders, etc."></textarea>
             </div>
             <label class="choice" style="display:block;">
@@ -1057,22 +1971,22 @@
         </details>
 
         <div class="actions">
-          <button type="button" id="btnRecommend" class="primary">See initial recommendation</button>
+          <button type="button" id="btnRecommend" class="primary hideInFollowup">Preview recommendation</button>
           <button type="button" id="btnSaveDraft">Save draft</button>
-          <button type="button" id="btnLoadDraft">Load draft</button>
-          <button type="button" id="btnClear">Clear</button>
-          <button type="button" id="btnSubmit" class="success">Submit for AE review</button>
+          <button type="button" id="btnLoadDraft" class="hideInFollowup">Load draft</button>
+          <button type="button" id="btnClear" class="hideInFollowup">Clear</button>
+          <button type="button" id="btnSubmit" class="success">Submit responses</button>
         </div>
 
         <div id="statusMessage" class="alert" role="status" aria-live="polite">
-          This prototype stores draft data in your browser only.
+          You can save and return later in this browser.
         </div>
       </section>
 
       <aside class="right-rail">
         <section class="panel selection-panel" aria-labelledby="selectionHeading">
-          <h2 id="selectionHeading">Your Selection</h2>
-          <p class="sub">Live summary of what the customer has configured so far.</p>
+          <h2 id="selectionHeading">Your snapshot</h2>
+          <p class="sub">A live summary of what you have already answered.</p>
 
           <div class="selection-grid">
             <article class="selection-cell">
@@ -1098,8 +2012,8 @@
             <div class="selection-list">
               <div class="selection-row"><b>Company</b><span class="muted" id="selCompany">Not entered</span></div>
               <div class="selection-row"><b>Scope</b><span class="muted" id="selScope">Not selected</span></div>
-              <div class="selection-row"><b>Intent band</b><span id="selIntentBand">Low</span></div>
-              <div class="selection-row"><b>AE-ready</b><span id="selAeReady">0 / 8</span></div>
+              <div class="selection-row"><b>Completion</b><span id="selIntentBand">0%</span></div>
+              <div class="selection-row"><b>Answered</b><span id="selAeReady">0 / 22</span></div>
             </div>
           </div>
 
@@ -1131,18 +2045,18 @@
 
         <section class="panel recommendationPanel" id="initialRecommendationPanel" hidden>
           <div class="section-head">
-            <h3>Initial recommendation</h3>
+            <h3>Recommendation preview</h3>
             <span class="tag" id="recConfidenceTag">Confidence: 0%</span>
           </div>
           <div class="section-body">
             <article class="recTierCard">
-              <p class="recLabel">Suggested starting package</p>
+              <p class="recLabel">Suggested starting point</p>
               <p class="recTier" id="recTierName">Core package</p>
-              <p class="recWhy" id="recSummary">Complete Stage A to generate recommendation rationale.</p>
+              <p class="recWhy" id="recSummary">Complete Stage A to generate recommendation guidance.</p>
             </article>
             <div class="recCols">
               <article class="recCol">
-                <h4>Why this fit</h4>
+                <h4>Why this is recommended</h4>
                 <ul id="recReasons"></ul>
               </article>
               <article class="recCol">
@@ -1155,7 +2069,7 @@
       </aside>
       </div>
 
-      <section class="panel">
+      <section class="panel" hidden>
         <h2>AE Queue Preview</h2>
         <p class="sub">This is the record object an AE/SDR queue would receive.</p>
         <div class="pill-row" id="pillRow">
@@ -1172,7 +2086,7 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" hidden>
         <h2>Embed Pattern</h2>
         <p class="embed">
           This page can run as a hosted route, iframe embed, or script-injected module.

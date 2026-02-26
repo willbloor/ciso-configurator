@@ -1,4 +1,4 @@
-/* Auto-generated from assets/data/question-bank.v1.csv on 2026-02-23T19:12:04.443Z. */
+/* Auto-generated from assets/data/question-bank.v1.csv on 2026-02-26T10:43:16.805Z. */
 /* eslint-disable */
 (function(){
   const rows = [
@@ -312,6 +312,21 @@
     "title": "Regulatory references not selected",
     "why": "References improve the evidence narrative for stakeholders.",
     "order": 210,
+    "requiredGuided": true,
+    "requiredAdvanced": true,
+    "requiredSdrLite": false,
+    "enabled": true
+  },
+  {
+    "id": "rq_stack",
+    "key": "stack",
+    "step": 4,
+    "stepLabel": "Context",
+    "group": "context_tooling",
+    "groupLabel": "Context and tooling",
+    "title": "Security tools and platform integrations not selected",
+    "why": "Tooling context improves integration-specific content and workflow recommendations.",
+    "order": 215,
     "requiredGuided": true,
     "requiredAdvanced": true,
     "requiredSdrLite": false,

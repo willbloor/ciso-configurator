@@ -1699,18 +1699,19 @@
       padding: 16px 0 30px;
     }
     .interShell{
-      border:1px solid var(--border);
+      border:1px solid color-mix(in srgb, var(--border) 90%, transparent);
       border-radius: var(--radius-lg);
-      background: var(--surface);
-      box-shadow: var(--shadow-card);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
+      box-shadow: var(--shadow-xl);
       overflow:hidden;
     }
     .interHead{
-      padding: 18px 20px 14px;
+      padding: 24px 24px 18px;
       border-bottom:1px solid var(--border);
       background:
-        radial-gradient(600px 220px at 8% -24%, color-mix(in srgb, var(--azure) 10%, transparent), transparent 70%),
-        linear-gradient(180deg, color-mix(in srgb, var(--surface) 95%, var(--accent) 5%), var(--surface));
+        radial-gradient(520px 220px at 20% -20%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%),
+        radial-gradient(480px 180px at 90% -30%, color-mix(in srgb, var(--lilac) 8%, transparent), transparent 70%),
+        linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, var(--accent) 8%), var(--surface));
     }
     .interTitleRow{
       display:flex;
@@ -1854,6 +1855,240 @@
       gap:8px;
       margin-top:12px;
     }
+    .interSectionShell{
+      display:grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items:start;
+      margin: 14px;
+      border:1px solid color-mix(in srgb, var(--border) 90%, transparent);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      overflow:hidden;
+    }
+    .interSectionNavWrap{
+      width: 100%;
+      border-right:1px solid var(--border);
+      background: var(--surface);
+    }
+    .interSectionNav{
+      position: sticky;
+      top: 10px;
+      display:grid;
+    }
+    .interSectionNavBtn{
+      appearance:none;
+      border:0;
+      border-bottom:1px solid var(--border);
+      background:transparent;
+      color: inherit;
+      text-align:left;
+      padding: 13px 12px;
+      display:grid;
+      grid-template-columns: 32px minmax(0, 1fr);
+      gap:10px;
+      align-items:center;
+      cursor:pointer;
+      transition: background .16s ease;
+      width:100%;
+    }
+    .interSectionNavBtn:hover{
+      background: var(--surface-2);
+    }
+    .interSectionNavBtn[data-active="true"]{
+      background: color-mix(in srgb, var(--azure) 8%, var(--surface));
+      box-shadow: inset 3px 0 0 color-mix(in srgb, var(--azure) 82%, var(--border));
+    }
+    .interSectionNavIcon{
+      inline-size: 28px;
+      block-size: 28px;
+      border-radius: var(--radius-sm);
+      border:1px solid color-mix(in srgb, var(--border) 90%, transparent);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 95%, var(--accent) 5%), var(--surface));
+      color: color-mix(in srgb, var(--muted) 76%, var(--text) 24%);
+      font-size:.66rem;
+      font-weight:800;
+      letter-spacing:.08em;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      line-height:1;
+    }
+    .interSectionNavBtn[data-active="true"] .interSectionNavIcon{
+      border-color: color-mix(in srgb, var(--azure) 48%, var(--border));
+      color: color-mix(in srgb, var(--azure) 82%, var(--text) 18%);
+      background: color-mix(in srgb, var(--azure) 8%, var(--surface));
+    }
+    .interSectionNavCopy{
+      min-width:0;
+      display:grid;
+      gap:2px;
+    }
+    .interSectionNavLabel{
+      font-size:.98rem;
+      font-weight:700;
+      letter-spacing:-.01em;
+      color: var(--text);
+      line-height:1.2;
+    }
+    .interSectionNavMeta{
+      font-size:.76rem;
+      color: var(--muted);
+      line-height:1.25;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .interSectionBody{
+      min-width:0;
+    }
+    .interSectionAnchor{
+      scroll-margin-top: 92px;
+    }
+    .interSectionBody #contentRecommendationsView.interEmbeddedContent{
+      display:block;
+      padding:0;
+      margin:0;
+    }
+    .interSectionBody #contentRecommendationsView.interEmbeddedContent .recommendationsShell{
+      border:0;
+      border-radius:0;
+      background:transparent;
+      padding:0;
+      box-shadow:none;
+    }
+    .interSectionBody #contentRecommendationsView.interEmbeddedContent .recommendationsShell::before{
+      display:none;
+    }
+    @media (min-width: 981px){
+      .interSectionNavWrap{
+        width: 72px;
+        transition: width .2s ease;
+      }
+      .interSectionNavWrap:hover,
+      .interSectionNavWrap:focus-within{
+        width: 220px;
+      }
+      .interSectionNavWrap:not(:hover):not(:focus-within) .interSectionNavBtn{
+        grid-template-columns: 1fr;
+        justify-items:center;
+        padding: 13px 8px;
+      }
+      .interSectionNavWrap:not(:hover):not(:focus-within) .interSectionNavCopy{
+        display:none;
+      }
+    }
+    .interOverviewHead{
+      display:block;
+      margin-bottom:10px;
+    }
+    .interOverviewSub{
+      margin: 6px 0 0;
+      font-size:.88rem;
+      line-height:1.4;
+      color: var(--muted);
+    }
+    .interOverviewStatusCards{
+      display:grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap:10px;
+    }
+    .interOverviewCard{
+      border:1px solid color-mix(in srgb, var(--border) 85%, transparent);
+      border-radius: var(--radius-md);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
+      padding: 11px;
+      display:grid;
+      gap:9px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+      position:relative;
+      overflow:hidden;
+    }
+    .interOverviewCard::before{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      top:0;
+      height:4px;
+      border-radius: var(--radius-md) var(--radius-md) 0 0;
+      background: linear-gradient(90deg, var(--azure), color-mix(in srgb, var(--azure) 55%, var(--surface)));
+      opacity:.7;
+    }
+    .interOverviewCard[data-tone="ready"]{
+      border-color: color-mix(in srgb, var(--lime) 44%, var(--border));
+    }
+    .interOverviewCard[data-tone="ready"]::before{
+      background: linear-gradient(90deg, var(--lime), color-mix(in srgb, var(--lime) 55%, var(--surface)));
+    }
+    .interOverviewCardTop{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+    }
+    .interOverviewActionSpacer{
+      min-width:56px;
+      height:32px;
+      display:inline-block;
+    }
+    .interOverviewStatusLabel{
+      font-size:.92rem;
+      font-weight:700;
+      color: var(--text);
+      line-height:1.2;
+      letter-spacing:-.01em;
+    }
+    .interOverviewVizRow{
+      display:grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap:10px;
+      align-items:center;
+    }
+    .interOverviewRing{
+      width:66px;
+      height:66px;
+      flex:0 0 auto;
+    }
+    .interOverviewRing::before{
+      inset:5px;
+    }
+    .interOverviewRing > span{
+      font-size:.8rem;
+      font-weight:800;
+      letter-spacing:-.01em;
+    }
+    .interOverviewMetricWrap{
+      min-width:0;
+    }
+    .interOverviewMacro{
+      margin:0;
+      font-size: clamp(1.5rem, 2.5vw, 2rem);
+      line-height:.94;
+      letter-spacing:-.03em;
+      font-weight: 820;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .interOverviewMacro.is-gaps{
+      font-size: clamp(1.8rem, 3.2vw, 2.4rem);
+      letter-spacing:-.05em;
+    }
+    .interOverviewMacroLabel{
+      margin:4px 0 0;
+      font-size:.72rem;
+      line-height:1.2;
+      color: var(--muted);
+      letter-spacing:.08em;
+      text-transform: uppercase;
+      font-weight:740;
+    }
+    .interOverviewStatusMeta{
+      margin:0;
+      font-size:.82rem;
+      color: var(--muted);
+      line-height:1.3;
+      color: color-mix(in srgb, var(--muted) 90%, var(--text) 10%);
+    }
     .interPill{
       display:inline-flex;
       align-items:center;
@@ -1865,11 +2100,25 @@
       background: var(--surface);
     }
     .interPackageHero{
+      margin: 14px 14px 0;
       padding: 16px 20px;
-      border-bottom:1px solid var(--border);
-      background:
-        radial-gradient(680px 240px at 6% -40%, color-mix(in srgb, var(--azure) 13%, transparent), transparent 72%),
-        linear-gradient(180deg, color-mix(in srgb, var(--surface) 97%, var(--accent) 3%), var(--surface));
+      border:1px solid color-mix(in srgb, var(--border) 85%, transparent);
+      border-radius: var(--radius-md);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+      position:relative;
+      overflow:hidden;
+    }
+    .interPackageHero::before{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      top:0;
+      height:4px;
+      border-radius: var(--radius-md) var(--radius-md) 0 0;
+      background: linear-gradient(90deg, var(--azure), color-mix(in srgb, var(--azure) 55%, var(--surface)));
+      opacity:.82;
     }
     .interPackageKicker{
       margin:0;
@@ -1897,28 +2146,50 @@
     .interPackageHero[data-tier-key="core"] .interPackageTitle{
       color: color-mix(in srgb, var(--azure) 88%, var(--text) 12%);
     }
+    .interPackageHero[data-tier-key="core"]::before{
+      background: linear-gradient(90deg, var(--azure), color-mix(in srgb, var(--azure) 55%, var(--surface)));
+    }
     .interPackageHero[data-tier-key="adv"] .interPackageTitle{
       color: color-mix(in srgb, var(--azure) 92%, var(--lilac) 8%);
     }
+    .interPackageHero[data-tier-key="adv"]::before{
+      background: linear-gradient(90deg, color-mix(in srgb, var(--azure) 78%, var(--lilac) 22%), color-mix(in srgb, var(--lilac) 62%, var(--surface)));
+    }
     .interPackageHero[data-tier-key="ult"] .interPackageTitle{
       color: color-mix(in srgb, var(--lime) 75%, var(--text) 25%);
+    }
+    .interPackageHero[data-tier-key="ult"]::before{
+      background: linear-gradient(90deg, var(--lime), color-mix(in srgb, var(--lime) 55%, var(--surface)));
     }
     .interViz{
       display:grid;
       grid-template-columns: 1.15fr .85fr;
       gap:14px;
-      padding: 14px;
-      border-bottom:1px solid var(--border);
-      background:
-        radial-gradient(760px 260px at 96% -40%, color-mix(in srgb, var(--lilac) 9%, transparent), transparent 76%),
-        linear-gradient(180deg, color-mix(in srgb, var(--surface) 97%, var(--azure) 3%), var(--surface));
+      margin: 0 14px;
+      padding: 14px 0 0;
     }
     .interVizCard{
-      border:1px solid var(--border);
+      border:1px solid color-mix(in srgb, var(--border) 85%, transparent);
       border-radius: var(--radius-md);
-      background: color-mix(in srgb, var(--surface) 93%, var(--accent) 7%);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
       padding: 12px;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.4);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+      position:relative;
+      overflow:hidden;
+    }
+    .interVizCard::before{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      top:0;
+      height:4px;
+      border-radius: var(--radius-md) var(--radius-md) 0 0;
+      background: linear-gradient(90deg, var(--azure), color-mix(in srgb, var(--azure) 55%, var(--surface)));
+      opacity:.7;
+    }
+    .interVizCard:nth-of-type(2)::before{
+      background: linear-gradient(90deg, color-mix(in srgb, var(--azure) 72%, var(--lilac) 28%), color-mix(in srgb, var(--lilac) 60%, var(--surface)));
     }
     .interPackageHero.is-enter,
     .interVizCard.is-enter,
@@ -2029,13 +2300,14 @@
       display:grid;
       grid-template-columns: 1.05fr .95fr;
       gap:14px;
-      padding: 14px;
+      padding: 0 14px 14px;
     }
     .interCard{
-      border:1px solid var(--border);
+      border:1px solid color-mix(in srgb, var(--border) 85%, transparent);
       border-radius: var(--radius-md);
-      background: color-mix(in srgb, var(--surface) 96%, var(--accent) 4%);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
       padding: 14px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
     }
     .interCard h3{
       margin:0 0 10px;
@@ -2056,6 +2328,13 @@
     }
     .interPitchHead h3{
       margin:0;
+    }
+    .interPitchActions{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
     }
     .interPitchStatus{
       display:inline-flex;
@@ -2088,10 +2367,11 @@
       gap:10px;
     }
     .interPitchItem{
-      border:1px solid color-mix(in srgb, var(--border) 86%, transparent);
-      border-radius: 10px;
-      background: color-mix(in srgb, var(--surface) 92%, var(--azure) 8%);
+      border:1px solid color-mix(in srgb, var(--border) 85%, transparent);
+      border-radius: var(--radius-sm);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
       padding: 10px 11px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
     }
     .interPitchLabel{
       margin:0 0 6px;
@@ -2146,7 +2426,7 @@
     }
     .interFollowupRail{
       position: sticky;
-      top: 10px;
+      top: 0;
       align-self:start;
     }
     .interGapItem{
@@ -2236,7 +2516,7 @@
       cursor:pointer;
     }
     .interFollowupComposer{
-      margin-top:12px;
+      margin-top:0;
       border:1px solid color-mix(in srgb, var(--azure) 24%, var(--border));
       border-radius: var(--radius-sm);
       background: color-mix(in srgb, var(--azure) 6%, var(--surface));
@@ -2337,10 +2617,39 @@
       color: color-mix(in srgb, var(--lime) 76%, var(--text));
       font-weight:650;
     }
+    @media (max-width: 1520px){
+      .interOverviewStatusCards{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
     @media (max-width: 980px){
       .grid{ grid-template-columns: 1fr; }
       .sticky{ position: static !important; top:auto !important; }
       .progress{ justify-content:flex-start; }
+      .interSectionShell{ grid-template-columns: 1fr; }
+      .interSectionNavWrap{
+        border-right:0;
+        border-bottom:1px solid var(--border);
+        background: var(--surface);
+      }
+      .interSectionNav{
+        position: static;
+        display:flex;
+        overflow:auto;
+      }
+      .interSectionNavBtn{
+        border-bottom:0;
+        border-right:1px solid color-mix(in srgb, var(--border) 90%, transparent);
+        min-width: 176px;
+        flex:0 0 auto;
+      }
+      .interSectionNavMeta{ display:none; }
+      .interOverviewHead{
+        flex-direction:column;
+      }
+      .interOverviewStatusCards{
+        grid-template-columns: 1fr;
+      }
       .interGapFollowupLayout{ grid-template-columns: 1fr; }
       .interFollowupRail{ position: static; }
       .viewActionSlot{
@@ -4717,10 +5026,24 @@
 }
 
 .recommendationsShell{
-  border:1px solid var(--border);
-  border-radius:18px;
-  background: var(--panel);
-  padding:24px;
+  border:1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+  padding:18px;
+  position:relative;
+  overflow:hidden;
+}
+.recommendationsShell::before{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  top:0;
+  height:4px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: linear-gradient(90deg, var(--azure), color-mix(in srgb, var(--azure) 55%, var(--surface)));
+  opacity:.7;
 }
 .recommendationsHead{
   display:flex;
@@ -4765,12 +5088,26 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .contentRecCard{
-  border:1px solid var(--border);
-  background: var(--soft2);
-  border-radius:12px;
+  border:1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
+  border-radius: var(--radius-sm);
   padding:14px;
   display:grid;
   gap:8px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+  position:relative;
+  overflow:hidden;
+}
+.contentRecCard::before{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  top:0;
+  height:3px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: linear-gradient(90deg, var(--azure), color-mix(in srgb, var(--azure) 55%, var(--surface)));
+  opacity:.68;
 }
 .contentRecImageWrap{
   margin:-14px -14px 2px;

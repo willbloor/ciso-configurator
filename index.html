@@ -137,9 +137,6 @@
           </svg>
         </button>
         <button class="btn primary small" type="button" id="globalEditConfigurator" hidden>Edit record</button>
-        <button class="btn secondaryBlue small" type="button" id="globalShareRecord" data-action="openShareRecord" hidden>Share</button>
-        <button class="btn secondaryBlue small" type="button" id="globalViewRecommendations" hidden>View content recommendations</button>
-        <button class="btn secondaryBlue small" type="button" id="globalBookConsultation" hidden>Book consultation</button>
       </div>
     </div>
     <nav class="workspaceBreadcrumb" id="workspaceBreadcrumb" aria-label="Workspace breadcrumb" hidden>
@@ -549,28 +546,18 @@
       <article class="interShell" id="interstitialContent"></article>
     </section>
 
-    <section id="contentRecommendationsView" aria-label="Content recommendations view">
+    <section id="contentRecommendationsView" aria-label="Content view">
       <article class="recommendationsShell">
         <header class="recommendationsHead">
           <div>
-            <h2 id="contentRecommendationsTitle">Resources for this company</h2>
-            <p class="recommendationsSub" id="contentRecommendationsSub">Recommended resources tailored for this account.</p>
+            <h2 id="contentRecommendationsTitle">Content for this company</h2>
+            <p class="recommendationsSub" id="contentRecommendationsSub">Recommended content tailored for this account.</p>
           </div>
           <div class="recommendationsHeadActions">
-            <span class="dashboardPill" id="contentRecommendationsCompletion">Completion: 0/22 (0%)</span>
-            <button class="btn primary small" type="button" id="generateRecommendationEmailBtn" data-action="openRecommendationEmail">Generate email</button>
             <button class="btn secondaryBlue small" type="button" id="previewCustomerPageTemplateBtn" data-action="previewCustomerPageTemplate">Preview customer page</button>
             <button class="btn secondaryBlue small" type="button" id="generateCustomerPageTemplateBtn" data-action="generateCustomerPageTemplate">Download customer page</button>
-            <button class="btn secondaryBlue small" type="button" id="openCrmExportFromRecommendationsBtn" data-action="openCrmExport">CRM export</button>
-            <button class="btn small" type="button" id="contentRecommendationsBackBtn" data-action="backToReview">Back to review</button>
           </div>
         </header>
-        <div class="recommendationsMeta">
-          <span class="dashboardPill" id="contentRecommendationsTier">Package: —</span>
-          <span class="dashboardPill" id="contentRecommendationsOutcomes">Outcomes: —</span>
-          <span class="dashboardPill" id="contentRecommendationsAudience">Company: —</span>
-          <span class="dashboardPill" id="contentRecommendationsRss">RSS: loading feeds…</span>
-        </div>
         <div class="recommendationsGate" id="contentRecommendationsGate" hidden></div>
         <div class="recommendationsGrid" id="contentRecommendationsGrid"></div>
         <section class="customerTemplatePreviewWrap" id="customerTemplatePreviewWrap" hidden aria-label="Customer page template preview">
@@ -655,9 +642,6 @@
             </div>
               <div class="titleActions">
                 <div class="titleCollabTools" id="configuratorCollabTools">
-                  <button class="titleAddUserIconBtn" type="button" id="configuratorShareRecordBtn" data-action="openShareRecord" data-collab-add-trigger="true" aria-label="Add collaborator">
-                    <span aria-hidden="true">+</span>
-                  </button>
                   <div class="collabAvatarStack collabAvatarStack--md" id="configuratorCollabAvatars" aria-label="Record collaborators" hidden></div>
                 </div>
               <button class="btn secondaryBlue small" type="button" id="jumpNextIncompleteBtn" data-jump-next-incomplete="true" title="Jump to next incomplete section">
@@ -1328,8 +1312,8 @@
                     </div>
                     <div class="sumBody" id="sumTier">—</div>
                     <div class="reviewRecommendationAccess">
-                      <button class="btn secondaryBlue small" type="button" id="viewContentRecommendationsBtn" data-action="openRecommendations" data-locked="true" disabled>View content recommendations</button>
-                      <p class="reviewRecommendationHint" id="viewContentRecommendationsHint">Complete at least 90% of this profile to unlock recommendations.</p>
+                      <button class="btn secondaryBlue small" type="button" id="viewContentRecommendationsBtn" data-action="openRecommendations" data-locked="true" disabled>View content</button>
+                      <p class="reviewRecommendationHint" id="viewContentRecommendationsHint">Complete at least 90% of this profile to unlock content.</p>
                     </div>
                   </div>
 
@@ -1709,7 +1693,7 @@
         <div>
           <div class="settingsLabel" style="margin:0 0 8px;">Email builder</div>
           <h3 class="consultationTitle" id="emailBuilderCompany">Record</h3>
-          <p class="consultationSub" id="emailBuilderSub">Structured customer email based on current recommendations.</p>
+          <p class="consultationSub" id="emailBuilderSub">Structured customer email based on current content plan.</p>
         </div>
         <button class="btn small" id="closeEmailBuilder" type="button">Close</button>
       </div>
@@ -1721,7 +1705,7 @@
       <div class="consultationBody">
         <section class="consultationSection">
           <h4>Subject</h4>
-          <p class="emailBuilderSubject" id="emailBuilderSubject">Immersive recommendations</p>
+          <p class="emailBuilderSubject" id="emailBuilderSubject">Immersive content plan</p>
         </section>
         <section class="consultationSection">
           <h4>Email draft</h4>

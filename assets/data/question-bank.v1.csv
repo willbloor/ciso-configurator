@@ -20,4 +20,5 @@ rq_fit_risk_frame,fitRiskFrame,3,Package fit,package_fit,Package fit,Risk frame 
 rq_industry,industry,4,Context,context_regulatory,Context and regulatory,Industry not selected,Industry context changes suggested standards and language.,190,true,true,false,true
 rq_region,region,4,Context,context_regulatory,Context and regulatory,Region not selected,Region influences evidence and audit expectations.,200,true,true,false,true
 rq_regs,regs,4,Context,context_regulatory,Context and regulatory,Regulatory references not selected,References improve the evidence narrative for stakeholders.,210,true,true,false,true
+rq_stack,stack,4,Context,context_tooling,Context and tooling,Security tools and platform integrations not selected,Tooling context improves integration-specific content and workflow recommendations.,215,true,true,false,true
 rq_roi_visited,roiVisited,5,ROI estimate,roi_business_case,ROI and business case,ROI estimate not reviewed,ROI inputs are needed for investment and timing decisions.,220,true,true,false,true

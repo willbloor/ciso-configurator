@@ -694,6 +694,41 @@ Design and workflow updates deployed for self-service intake and dashboard follo
      - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
      - `for f in /Users/will.bloor/Documents/Configurator/assets/js/*.js; do node --check \"$f\"; done`
 
+37. Release-process compliance sweep for `codex/copy-rules` push/handoff
+   - Executed full gate checks on branch state before handoff confirmation:
+     - JS/runtime/script syntax checks (`node --check`) across app + widget + catalog + helper scripts
+     - README absolute-path audit (with expected historical removals for Firebase artifacts)
+     - generated artifact parity checks:
+       - `question-bank.v1.csv` ↔ `question-bank.js`
+       - `official-blog-rss-curated.csv` ↔ `official-blog-rss-fallback.js`
+       - `immersive-content-master.csv` ↔ `content-catalog.js`
+     - security checks:
+       - secret-pattern scan (no hits)
+       - `eval`/`new Function` scan (no active hits)
+       - CSP/security header verification in `vercel.json` + CSP/referrer meta check in `index.html`
+   - Updated workstream board status and handoff log for `copy-rules` with the completed gate evidence.
+   - Principle:
+     - pushes and handoffs must include explicit, repeatable validation evidence, not only a successful Git transport event.
+   - Cross-surface impact:
+     - process-only governance update; runtime behavior unchanged.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+     - `/Users/will.bloor/Documents/Configurator/docs/workstreams.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/copy-rules.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/content-catalog.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/official-blog-rss-fallback.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/question-bank.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/clean_content_csv_by_recency.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/generate_question_bank_js.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/reconcile_content_csvs.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/reconcile_operations_csvs.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/sync_official_blog_rss_curated.mjs`
+   - Residual risk / follow-up:
+     - no in-repo automated browser E2E suite exists; manual UI phrasing review still recommended before merge to shared branch.
+
 ## State Sync Guardrails (Critical, 2026-02-26)
 
 These are hard rules to prevent recurrence of the Tina Corp save-loss regression.

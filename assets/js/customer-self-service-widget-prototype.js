@@ -139,6 +139,28 @@
         return acc;
       }, {});
 
+      function copyRulesCall(methodName, payload){
+        const api = (window && window.immersiveCopyRules && typeof window.immersiveCopyRules === 'object')
+          ? window.immersiveCopyRules
+          : null;
+        if(!api || typeof api[methodName] !== 'function') return null;
+        try{
+          return api[methodName](payload || {});
+        }catch(err){
+          console.warn('[CopyRules:widget] Failed call:', methodName, err);
+          return null;
+        }
+      }
+
+      function followupAudienceHint(snapshotObj){
+        const snap = (snapshotObj && typeof snapshotObj === 'object') ? snapshotObj : {};
+        return copyRulesCall('inferAudience', {
+          audience: String(snap.messageAudience || '').trim().toLowerCase(),
+          role: String(snap.role || '').trim(),
+          mode: String(snap.fieldMode || '').trim().toLowerCase()
+        }) || 'manager';
+      }
+
       const widgetSelectCardConfig = {
         role: {
           columns: 5,
@@ -320,7 +342,9 @@
         customerFollowupProgressBar: document.getElementById('customerFollowupProgressBar'),
         customerFollowupSummary: document.getElementById('customerFollowupSummary'),
         customerFollowupIntro: document.getElementById('customerFollowupIntro'),
+        customerFollowupGateAlert: document.getElementById('customerFollowupGateAlert'),
         customerFollowupForm: document.getElementById('customerFollowupForm'),
+        fullQuestionnaireAccordion: document.getElementById('fullQuestionnaireAccordion'),
         selContact: document.getElementById('selContact'),
         selRole: document.getElementById('selRole'),
         selCountry: document.getElementById('selCountry'),
@@ -593,7 +617,8 @@
         const cols = Number(cfg.columns) || 2;
         const variant = String(cfg.variant || 'cards').trim().toLowerCase();
         const isChipVariant = variant === 'chips';
-        grid.className = `choice-grid select-card-grid is-${Math.max(2, Math.min(5, cols))}${isChipVariant ? ' chips' : ''}`;
+        const useTwoColumns = !isChipVariant && rows.length > 3;
+        grid.className = `choice-grid select-card-grid is-${Math.max(2, Math.min(5, cols))}${isChipVariant ? ' chips' : ''}${useTwoColumns ? ' two' : ''}`;
         const selectedValue = String((opts && opts.selectedValue) || '').trim();
         const nameKey = String((opts && opts.inputName) || `card_${source.id || source.name || 'select'}`).trim();
         const onSelect = (opts && typeof opts.onSelect === 'function') ? opts.onSelect : ()=> {};
@@ -752,6 +777,37 @@
       function isFilled(value){
         if(Array.isArray(value)) return value.length > 0;
         return String(value || '').trim().length > 0;
+      }
+
+      function hasFollowupContact(snapInput){
+        const snap = (snapInput && typeof snapInput === 'object') ? snapInput : snapshot();
+        const fullName = String((snap && snap.fullName) || '').trim();
+        const email = String((snap && snap.email) || '').trim();
+        const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        return !!fullName && emailOk;
+      }
+
+      function applyFollowupContactGate(snapInput){
+        const keys = (Array.isArray(state.followupModeKeys) ? state.followupModeKeys : [])
+          .filter((key)=> followupCatalogMap[key]);
+        if(!keys.length){
+          if(controls.btnApplyFollowupAnswers) controls.btnApplyFollowupAnswers.disabled = false;
+          return;
+        }
+        if(el.customerFollowupPanel){
+          el.customerFollowupPanel.classList.remove('is-locked');
+        }
+        if(el.customerFollowupGateAlert){
+          el.customerFollowupGateAlert.hidden = true;
+        }
+        if(el.customerFollowupForm){
+          Array.from(el.customerFollowupForm.querySelectorAll('input, select, textarea, button')).forEach((node)=> {
+            node.disabled = false;
+          });
+        }
+        if(controls.btnApplyFollowupAnswers){
+          controls.btnApplyFollowupAnswers.disabled = false;
+        }
       }
 
       function aeReadyCount(snap){
@@ -1140,10 +1196,11 @@
         }
 
         if(item.kind === 'radio'){
-          const grid = document.createElement('div');
-          grid.className = 'choice-grid two';
-          const selected = String(sourceValue || '');
           const options = groupOptions(item.sourceName);
+          const useTwoColumns = options.length > 3;
+          const grid = document.createElement('div');
+          grid.className = useTwoColumns ? 'choice-grid two' : 'choice-grid';
+          const selected = String(sourceValue || '');
           if(options.some((opt)=> String(opt.hint || '').trim())){
             wrap.setAttribute('data-layout', 'cards');
           }
@@ -1179,10 +1236,11 @@
         }
 
         if(item.kind === 'checkbox'){
-          const grid = document.createElement('div');
-          grid.className = 'choice-grid two';
-          const selected = new Set(Array.isArray(sourceValue) ? sourceValue : []);
           const options = groupOptions(item.sourceName);
+          const useTwoColumns = options.length > 3;
+          const grid = document.createElement('div');
+          grid.className = useTwoColumns ? 'choice-grid two' : 'choice-grid';
+          const selected = new Set(Array.isArray(sourceValue) ? sourceValue : []);
           const useChipLayout = item.sourceName === 'groups' && !options.some((opt)=> String(opt.hint || '').trim());
           if(useChipLayout){
             grid.className = 'choice-grid chips';
@@ -1295,8 +1353,13 @@
           el.customerFollowupIntro.textContent = `Please complete these ${keys.length} outstanding question${keys.length === 1 ? '' : 's'} so we can tailor your recommendation.`;
         }
         ensureStageVisibilityForKeys(keys);
+        if(el.fullQuestionnaireAccordion){
+          el.fullQuestionnaireAccordion.open = false;
+        }
         renderCustomerFollowupForm(keys);
-        updateFollowupModeProgress(snapshot());
+        const snap = snapshot();
+        updateFollowupModeProgress(snap);
+        applyFollowupContactGate(snap);
         if(el.customerFollowupForm){
           const firstControl = el.customerFollowupForm.querySelector('select, input, textarea');
           if(firstControl){
@@ -1316,7 +1379,8 @@
         }
         const snap = snapshot();
         const record = buildRecord(false);
-        const firstName = String((snap.fullName || '').trim().split(/\s+/)[0] || 'there');
+        const firstName = String((snap.fullName || '').trim().split(/\s+/)[0] || '');
+        const greeting = firstName ? `Hi ${firstName},` : 'Hi,';
         const focusBits = [];
         if(snap.urgentWin) focusBits.push(optionLabel('urgentWin', snap.urgentWin).toLowerCase());
         if(snap.fitScope) focusBits.push(`${optionLabel('fitScope', snap.fitScope).toLowerCase()} scope`);
@@ -1325,22 +1389,34 @@
           : 'Based on your initial configurator submission,';
         const link = buildFollowupFormUrl(record.recordId, selected);
         const questionLines = selected.map((key)=> `- ${followupCatalogMap[key].label}`);
-        const subject = `Quick follow-up on your configurator submission`;
-        const body = [
-          `Hi ${firstName},`,
-          '',
-          'Thank you for completing the configurator.',
-          `${focusLine} we just need a few extra details to tailor the recommendation:`,
-          ...questionLines,
-          '',
-          'Please use this short follow-up form:',
-          link,
-          '',
-          'Once complete, we will confirm next steps and propose the right attendees for a short discovery call.',
-          '',
-          'Thanks,',
-          'Immersive One team'
-        ].join('\n');
+        const followupCopy = copyRulesCall('buildFollowupEmail', {
+          audience: followupAudienceHint(snap),
+          role: String(snap.role || '').trim(),
+          mode: String(snap.fieldMode || '').trim().toLowerCase(),
+          company: String(snap.company || state.companyHint || '').trim() || 'your organization',
+          firstName,
+          focusLine: `${focusLine} we just need a few extra details to tailor the recommendation:`,
+          questionLines,
+          link
+        });
+        const subject = (followupCopy && String(followupCopy.subject || '').trim()) || 'Quick follow-up on your configurator submission';
+        const body = (followupCopy && Array.isArray(followupCopy.bodyLines) && followupCopy.bodyLines.length)
+          ? followupCopy.bodyLines.join('\n')
+          : [
+              greeting,
+              '',
+              'Thank you for completing the configurator.',
+              `${focusLine} we just need a few extra details to tailor the recommendation:`,
+              ...questionLines,
+              '',
+              'Please use this short follow-up form:',
+              link,
+              '',
+              'Once complete, we will confirm next steps and propose the right attendees for a short discovery call.',
+              '',
+              'Thanks,',
+              'Immersive team'
+            ].join('\n');
         if(el.followupSubject) el.followupSubject.value = subject;
         if(el.followupBody) el.followupBody.value = body;
         if(el.followupLink){
@@ -1617,6 +1693,7 @@
         applyHeroCopy();
         renderInitialRecommendation(rec.recommendation || null);
         updateFollowupModeProgress(snap);
+        applyFollowupContactGate(snap);
       }
 
       function validateBeforeSubmit(requireEmail){

@@ -978,13 +978,13 @@
     }
 
     .customer-panel .choice-grid.two {
-      grid-template-columns: 1fr;
+      grid-template-columns: 1fr 1fr;
     }
 
-    .customer-panel .select-card-grid.is-2,
-    .customer-panel .select-card-grid.is-3,
-    .customer-panel .select-card-grid.is-4,
-    .customer-panel .select-card-grid.is-5 {
+    .customer-panel .select-card-grid.is-2:not(.two),
+    .customer-panel .select-card-grid.is-3:not(.two),
+    .customer-panel .select-card-grid.is-4:not(.two),
+    .customer-panel .select-card-grid.is-5:not(.two) {
       grid-template-columns: 1fr;
     }
 
@@ -1194,6 +1194,50 @@
 
     .followup-customer::before {
       opacity: 0.86;
+    }
+
+    .followup-customer.is-locked {
+      border-color: color-mix(in srgb, var(--warn) 42%, var(--line));
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 95%, var(--warn) 5%), var(--bg-1));
+    }
+
+    .followup-gate-alert {
+      margin: 0;
+    }
+
+    .followup-customer.is-locked .followup-dynamic-form,
+    .followup-customer.is-locked .followup-summary {
+      opacity: .46;
+      filter: grayscale(.18);
+      pointer-events: none;
+    }
+
+    .followup-customer.is-locked #btnApplyFollowupAnswers {
+      opacity: .5;
+      pointer-events: none;
+    }
+
+    .customer-panel details.full-questionnaire {
+      margin-top: 14px;
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      border-radius: 12px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 97%, var(--accent) 3%), var(--surface));
+    }
+
+    .customer-panel details.full-questionnaire > summary {
+      font-size: .93rem;
+      font-weight: 750;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--text) 82%, var(--accent) 18%);
+      padding: 12px 14px;
+      cursor: pointer;
+    }
+
+    .customer-panel details.full-questionnaire > .detail-body {
+      display: grid;
+      gap: 12px;
+      padding: 12px 14px 14px;
     }
 
     .followup-summary {
@@ -1643,6 +1687,9 @@
           </div>
         </section>
 
+        <details id="fullQuestionnaireAccordion" class="full-questionnaire" open>
+          <summary>Full questionnaire (optional in follow-up mode)</summary>
+          <div class="detail-body">
         <div class="section" id="stageA">
           <div class="section-head">
             <h3>Stage A · Quick discovery</h3>
@@ -1773,7 +1820,7 @@
 
             <fieldset id="fitScopeFieldset" class="qBlock">
               <label>8) Scope of the program</label>
-              <div class="choice-grid two">
+              <div class="choice-grid">
                 <label class="choice">
                   <span class="choice-row"><input type="radio" name="fitScope" value="single" /><span>Single team / single function</span></span>
                   <small>Contained rollout focused on one benefitting group.</small>
@@ -1969,6 +2016,8 @@
             </label>
           </div>
         </details>
+          </div>
+        </details>
 
         <div class="actions">
           <button type="button" id="btnRecommend" class="primary hideInFollowup">Preview recommendation</button>
@@ -2097,6 +2146,7 @@
     </main>
   </div>
 
+  <script src="../assets/js/copy-rules.js"></script>
   <script src="../assets/js/customer-self-service-widget-prototype.js"></script>
 </body>
 </html>

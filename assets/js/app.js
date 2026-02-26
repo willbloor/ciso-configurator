@@ -1000,6 +1000,45 @@
         return String(value || '').trim().toLowerCase();
       }
 
+      function emailLooksValid(value){
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(String(value || '').trim());
+      }
+
+      function contactFallbackToken(value, fallback){
+        const token = String(value || '')
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '.')
+          .replace(/^\.+|\.+$/g, '')
+          .replace(/\.{2,}/g, '.')
+          .slice(0, 44);
+        if(token) return token;
+        return String(fallback || 'record')
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '.')
+          .replace(/^\.+|\.+$/g, '')
+          .replace(/\.{2,}/g, '')
+          || 'record';
+      }
+
+      function ensureSnapshotContactIdentity(snapshotInput, opts){
+        const snapshot = (snapshotInput && typeof snapshotInput === 'object') ? snapshotInput : {};
+        const cfg = (opts && typeof opts === 'object') ? opts : {};
+        const fallbackName = 'Primary Contact';
+        const recordId = String(cfg.recordId || '').trim();
+        const company = String(cfg.company || '').trim();
+        const fullNameRaw = String(snapshot.fullName || '').trim();
+        const fullName = fullNameRaw || fallbackName;
+        const emailRaw = normalizeEmail(snapshot.email || '');
+        if(emailLooksValid(emailRaw)){
+          return { fullName, email: emailRaw };
+        }
+        const token = contactFallbackToken(company, recordId || 'record');
+        const fallbackEmail = `contact.${token}@example.invalid`;
+        return { fullName, email: fallbackEmail };
+      }
+
       function normalizeIdentityName(value){
         return String(value || '')
           .trim()
@@ -3562,6 +3601,12 @@ const evidenceOpts = [
           && findSavedThread(interThread.id)
           && (interPerms.role === 'admin' || interPerms.role === 'owner')
         );
+        const canArchiveThread = !!(
+          interThread
+          && interThread.id
+          && interThread.id !== 'current'
+          && (interPerms.role === 'admin' || interPerms.role === 'owner')
+        );
         const interArchived = !!(interThread && interThread.archived);
         const interArchiveOnly = view === 'interstitial' && interArchived;
 
@@ -3572,7 +3617,7 @@ const evidenceOpts = [
           el.style.display = on ? '' : 'none';
         };
         setActionBtnVisible(createBtn, view === 'dashboard');
-        setActionBtnVisible(deleteBtn, false);
+        setActionBtnVisible(deleteBtn, view === 'interstitial' && !interArchiveOnly);
         setActionBtnVisible(editBtn, view === 'interstitial' && (!interArchiveOnly || canManageThread));
         if(editBtn){
           if(interArchiveOnly){
@@ -3591,7 +3636,15 @@ const evidenceOpts = [
           const actionLabel = interArchived ? 'Unarchive record' : 'Archive record';
           deleteBtn.dataset.archiveMode = interArchived ? 'restore' : 'archive';
           deleteBtn.setAttribute('aria-label', actionLabel);
-          deleteBtn.title = actionLabel;
+          deleteBtn.disabled = !canArchiveThread;
+          deleteBtn.setAttribute('aria-disabled', deleteBtn.disabled ? 'true' : 'false');
+          if(!interThread || !interThread.id || interThread.id === 'current'){
+            deleteBtn.title = 'Save the record first, then archive it.';
+          }else if(!canArchiveThread){
+            deleteBtn.title = 'Only owners or admins can archive records.';
+          }else{
+            deleteBtn.title = actionLabel;
+          }
         }
         let targetSlot = null;
         if(view === 'dashboard') targetSlot = dashboardSlot;
@@ -6456,6 +6509,12 @@ const evidenceOpts = [
           snapshotSeed,
           sourceCompany
         );
+        const snapshotContact = ensureSnapshotContactIdentity(snapshot, {
+          company: sourceCompany,
+          recordId: normalizedId
+        });
+        snapshot.fullName = snapshotContact.fullName;
+        snapshot.email = snapshotContact.email;
         snapshot.fieldMode = resolveConfiguratorFieldMode(snapshot.fieldMode || 'guided');
         const progress = readinessProgressFromContext(snapshot);
         const modules = threadModulesFromSnapshot(snapshot, { outcomes, outcomesText });
@@ -8603,7 +8662,7 @@ const evidenceOpts = [
       }
 
       function interstitialFollowupEmailValid(value){
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(String(value || '').trim());
+        return emailLooksValid(value);
       }
 
       function interstitialFollowupContact(thread){

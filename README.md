@@ -761,6 +761,46 @@ Design and workflow updates deployed for self-service intake and dashboard follo
    - Residual risk / follow-up:
      - browser phrasing QA remains manual because there is no automated UI text-assertion suite in-repo.
 
+39. Added deterministic fallback contact identity defaults for all records
+   - Added shared contact normalization helpers in app runtime:
+     - `emailLooksValid(...)`
+     - `contactFallbackToken(...)`
+     - `ensureSnapshotContactIdentity(...)`
+   - `normalizeThreadModel(...)` now guarantees every record snapshot has:
+     - `fullName` (fallback: `Primary Contact`)
+     - valid `email` (fallback: `contact.<company-or-record-token>@example.invalid`)
+   - This applies to both:
+     - existing records loaded from storage (hydration/normalization path)
+     - newly created/updated records that pass through normalization before persistence
+   - Consolidated follow-up email validation to the same `emailLooksValid(...)` helper to keep one validation rule.
+   - Principle:
+     - enforce minimum contact identity completeness across the record lifecycle so downstream follow-up and content/email flows do not fail on missing fields.
+   - Cross-surface impact:
+     - dashboard `Gaps` follow-up composer and any generated email surfaces that depend on snapshot contact identity now receive deterministic fallback values instead of blanks.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+     - `/Users/will.bloor/Documents/Configurator/docs/workstreams.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+   - Residual risk / follow-up:
+     - fallback values are intentionally synthetic; operators should still overwrite with verified customer contact details before external sends.
+
+40. Added archive icon action to record header (left of Edit record)
+   - Enabled the existing icon-only archive control in the interstitial record action bar so it appears immediately left of `Edit record`.
+   - Behavior:
+     - visible on active record pages
+     - hidden in archived-only mode (where `Edit record` becomes `Unarchive`)
+     - disabled for non-owner/non-admin roles
+     - disabled for unsaved `current` records (with save-first tooltip)
+   - Principle:
+     - make archive action discoverable at point-of-use while preserving role and record-state safeguards.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
 ## State Sync Guardrails (Critical, 2026-02-26)
 
 These are hard rules to prevent recurrence of the Tina Corp save-loss regression.

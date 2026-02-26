@@ -1,6 +1,7 @@
 id,key,step,step_label,group,group_label,title,why,order,required_guided,required_advanced,required_sdr_lite,enabled
 rq_role,role,1,About,about_identity,About identity,Role not confirmed,Role anchors ownership for outcomes and follow-up.,10,true,true,true,true
 rq_full_name,fullName,1,About,about_identity,About identity,Name not captured,Contact ownership is required for follow-up and handoff.,20,true,true,true,true
+rq_business_email,email,1,About,about_identity,About identity,Business email not captured,Business email is mandatory before customer follow-up can be sent.,25,true,true,true,true
 rq_company,company,1,About,about_identity,About identity,Company not captured,Company context is needed before sharing a recommendation.,30,true,true,true,true
 rq_company_size,companySize,1,About,about_identity,About identity,Company size missing,Size influences cadence and recommendation confidence.,40,true,true,false,true
 rq_operating_country,operatingCountry,1,About,about_identity,About identity,Operating country missing,Country informs the likely regulatory evidence path.,50,true,true,true,true

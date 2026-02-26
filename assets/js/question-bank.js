@@ -1,4 +1,4 @@
-/* Auto-generated from assets/data/question-bank.v1.csv on 2026-02-26T10:43:16.805Z. */
+/* Auto-generated from assets/data/question-bank.v1.csv on 2026-02-26T15:00:36.402Z. */
 /* eslint-disable */
 (function(){
   const rows = [
@@ -27,6 +27,21 @@
     "title": "Name not captured",
     "why": "Contact ownership is required for follow-up and handoff.",
     "order": 20,
+    "requiredGuided": true,
+    "requiredAdvanced": true,
+    "requiredSdrLite": true,
+    "enabled": true
+  },
+  {
+    "id": "rq_business_email",
+    "key": "email",
+    "step": 1,
+    "stepLabel": "About",
+    "group": "about_identity",
+    "groupLabel": "About identity",
+    "title": "Business email not captured",
+    "why": "Business email is mandatory before customer follow-up can be sent.",
+    "order": 25,
     "requiredGuided": true,
     "requiredAdvanced": true,
     "requiredSdrLite": true,

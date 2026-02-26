@@ -526,6 +526,7 @@
         dashboardRowAnimatedIds: new Set(),
         workspaceCompanyAnimatedIds: new Set(),
         interstitialAnimatedThreadIds: new Set(),
+        interstitialOutcomeAnimatedIds: new Set(),
         interstitialFollowupByThread: Object.create(null),
         interstitialSection: 'overview',
         navPreviewThreadId: null,
@@ -2208,6 +2209,7 @@
       const FALLBACK_QUESTION_REQUIREMENT_ROWS = Object.freeze([
         { id:'rq_role', key:'role', step:1, group:'about_identity', groupLabel:'About identity', title:'Role not confirmed', why:'Role anchors ownership for outcomes and follow-up.', order:10, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
         { id:'rq_full_name', key:'fullName', step:1, group:'about_identity', groupLabel:'About identity', title:'Name not captured', why:'Contact ownership is required for follow-up and handoff.', order:20, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
+        { id:'rq_business_email', key:'email', step:1, group:'about_identity', groupLabel:'About identity', title:'Business email not captured', why:'Business email is mandatory before customer follow-up can be sent.', order:25, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
         { id:'rq_company', key:'company', step:1, group:'about_identity', groupLabel:'About identity', title:'Company not captured', why:'Company context is needed before sharing a recommendation.', order:30, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
         { id:'rq_company_size', key:'companySize', step:1, group:'about_identity', groupLabel:'About identity', title:'Company size missing', why:'Size influences cadence and recommendation confidence.', order:40, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:false, enabled:true },
         { id:'rq_operating_country', key:'operatingCountry', step:1, group:'about_identity', groupLabel:'About identity', title:'Operating country missing', why:'Country informs the likely regulatory evidence path.', order:50, requiredGuided:true, requiredAdvanced:true, requiredSdrLite:true, enabled:true },
@@ -2415,6 +2417,7 @@
         switch(String(requirementKey || '').trim()){
           case 'role': return !!ctx.role;
           case 'fullName': return !!ctx.fullName;
+          case 'email': return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(String(ctx.email || '').trim());
           case 'company': return !!ctx.company;
           case 'companySize': return !!ctx.companySize;
           case 'operatingCountry': return !!ctx.operatingCountry;
@@ -3716,6 +3719,7 @@ const evidenceOpts = [
       const REQUIRED_FIELD_SELECTORS = Object.freeze({
         role: '#optRole',
         fullName: '#fullName',
+        email: '#businessEmail',
         company: '#company',
         companySize: '#companySize',
         operatingCountry: '#operatingCountry',
@@ -3954,6 +3958,7 @@ const evidenceOpts = [
           fieldMode: effectiveConfiguratorFieldMode(sourceFieldMode),
           role: String(src.role || '').trim(),
           fullName: String(src.fullName || '').trim(),
+          email: String(src.email || '').trim(),
           company: String(src.company || '').trim(),
           companySize: String(src.companySize || '').trim(),
           operatingCountry: String(src.operatingCountry || '').trim(),
@@ -5053,6 +5058,7 @@ const evidenceOpts = [
         state.dashboardRowAnimatedIds = new Set();
         state.workspaceCompanyAnimatedIds = new Set();
         state.interstitialAnimatedThreadIds = new Set();
+        state.interstitialOutcomeAnimatedIds = new Set();
         state.recordSeenVersions = Object.create(null);
         state.collaborationNoticeTitle = '';
         state.collaborationNoticeBody = '';
@@ -8223,7 +8229,7 @@ const evidenceOpts = [
         }else if(outcomes.length){
           payload.push(`Primary outcomes: ${outcomes.map((row)=> row.short || row.label).filter(Boolean).join(' · ')}`);
         }else{
-          payload.push('Primary outcomes: Outcome confidence pending');
+          payload.push('Primary outcomes: Awaiting outcome signals');
         }
         payload.push(`Open gaps: ${progress.gapSummary || 'No open gaps'}`);
         if(Number.isFinite(roiPct)){
@@ -8596,12 +8602,17 @@ const evidenceOpts = [
         return base.toString();
       }
 
+      function interstitialFollowupEmailValid(value){
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(String(value || '').trim());
+      }
+
       function interstitialFollowupContact(thread){
         const source = (thread && typeof thread === 'object') ? thread : {};
         const snapshot = (source.snapshot && typeof source.snapshot === 'object') ? source.snapshot : {};
-        const fullName = String(snapshot.fullName || source.updatedBy || '').trim();
-        const firstName = fullName ? fullName.split(/\s+/)[0] : 'there';
-        const email = String(snapshot.email || source.updatedByEmail || '').trim();
+        const fullName = String(snapshot.fullName || '').trim();
+        const firstName = fullName ? fullName.split(/\s+/)[0] : '';
+        const rawEmail = String(snapshot.email || '').trim();
+        const email = interstitialFollowupEmailValid(rawEmail) ? rawEmail : '';
         return { fullName, firstName, email };
       }
 
@@ -8629,22 +8640,37 @@ const evidenceOpts = [
         const focusLine = (rule.singleGroup && rule.groupLabels.length === 1)
           ? `We have a few follow-up questions around ${rule.groupLabels[0].toLowerCase()}.`
           : 'We have a few follow-up questions to complete your package recommendation.';
-        const subject = `Quick follow-up on your configurator submission (${company})`;
-        const bodyLines = [
-          `Hi ${contact.firstName},`,
-          '',
-          'Thanks again for your configurator submission.',
+        const snapshot = (thread && thread.snapshot && typeof thread.snapshot === 'object') ? thread.snapshot : {};
+        const followupCopy = copyRulesCall('buildFollowupEmail', {
+          audience: copyRulesAudienceHint(snapshot, snapshot.role || ''),
+          role: snapshot.role || '',
+          mode: effectiveConfiguratorFieldMode(snapshot.fieldMode || state.fieldMode || 'guided'),
+          company,
+          firstName: contact.firstName,
           focusLine,
-          ...questionLines,
-          '',
-          'Please use this short form to answer these:',
-          link || '(follow-up link unavailable in this environment)',
-          '',
-          'Once completed, we will confirm next steps and suggest the best attendees for a short discovery call.',
-          '',
-          'Thanks,',
-          'Immersive One team'
-        ];
+          questionLines,
+          link
+        });
+        const greeting = contact.firstName ? `Hi ${contact.firstName},` : 'Hi,';
+        const subject = (followupCopy && String(followupCopy.subject || '').trim())
+          || `Quick follow-up on your configurator submission (${company})`;
+        const bodyLines = (followupCopy && Array.isArray(followupCopy.bodyLines) && followupCopy.bodyLines.length)
+          ? followupCopy.bodyLines
+          : [
+              greeting,
+              '',
+              'Thanks again for your configurator submission.',
+              focusLine,
+              ...questionLines,
+              '',
+              'Please use this short form to answer these:',
+              link || '(follow-up link unavailable in this environment)',
+              '',
+              'Once completed, we will confirm next steps and suggest the best attendees for a short discovery call.',
+              '',
+              'Thanks,',
+              'Immersive team'
+            ];
         const body = bodyLines.join('\n');
         const mailto = `mailto:${encodeURIComponent(contact.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         return {
@@ -8656,7 +8682,48 @@ const evidenceOpts = [
         };
       }
 
+      function interstitialRoiConfigured(thread){
+        const source = (()=> {
+          if(thread && thread.id === 'current') return state;
+          if(thread && thread.snapshot && typeof thread.snapshot === 'object') return thread.snapshot;
+          if(thread && typeof thread === 'object') return thread;
+          return {};
+        })();
+        const readNumber = (value, fallback)=> (
+          Number.isFinite(Number(value)) ? Number(value) : fallback
+        );
+        const epsilon = 1e-6;
+        const baselineRevenue = Number(IMMERSIVE_MODEL.baselineRevenueB) || 10;
+        const baselineInvestment = Number(IMMERSIVE_MODEL.baselineInvestment) || 250000;
+        const baselineCyber = Number(IMMERSIVE_MODEL.baselineCyber) || 200;
+        const baselineDev = Number(IMMERSIVE_MODEL.baselineDev) || 1000;
+        const baselineWorkforce = Number(IMMERSIVE_MODEL.baselineWorkforce) || 3000;
+
+        const revenueB = readNumber(source.revenueB, baselineRevenue);
+        const investUSD = readNumber(source.investUSD, baselineInvestment);
+        const teamCyber = readNumber(source.teamCyber, baselineCyber);
+        const teamDev = readNumber(source.teamDev, baselineDev);
+        const teamWf = readNumber(source.teamWf, baselineWorkforce);
+        const paybackDelayMonths = readNumber(source.paybackDelayMonths, 3);
+        const cyberSalaryUSD = readNumber(source.cyberSalaryUSD, 180000);
+        const devSalaryUSD = readNumber(source.devSalaryUSD, 160000);
+        const realization = String(source.realization || 'conservative').trim().toLowerCase() || 'conservative';
+
+        if(!!source.investManual || !!source.teamManual) return true;
+        if(Math.abs(revenueB - baselineRevenue) > epsilon) return true;
+        if(Math.abs(investUSD - baselineInvestment) > epsilon) return true;
+        if(Math.abs(teamCyber - baselineCyber) > epsilon) return true;
+        if(Math.abs(teamDev - baselineDev) > epsilon) return true;
+        if(Math.abs(teamWf - baselineWorkforce) > epsilon) return true;
+        if(Math.abs(paybackDelayMonths - 3) > epsilon) return true;
+        if(Math.abs(cyberSalaryUSD - 180000) > epsilon) return true;
+        if(Math.abs(devSalaryUSD - 160000) > epsilon) return true;
+        if(realization !== 'conservative') return true;
+        return false;
+      }
+
       function interVizModel(thread){
+        const roiConfigured = interstitialRoiConfigured(thread);
         if(thread && thread.id === 'current'){
           const topOutcomes = inferredPrimaryOutcomes(3);
           const pctById = topOutcomePercentages(topOutcomes);
@@ -8668,16 +8735,16 @@ const evidenceOpts = [
             .filter((o)=> o.label && Number.isFinite(o.pct));
 
           if(!outcomeBreakdown.length){
-            outcomeBreakdown = [{ label:'Outcome confidence pending', pct:100 }];
+            outcomeBreakdown = [{ label:'Awaiting outcome signals', pct:0 }];
           }
 
           const roi = computeRoi();
           const paybackMonths = computePaybackMonths(roi);
           return {
-            roiPct: Number(roi.roi * 100),
-            npv: Number(roi.npv),
-            spend: Number(state.investUSD),
-            paybackMonths,
+            roiPct: roiConfigured ? Number(roi.roi * 100) : null,
+            npv: roiConfigured ? Number(roi.npv) : null,
+            spend: roiConfigured ? Number(state.investUSD) : null,
+            paybackMonths: roiConfigured ? paybackMonths : null,
             outcomeBreakdown
           };
         }
@@ -8702,15 +8769,17 @@ const evidenceOpts = [
               pct: idx === outcomes.length - 1 ? carry : share
             }));
           }else{
-            outcomeBreakdown = [{ label:'Outcome confidence pending', pct:100 }];
+            outcomeBreakdown = [{ label:'Awaiting outcome signals', pct:0 }];
           }
         }
 
         return {
-          roiPct: Number(viz.roiPct),
-          npv: Number(viz.npv),
-          spend: Number(viz.spend),
-          paybackMonths: (viz.paybackMonths === null || viz.paybackMonths === undefined) ? null : Number(viz.paybackMonths),
+          roiPct: roiConfigured ? Number(viz.roiPct) : null,
+          npv: roiConfigured ? Number(viz.npv) : null,
+          spend: roiConfigured ? Number(viz.spend) : null,
+          paybackMonths: roiConfigured
+            ? ((viz.paybackMonths === null || viz.paybackMonths === undefined) ? null : Number(viz.paybackMonths))
+            : null,
           outcomeBreakdown
         };
       }
@@ -8722,6 +8791,9 @@ const evidenceOpts = [
         const thread = activeThreadModel();
         if(!(state.interstitialAnimatedThreadIds instanceof Set)){
           state.interstitialAnimatedThreadIds = new Set();
+        }
+        if(!(state.interstitialOutcomeAnimatedIds instanceof Set)){
+          state.interstitialOutcomeAnimatedIds = new Set();
         }
         if(!(state.completionRingAnimatedIds instanceof Set)){
           state.completionRingAnimatedIds = new Set();
@@ -8808,6 +8880,8 @@ const evidenceOpts = [
           : '';
         const outcomeRows = (viz.outcomeBreakdown || []).slice(0, 4).map((row, idx)=> {
           const pct = clamp(Number(row.pct) || 0, 0, 100);
+          const outcomeAnimId = `inter-outcome:${interAnimKey}:${activeInterSection}:${idx}:${String(row.label || '').trim().toLowerCase()}`;
+          const shouldAnimateOutcome = !state.interstitialOutcomeAnimatedIds.has(outcomeAnimId);
           return `
             <div class="interOutcomeRow">
               <div class="interOutcomeTop">
@@ -8815,7 +8889,7 @@ const evidenceOpts = [
                 <span class="interOutcomePct">${pct}%</span>
               </div>
               <div class="interOutcomeTrack">
-                <span class="interOutcomeFill" data-target="${pct}" style="--delay:${idx * 90}ms;"></span>
+                <span class="interOutcomeFill" data-target="${pct}" data-outcome-id="${escapeHtml(outcomeAnimId)}" data-animate="${shouldAnimateOutcome ? 'true' : 'false'}" style="--delay:${idx * 90}ms; width:${shouldAnimateOutcome ? 0 : pct}%"></span>
               </div>
             </div>
           `;
@@ -8823,6 +8897,11 @@ const evidenceOpts = [
 
         const followupThreadId = String((thread && thread.id) || '').trim() || 'current';
         const followupBucket = interstitialFollowupBucket(followupThreadId);
+        const followupContact = interstitialFollowupContact(thread);
+        const followupContactReady = !!(
+          String((followupContact && followupContact.fullName) || '').trim()
+          && interstitialFollowupEmailValid((followupContact && followupContact.email) || '')
+        );
         const eligibleGapByKey = new Map(
           gaps
             .filter((gap)=> {
@@ -8831,30 +8910,38 @@ const evidenceOpts = [
             })
             .map((gap)=> [String(gap.key).trim(), gap])
         );
+        if(!followupContactReady){
+          followupBucket.selectedKeys = [];
+        }
         followupBucket.selectedKeys = (Array.isArray(followupBucket.selectedKeys) ? followupBucket.selectedKeys : [])
           .map((key)=> String(key || '').trim())
           .filter((key)=> eligibleGapByKey.has(key));
         const selectedGapSet = new Set(followupBucket.selectedKeys);
-        const hasFollowupTargets = !!(interPerms.canEditRecord && eligibleGapByKey.size > 0);
+        const hasFollowupTargets = !!(interPerms.canEditRecord && eligibleGapByKey.size > 0 && followupContactReady);
         const followupComposerHtml = gaps.length
           ? `
                 <div class="interFollowupComposer">
+                  ${followupContactReady ? '' : `
+                    <p class="interFollowupGateAlert">
+                      Name and business email are mandatory before customer follow-up can be created.
+                    </p>
+                  `}
                   <div class="interFollowupMeta">
+                  <span class="interPill interFollowupMetaLabel">Email generator</span>
                   <span class="interPill" id="interFollowupSelectedCount">0 of ${INTERSTITIAL_FOLLOWUP_MAX}</span>
-                  <span class="interPill" id="interFollowupRulePill">Recommended ${INTERSTITIAL_FOLLOWUP_RECOMMENDED} · Max ${INTERSTITIAL_FOLLOWUP_MAX}</span>
                   </div>
                   <p class="interFollowupRule">
-                  Select up to ${INTERSTITIAL_FOLLOWUP_MAX} questions. We recommend ${INTERSTITIAL_FOLLOWUP_RECOMMENDED} for best response rates.
+                  Select up to ${INTERSTITIAL_FOLLOWUP_MAX} questions.
                   </p>
                   <p class="interFollowupWarn" id="interFollowupWarn" hidden>
                     <span class="interFollowupWarnIcon" aria-hidden="true">!</span>
                     <span>More than ${INTERSTITIAL_FOLLOWUP_RECOMMENDED} may reduce the likelihood of response.</span>
                   </p>
                   <div class="interFollowupActions">
-                  <button type="button" class="btn small" data-inter-followup-clear>Clear</button>
                   <button type="button" class="btn small primary" data-inter-followup-generate ${hasFollowupTargets ? '' : 'disabled aria-disabled="true"'}>
                     Create follow-up for customer
                   </button>
+                  <button type="button" class="btn small" data-inter-followup-clear ${followupContactReady ? '' : 'disabled aria-disabled="true"'}>Clear</button>
                 </div>
                 <div class="interFollowupOutput" id="interFollowupOutput" hidden>
                   <p class="interFollowupSubject" id="interFollowupSubject">—</p>
@@ -8871,7 +8958,7 @@ const evidenceOpts = [
 
         const gapItems = gaps.length
           ? gaps.map((gap, idx)=> `
-              <div class="interGapItem${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ` style="--inter-enter-delay:${170 + (idx * 46)}ms;"` : ''}>
+              <div class="interGapItem${shouldAnimateInter ? ' is-enter' : ''}${followupContactReady ? '' : ' is-followup-locked'}"${shouldAnimateInter ? ` style="--inter-enter-delay:${170 + (idx * 46)}ms;"` : ''}>
                 <div class="interGapTop">
                   <p class="interGapTitle">${escapeHtml(gap.title)}</p>
                   ${String((gap && gap.groupLabel) || '').trim() ? `<span class="interGapGroup">${escapeHtml(gap.groupLabel)}</span>` : ''}
@@ -8884,6 +8971,9 @@ const evidenceOpts = [
                       return '<span class="interGapSelectHint">Internal only</span>';
                     }
                     const checked = selectedGapSet.has(key) ? 'checked' : '';
+                    if(!followupContactReady){
+                      return '<span class="interGapSelectHint">Needs name + email</span>';
+                    }
                     return `
                       <label class="interGapSelect" title="Include this question in customer follow-up">
                         <input type="checkbox" data-inter-followup-gap="${escapeHtml(key)}" ${checked} />
@@ -9101,7 +9191,7 @@ const evidenceOpts = [
               ${overviewSnapshotHtml}
 	            <article id="interSectionGaps" class="interCard interCardWide interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:146ms;"' : ''}${showGapsSection ? '' : ' hidden'}>
 	              <h3>Gaps: what we still need</h3>
-	              <div class="interGapFollowupLayout">
+	              <div class="interGapFollowupLayout${followupContactReady ? '' : ' is-followup-locked'}">
 	                <div class="interGapList">${gapItems}</div>
 	                ${followupComposerHtml ? `<aside class="interFollowupRail">${followupComposerHtml}</aside>` : ''}
 	              </div>
@@ -9193,7 +9283,6 @@ const evidenceOpts = [
         });
         const followupChecks = $$('#interstitialContent [data-inter-followup-gap]');
         const followupSelectedCount = $('#interFollowupSelectedCount');
-        const followupRulePill = $('#interFollowupRulePill');
         const followupOutput = $('#interFollowupOutput');
         const followupSubject = $('#interFollowupSubject');
         const followupDraft = $('#interFollowupDraft');
@@ -9216,14 +9305,14 @@ const evidenceOpts = [
           if(followupSelectedCount){
             followupSelectedCount.textContent = `${selectedRows.length} of ${INTERSTITIAL_FOLLOWUP_MAX}`;
           }
-          if(followupRulePill){
-            followupRulePill.textContent = `Recommended ${INTERSTITIAL_FOLLOWUP_RECOMMENDED} · Max ${INTERSTITIAL_FOLLOWUP_MAX}`;
-          }
           if(followupWarn){
             followupWarn.hidden = !rule.overRecommended;
           }
           if(followupGenerateBtn){
-            followupGenerateBtn.disabled = !selectedRows.length || !eligibleGapByKey.size;
+            followupGenerateBtn.disabled = !selectedRows.length || !eligibleGapByKey.size || !followupContactReady;
+          }
+          if(followupClearBtn){
+            followupClearBtn.disabled = !followupContactReady || !selectedRows.length;
           }
         };
 
@@ -9242,7 +9331,13 @@ const evidenceOpts = [
         };
 
         followupChecks.forEach((check)=> {
+          check.disabled = !followupContactReady;
           check.addEventListener('change', ()=>{
+            if(!followupContactReady){
+              check.checked = false;
+              toast('Name and business email are required before customer follow-up can be created.');
+              return;
+            }
             const key = String(check.getAttribute('data-inter-followup-gap') || '').trim();
             if(!key || !eligibleGapByKey.has(key)) return;
             const selectedKeys = new Set(Array.isArray(followupBucket.selectedKeys) ? followupBucket.selectedKeys : []);
@@ -9277,6 +9372,10 @@ const evidenceOpts = [
 
         if(followupGenerateBtn){
           followupGenerateBtn.addEventListener('click', ()=> {
+            if(!followupContactReady){
+              toast('Name and business email are required before customer follow-up can be created.');
+              return;
+            }
             const selectedRows = selectedFollowupRows();
             if(!selectedRows.length){
               toast('Select at least one gap to create a follow-up request.');
@@ -9433,8 +9532,18 @@ const evidenceOpts = [
         animateDashboardCompletionRings(host);
         $$('#interstitialContent .interOutcomeFill').forEach((fill)=>{
           const pct = clamp(Number(fill.dataset.target) || 0, 0, 100);
+          const shouldAnimate = String(fill.dataset.animate || '').toLowerCase() === 'true';
+          if(!shouldAnimate){
+            fill.style.width = `${pct}%`;
+            return;
+          }
           fill.style.width = '0%';
           window.requestAnimationFrame(()=>{ fill.style.width = `${pct}%`; });
+          fill.dataset.animate = 'false';
+          const outcomeId = String(fill.dataset.outcomeId || '').trim();
+          if(outcomeId){
+            state.interstitialOutcomeAnimatedIds.add(outcomeId);
+          }
         });
       }
 
@@ -11228,6 +11337,30 @@ const evidenceOpts = [
         return candidates[0];
       }
 
+      function copyRulesCall(methodName, payload){
+        const api = (window && window.immersiveCopyRules && typeof window.immersiveCopyRules === 'object')
+          ? window.immersiveCopyRules
+          : null;
+        if(!api || typeof api[methodName] !== 'function') return null;
+        try{
+          return api[methodName](payload || {});
+        }catch(err){
+          console.warn('[CopyRules] Failed call:', methodName, err);
+          return null;
+        }
+      }
+
+      function copyRulesAudienceHint(snapshot, roleLabel){
+        const snap = (snapshot && typeof snapshot === 'object') ? snapshot : {};
+        const explicit = String(snap.messageAudience || '').trim().toLowerCase();
+        const mode = effectiveConfiguratorFieldMode(snap.fieldMode || state.fieldMode || 'guided');
+        return copyRulesCall('inferAudience', {
+          audience: explicit,
+          role: roleLabel || snap.role || '',
+          mode
+        }) || 'manager';
+      }
+
       function customerTemplateModelFromCandidate(candidate){
         const record = candidate && candidate.thread ? candidate.thread : null;
         if(!record) return null;
@@ -11239,6 +11372,7 @@ const evidenceOpts = [
         const coverageRows = moduleRowsWithValues(modules.coverage || []);
         const packageFitRows = moduleRowsWithValues(modules.packageFit || []);
         const contextRows = moduleRowsWithValues(modules.context || []);
+        const snapshot = (record.snapshot && typeof record.snapshot === 'object') ? record.snapshot : {};
         const profileName = moduleValueByLabel(organizationRows, 'Name')
           || String(record.snapshot && record.snapshot.fullName || '').trim()
           || 'Customer team';
@@ -11299,7 +11433,19 @@ const evidenceOpts = [
         const coverageLabel = coverageFocus.length ? naturalList(coverageFocus) : 'security, IT, and engineering teams';
         const pressureLabel = pressureFocus.length ? naturalList(pressureFocus) : 'board, investor, and regulator scrutiny';
         const companyLabel = String(record.company || 'your organisation').trim() || 'your organisation';
-        const valueCards = [
+        const copyAudience = copyRulesAudienceHint(snapshot, roleLabel);
+        const landingCopy = copyRulesCall('buildLandingCopy', {
+          audience: copyAudience,
+          role: roleLabel,
+          mode: effectiveConfiguratorFieldMode(snapshot.fieldMode || state.fieldMode || 'guided'),
+          company: companyLabel,
+          tier: String(gate.tier || 'Core'),
+          topOutcomes: outcomeTitles,
+          coverageGroups: coverageFocus,
+          pressureSignals: pressureFocus
+        });
+
+        const valueCardsRaw = [
           {
             id: 'prove',
             kicker: 'PROVE',
@@ -11337,10 +11483,24 @@ const evidenceOpts = [
             reverse: true
           }
         ];
+        const valueCards = valueCardsRaw.map((card)=>{
+          const toneCard = landingCopy && landingCopy.valueCards && landingCopy.valueCards[card.id]
+            ? landingCopy.valueCards[card.id]
+            : null;
+          if(!toneCard) return card;
+          return Object.assign({}, card, {
+            title: String(toneCard.title || card.title).trim() || card.title,
+            text: String(toneCard.text || card.text).trim() || card.text,
+            bullets: (Array.isArray(toneCard.bullets) && toneCard.bullets.length)
+              ? toneCard.bullets.slice(0, 4)
+              : card.bullets
+          });
+        });
         const demoCard = {
           kicker: 'PRODUCT TOUR',
           title: 'Take a guided tour of the platform',
-          text: 'See how you can run scenario-based exercises, capture after-action evidence, and export summaries for stakeholders.',
+          text: (landingCopy && String(landingCopy.demoCardText || '').trim())
+            || 'See how you can run scenario-based exercises, capture after-action evidence, and export summaries for stakeholders.',
           ctaLabel: 'Take a Product Tour',
           ctaUrl: 'https://www.immersivelabs.com/demo',
           videoPoster: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263%2F69848bd313059d7ecc7021f9_immersive-home-hero_poster.0000000.jpg',
@@ -11418,9 +11578,9 @@ const evidenceOpts = [
           stage: String(record.stage || 'Closed'),
           generatedOn,
           hero: {
-            eyebrow: 'Customer dashboard',
-            title: `${String(record.company || 'Customer')} readiness dashboard`,
-            subtitle: `Built from what ${profileName} shared, with recommendations focused on your top priorities and delivery outcomes.`,
+            eyebrow: (landingCopy && String(landingCopy.heroEyebrow || '').trim()) || 'Customer dashboard',
+            title: (landingCopy && String(landingCopy.heroTitle || '').trim()) || `${String(record.company || 'Customer')} readiness dashboard`,
+            subtitle: (landingCopy && String(landingCopy.heroSubtitle || '').trim()) || `Built from what ${profileName} shared, with recommendations focused on your top priorities and delivery outcomes.`,
             imageUrl: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/678646ce52898299cc1134be_HERO%20IMAGE%20LABS.webp',
             primaryCtaLabel: 'Recommended resources',
             primaryCtaHref: '#recommended-for-you',
@@ -11438,7 +11598,7 @@ const evidenceOpts = [
             title: packageInfo.title || `${String(gate.tier || 'Core')} package`,
             rationale: packageInfo.body || ''
           },
-          needsSummary,
+          needsSummary: (landingCopy && String(landingCopy.needsSummary || '').trim()) || needsSummary,
           valueCards,
           demoCard,
           outcomeBlocks,
@@ -13198,25 +13358,36 @@ const evidenceOpts = [
           .map((gap)=> String((gap && gap.title) || '').trim())
           .filter(Boolean)
           .slice(0, 5);
-
-        const subject = `Immersive content plan for ${gate.company} (${gate.tier})`;
+        const roleLabel = moduleValueByLabel(orgRows, 'Role');
+        const audience = copyRulesAudienceHint(snapshot, roleLabel);
+        const emailCopy = copyRulesCall('buildContentEmail', {
+          audience,
+          role: roleLabel,
+          mode: effectiveConfiguratorFieldMode(snapshot.fieldMode || state.fieldMode || 'guided'),
+          company: gate.company,
+          tier: gate.tier,
+          completion: gate.completion,
+          topOutcomes
+        });
+        const subject = (emailCopy && String(emailCopy.subject || '').trim())
+          || `Immersive content plan for ${gate.company} (${gate.tier})`;
         const lines = [];
-        lines.push('Hi {{First Name}},');
+        lines.push((emailCopy && String(emailCopy.greeting || '').trim()) || 'Hi {{First Name}},');
         lines.push('');
-        lines.push(`Based on your current ${gate.company} profile (${gate.completion}, ${gate.tier} package), here are the recommended content blocks for ${topOutcomeText}.`);
+        lines.push((emailCopy && String(emailCopy.intro || '').trim()) || `Based on your current ${gate.company} profile (${gate.completion}, ${gate.tier} package), here are the recommended content blocks for ${topOutcomeText}.`);
         lines.push('');
-        lines.push('Profile summary');
+        lines.push((emailCopy && String(emailCopy.profileHeading || '').trim()) || 'Profile summary');
         lines.push(`- Package: ${gate.tier}`);
         lines.push(`- Completion: ${gate.completion}`);
         lines.push(`- Priority outcomes: ${topOutcomes.length ? topOutcomes.join(' · ') : 'Outcome signals still forming'}`);
         lines.push(`- Open gaps: ${gapTitles.length ? gapTitles.join(' · ') : 'No open gaps'}`);
         if(profileSignals.length){
           lines.push('');
-          lines.push('Signals captured');
+          lines.push((emailCopy && String(emailCopy.signalsHeading || '').trim()) || 'Signals captured');
           profileSignals.forEach((line)=> lines.push(`- ${line}`));
         }
         lines.push('');
-        lines.push('Recommended content blocks');
+        lines.push((emailCopy && String(emailCopy.recommendationsHeading || '').trim()) || 'Recommended content blocks');
         if(cards.length){
           cards.forEach((card, idx)=>{
             const safeCardHref = safeLinkHref(card && card.url);
@@ -13230,7 +13401,9 @@ const evidenceOpts = [
           lines.push('- No mapped content available from the current Webflow export for this profile yet.');
         }
         lines.push('');
-        lines.push('If useful, reply with your target audience and I can tailor this into a send-ready version.');
+        lines.push((emailCopy && String(emailCopy.close || '').trim()) || 'If useful, reply with your target audience and I can tailor this into a send-ready version.');
+        lines.push('');
+        lines.push((emailCopy && String(emailCopy.signature || '').trim()) || 'Immersive team');
 
         return {
           threadId: gate.threadId,
@@ -14668,12 +14841,24 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       
       // ---------- export (PoC): structured data + CSV + print ----------
       function syncLeadFromDOM(){
+        const businessEmailEl = $('#businessEmail');
         const emailEl = $('#email');
         const phoneEl = $('#phone');
         const notesEl = $('#notes');
         const optinEl = $('#optin');
 
-        if(emailEl) state.email = (emailEl.value || '').trim();
+        // Only pull values when the corresponding DOM controls are present.
+        // This prevents hidden/non-rendered views from clearing persisted state.
+        if(businessEmailEl || emailEl){
+          const businessEmail = businessEmailEl ? (businessEmailEl.value || '').trim() : '';
+          const consultationEmail = emailEl ? (emailEl.value || '').trim() : '';
+          const nextEmail = businessEmail || consultationEmail;
+          if(nextEmail || businessEmailEl || emailEl){
+            state.email = nextEmail;
+          }
+          if(businessEmailEl && businessEmailEl.value !== state.email) businessEmailEl.value = state.email;
+          if(emailEl && emailEl.value !== state.email) emailEl.value = state.email;
+        }
         if(phoneEl) state.phone = (phoneEl.value || '').trim();
         if(notesEl) state.notes = (notesEl.value || '').trim();
         if(optinEl) state.optin = !!optinEl.checked;
@@ -16520,6 +16705,31 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const fullNameEl = $('#fullName');
       if(fullNameEl) fullNameEl.addEventListener('input', (e)=>{ state.fullName = e.target.value; update(); });
 
+      const businessEmailEl = $('#businessEmail');
+      if(businessEmailEl){
+        businessEmailEl.addEventListener('input', (e)=>{
+          const value = String(e.target.value || '');
+          state.email = value;
+          const consultationEmailEl = $('#email');
+          if(consultationEmailEl && consultationEmailEl.value !== value){
+            consultationEmailEl.value = value;
+          }
+          update();
+        });
+      }
+
+      const consultationEmailEl = $('#email');
+      if(consultationEmailEl){
+        consultationEmailEl.addEventListener('input', (e)=>{
+          const value = String(e.target.value || '');
+          state.email = value;
+          if(businessEmailEl && businessEmailEl.value !== value){
+            businessEmailEl.value = value;
+          }
+          update();
+        });
+      }
+
       const companyEl = $('#company');
       if(companyEl) companyEl.addEventListener('input', (e)=>{ state.company = e.target.value; update(); });
 
@@ -16688,6 +16898,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         setVal('#region', state.region);
         setVal('#regSearch', state.regSearch);
         setVal('#stackOther', state.stackOther);
+        setVal('#businessEmail', state.email);
         setVal('#email', state.email);
         setVal('#phone', state.phone);
         setVal('#notes', state.notes);
@@ -16763,7 +16974,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         // Identity + context
         state.fieldMode = resolveConfiguratorFieldMode(account.fieldMode || 'guided');
         state.role = '';
-        state.fullName = useAccountDefaults ? (account.fullName || '') : '';
+        state.fullName = '';
         state.company = '';
         state.companySize = '';
         state.operatingCountry = useAccountDefaults ? (account.defaultCountry || '') : '';
@@ -16819,7 +17030,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         state.devSalaryUSD = 160000;
 
         // Lead capture
-        state.email = useAccountDefaults ? (account.email || '') : '';
+        state.email = '';
         state.phone = useAccountDefaults ? (account.phone || '') : '';
         state.notes = '';
         state.optin = false;
@@ -17260,18 +17471,24 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           toast('Downloaded consultation brief.');
         }
         if(action === 'book'){
+          const businessEmailField = $('#businessEmail');
           const emailField = $('#email');
           const phoneField = $('#phone');
           const notesField = $('#notes');
           const optinField = $('#optin');
-          state.email = emailField ? emailField.value.trim() : '';
+          const businessEmail = businessEmailField ? businessEmailField.value.trim() : '';
+          const consultationEmail = emailField ? emailField.value.trim() : '';
+          state.email = businessEmail || consultationEmail;
+          if(businessEmailField && businessEmailField.value !== state.email) businessEmailField.value = state.email;
+          if(emailField && emailField.value !== state.email) emailField.value = state.email;
           state.phone = phoneField ? phoneField.value.trim() : '';
           state.notes = notesField ? notesField.value.trim() : '';
           state.optin = !!(optinField && optinField.checked);
 
           if(!state.email){
             toast('Add a business email to book a consultation.');
-            if(emailField) emailField.focus();
+            if(businessEmailField) businessEmailField.focus();
+            else if(emailField) emailField.focus();
             return;
           }
 

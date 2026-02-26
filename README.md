@@ -511,6 +511,33 @@ Design and workflow updates deployed for self-service intake and dashboard follo
    - Validation performed:
      - `node --check /Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
 
+32. Added adaptive card density, follow-up accordion, and contact gating for gaps/follow-up
+   - Updated widget card layout rules to match configurator density without over-long single-column flow:
+     - card questions now render two columns when option count is greater than `3`
+     - card questions with `3` or fewer options remain single-column
+     - applied to static widget fields and dynamically rendered follow-up controls
+   - Reduced follow-up-mode duplication in widget:
+     - wrapped base questionnaire sections in a collapsible `Full questionnaire` accordion
+     - in follow-up mode, this accordion is collapsed by default so the requested outstanding-question list is the primary focus
+   - Added widget follow-up contact gate:
+     - outstanding follow-up question controls are locked when `name` + valid `business email` are missing
+     - inline error alert is shown in the follow-up panel until contact fields are present
+   - Added dashboard gaps follow-up contact gate (AE/SDR side):
+     - follow-up checkboxes/composer are disabled when contact `name` + `business email` are missing on the record snapshot
+     - gaps list gets locked visual treatment and composer shows a blocking alert explaining mandatory fields
+   - Principle:
+     - preserve scanable two-column density for larger answer sets, avoid duplicate question surfaces in follow-up mode, and enforce minimum contact identity before customer follow-up workflows are enabled.
+   - Cross-surface impact:
+     - dashboard `Gaps` follow-up generation and `/widget?followup=...` completion now share the same mandatory-contact dependency, reducing dead-end follow-up links and mismatched behavior.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
 32. Release-gate reconciliation + security/logic validation sweep before push
    - Reconciled source/runtime content catalog drift:
      - removed two stale `blog-post:*` rows from `/Users/will.bloor/Documents/Configurator/assets/data/immersive-content-master.csv` that had aged out of runtime `content-catalog.js` by the 1095-day recency window.
@@ -547,6 +574,155 @@ Design and workflow updates deployed for self-service intake and dashboard follo
        - CSP/security headers present in `/Users/will.bloor/Documents/Configurator/vercel.json` and CSP/referrer meta present in `/Users/will.bloor/Documents/Configurator/index.html`
    - Residual risk / follow-up:
      - no headless browser E2E test harness is present in-repo, so route/render behavior is validated by static/runtime checks only.
+
+33. Added structured copy-rules layer and wired generation outputs for on-brand language
+   - Added a centralized runtime copy-rules module:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/copy-rules.js`
+   - Encoded messaging/tone structure from:
+     - `Immersive Tone of Voice Guidelines - Approved Copy.docx`
+     - `Immersive Master Messaging.docx`
+   - Implemented audience/context-aware copy composition for:
+     - landing page/dashboard template narrative (hero + summary + prove/improve/report card language)
+     - content email builder subject/body framing
+     - customer follow-up email builders (interstitial + widget)
+   - Added safe fallback behavior:
+     - if copy rules are unavailable, existing hardcoded generation copy remains active.
+   - Wired copy-rules loading into both app surfaces:
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+   - Principle:
+     - enforce consistent, audience-aware brand language across generated outputs using a single structured rules layer instead of duplicated string templates.
+   - Cross-surface impact:
+     - updates customer-facing generated language in dashboard-template output, content email drafts, and follow-up email drafts while preserving existing workflow logic.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/copy-rules.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/copy-rules.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+   - Residual risk / follow-up:
+     - copy quality is now deterministic and consistent, but should be spot-checked in browser flows for final phrasing preferences by audience.
+
+34. Tightened follow-up gating, removed fallback identity leakage, and defaulted ROI/outcomes to neutral until configured
+   - Fixed customer follow-up contact source in dashboard `Gaps` composer:
+     - follow-up contact now resolves from record snapshot contact fields only (`fullName`, `email`)
+     - removed fallback to internal updater identity (`updatedBy`, `updatedByEmail`)
+     - follow-up greeting now defaults to `Hi,` when no customer first name is available (never `Hi there`/internal actor fallback)
+   - Strengthened and simplified `Gaps` follow-up composer UX:
+     - generation remains blocked unless record has customer `name` + valid `business email`
+     - swapped button order so primary action appears first:
+       - `Create follow-up for customer` then `Clear`
+     - removed duplicated recommendation/max pills; retained concise limit line and over-recommended warning only
+     - relabeled composer context to `Email generator`
+   - Adjusted overview signal defaults for low-input records:
+     - ROI metrics now render as `—` until ROI assumptions differ from baseline/default model inputs
+     - outcome fallback changed from `Outcome confidence pending 100%` to neutral `Awaiting outcome signals` at `0%`
+   - Added mandatory business email capture into configurator identity section:
+     - new `Business email` input in Step 0 (`About`) near name/company
+     - readiness requirement row added for `email` so missing email appears as a gap
+     - readiness context + requirement checks now validate business email format
+     - new-record initialization no longer pre-fills customer `name`/`email` from account defaults
+   - Re-scoped widget follow-up gate messaging:
+     - removed widget-side blocking alert for missing contact details
+     - gating message/disable behavior is now enforced on dashboard `Gaps` composer (AE workflow origin)
+   - Principle:
+     - prevent internal-user identity bleed into customer follow-up, enforce contact prerequisites at the source action, and avoid implying recommendation confidence from untouched default assumptions.
+   - Cross-surface impact:
+     - dashboard follow-up generation, customer follow-up email copy, and widget follow-up entry are now aligned to record-sourced customer contact semantics and cleaner neutral defaults.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/copy-rules.js`
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+     - `/Users/will.bloor/Documents/Configurator/assets/data/question-bank.v1.csv`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/question-bank.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+     - `/Users/will.bloor/Documents/Configurator/landing-pages/customer-self-service-widget-prototype.html`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/copy-rules.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/question-bank.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+
+35. Validation sweep fix: persisted identity/contact fields on save + stabilized outcome-weighting bars (**Superseded in part by entry 36**)
+   - Fixed a save-path reliability issue where record identity/contact/context edits could be missed if browser `input/change` events were not emitted predictably (for example autofill or edge timing interactions).
+   - `saveActiveRecord(...)` now performs an explicit DOM-to-state sync immediately before commit for:
+     - `fullName`
+     - `company`
+     - `companySize`
+     - `operatingCountry`
+     - `industry`
+     - `region`
+     - lead/contact fields (`businessEmail`, `email`, `phone`, `notes`, `optin`)
+   - Expanded DOM-to-state sync to include card/radio/checkbox-driven question controls (role, pressure/risk/coverage/package-fit/context/tooling selections), and invoked it on step transitions (`Continue`/`Back`/step jumps) as well as save.
+   - This ensures saved snapshot state is sourced from the currently rendered UI selections, even when browser/event timing causes state drift.
+   - This keeps `thread.snapshot.fullName` / `thread.snapshot.email` aligned with saved form values, so `Gaps` follow-up gating reflects the latest saved record state.
+   - Fixed interstitial `Outcome weighting` bar flicker:
+     - added per-record/section animation IDs
+     - bars animate once, then render at stable width on subsequent re-renders
+   - Principle:
+     - persist authoritative record values at save time and avoid repeated non-informative animations during routine re-renders.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+   - Important:
+     - The broad pre-save / pre-step DOM-to-state sync approach documented here caused a regression and is superseded by entry `36`.
+     - Do not reintroduce this pattern.
+
+36. Hotfix: rollback destructive pre-save/pre-step DOM sync that could wipe record state
+   - Corrected a regression introduced in entry `35` where aggressive DOM-to-state synchronization on:
+     - step transitions (`setActiveStep`)
+     - save commit path (`saveActiveRecord`)
+     could overwrite in-memory record state from partial/hidden DOM and lead to severe completion collapse after save/return.
+   - Removed the pre-step and pre-save `syncRecordInputsFromDom()` calls and removed the helper entirely.
+   - Hardened `syncLeadFromDOM()` so non-rendered views cannot clear persisted lead/contact fields:
+     - values are now only pulled when the corresponding controls are present
+     - missing DOM controls no longer zero-out `state.email`/lead values.
+   - Principle:
+     - state should remain event-driven and non-destructive; save/route paths must not infer authoritative data from partial DOM.
+   - Cross-surface impact:
+     - protects configurator save/return integrity, overview completion scoring, and gaps follow-up gating from false missing-field regressions caused by state overwrite.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `for f in /Users/will.bloor/Documents/Configurator/assets/js/*.js; do node --check \"$f\"; done`
+
+## State Sync Guardrails (Critical, 2026-02-26)
+
+These are hard rules to prevent recurrence of the Tina Corp save-loss regression.
+
+1. Never do broad DOM scraping before save or step navigation
+   - Do **not** add catch-all DOM-to-state sync in `saveActiveRecord(...)` or `setActiveStep(...)`.
+   - Hidden/partial DOM can overwrite valid in-memory state and collapse completion.
+
+2. State is authoritative; DOM is a view
+   - Persist from `state`, not from opportunistic DOM reads.
+   - Keep field state updated through explicit control handlers (`input`/`change`/button handlers), not emergency pre-save scraping.
+
+3. Any DOM read helper must be scoped and non-destructive
+   - If a helper is required, it must:
+     - read only controls guaranteed to exist for that view
+     - never clear existing state when controls are absent
+     - be limited to the smallest set of fields needed
+
+4. Regression test scenario required before push
+   - Must pass this manual flow:
+     - create new record
+     - complete all sections
+     - `Save & return`
+     - reopen via `Edit record`
+     - verify completion and all captured values persist
+
+5. Conflict/handoff rule for parallel chats
+   - Any change touching save path, step navigation, or snapshot persistence in `/assets/js/app.js` is high-risk.
+   - Chat must declare this in `/Users/will.bloor/Documents/Configurator/docs/workstreams.md` before editing and note cross-surface impact in README entry.
 
 ## README Update Working Rule (2026-02-25)
 

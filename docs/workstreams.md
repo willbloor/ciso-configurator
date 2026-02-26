@@ -1,6 +1,6 @@
 # Workstream Coordination Board
 
-Last updated (UTC): 2026-02-26 19:57
+Last updated (UTC): 2026-02-26 21:13
 
 This file is the live coordination source for parallel chats.  
 `README.md` remains the canonical shipped-change log; this board is the active ownership and handoff tracker.
@@ -30,7 +30,7 @@ This file is the live coordination source for parallel chats.
 | `content` | `codex/content` | Content catalogs/data sync in `/assets/data/immersive-content-master.csv`, `/assets/data/official-blog-rss-curated.csv`, `/assets/js/content-catalog.js`, `/assets/js/official-blog-rss-fallback.js` | `planned` | 2026-02-26 11:18 | Confirm feed/catalog scope + update status |
 | `release-gate` | `codex/release-gate` | README/code reconciliation, security/logic checks, deploy checklist, final push gate | `in-progress` | 2026-02-26 17:58 | Finalize main push after merged-state checks |
 | `copy-rules` | `codex/copy-rules` | Structured copy-rules layer and on-brand generation wiring across landing page, email builder, and follow-up email flows | `merged` | 2026-02-26 17:58 | Track post-merge feedback only |
-| `default-contact` | `codex/default-contact-fallbacks` | Ensure all records have fallback name + business email defaults in snapshot normalization and storage hydration paths | `ready-for-merge` | 2026-02-26 19:57 | Merge after review + optional browser follow-up flow spot-check |
+| `default-contact` | `codex/default-contact-fallbacks` | Ensure all records have fallback name + business email defaults in snapshot normalization and storage hydration paths | `merged` | 2026-02-26 21:13 | Track synthetic-contact fallback usage and post-merge feedback |
 
 ## File Claim Log
 
@@ -45,11 +45,13 @@ Use one line per claim/update so overlaps are explicit.
 | 2026-02-26 17:49 | `copy-rules` | `/README.md`, `/docs/workstreams.md` | Run full release-gate checklist (syntax, parity, security, config) and log compliance evidence before handoff | Chat: push process enforcement |
 | 2026-02-26 17:58 | `release-gate` | `/README.md`, `/docs/workstreams.md` | Merge `codex/copy-rules` into `main`, rerun release gate on merged state, and record push readiness | Chat: main promotion |
 | 2026-02-26 19:54 | `default-contact` | `/assets/js/app.js`, `/README.md`, `/docs/workstreams.md` | Add deterministic fallback full name + business email for records missing contact identity | Chat: data completeness hardening |
+| 2026-02-26 21:13 | `release-gate` | `/README.md`, `/docs/workstreams.md` | Merge `codex/default-contact-fallbacks` into `main`, rerun release checks on merged state, and record push readiness | Chat: main promotion |
 
 ## Handoff Notes
 
 - Add newest note at top.
 - Include: what changed, what is left, known risks, and links to related commits/PRs.
+- 2026-02-26 21:13 UTC (`release-gate`): Merged `codex/default-contact-fallbacks` into local `main`, reran merged-state release checks (syntax, path audit, security patterns, config/header checks all PASS), and marked `default-contact` as merged pending `origin/main` push.
 - 2026-02-26 19:57 UTC (`default-contact`): Added deterministic fallback contact identity in `/assets/js/app.js` normalization path (`normalizeThreadModel`) so all records hydrate/save with `snapshot.fullName` and valid `snapshot.email`; fallback values are `Primary Contact` and `contact.<company-or-record-token>@example.invalid`. Also unified follow-up email validation to shared helper. Validation: `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`. Remaining risk: synthetic defaults should be replaced with verified customer identity before external sends.
 - 2026-02-26 17:58 UTC (`release-gate`): Merged `codex/copy-rules` into local `main`, reran full release-gate checks on merged state (all PASS), and marked `copy-rules` workstream as merged pending push to `origin/main`.
 - 2026-02-26 17:49 UTC (`copy-rules`): Re-ran full release gate on branch `codex/copy-rules` (node syntax checks, README-path audit, catalog/question/RSS parity, secrets/eval scan, CSP/header verification) with all checks PASS; branch remains ready-for-merge.

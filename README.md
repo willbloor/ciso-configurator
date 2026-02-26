@@ -801,6 +801,38 @@ Design and workflow updates deployed for self-service intake and dashboard follo
    - Validation performed:
      - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
 
+41. Main-branch promotion of `default-contact` with merged-state release checks
+   - Merged branch:
+     - `codex/default-contact-fallbacks` -> `main`
+   - Re-ran release checks against merged `main` state before push:
+     - `node --check` on app/widget/catalog/runtime scripts
+     - README absolute-path reference audit (allowing documented removed Firebase artifacts)
+     - secret-pattern scan and `eval`/`new Function` scan
+     - `vercel.json` parse and security-header presence checks
+     - CSP/referrer meta presence checks in `/Users/will.bloor/Documents/Configurator/index.html`
+   - Updated workstream board to mark `default-contact` as `merged` and logged merged-state gate evidence.
+   - Principle:
+     - promotion to shared branch must be validated after merge, not inferred from feature-branch checks alone.
+   - Cross-surface impact:
+     - promotes deterministic fallback contact identity + archive action discoverability to shared branch without changing previously validated security/header posture.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+     - `/Users/will.bloor/Documents/Configurator/docs/workstreams.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/copy-rules.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/content-catalog.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/official-blog-rss-fallback.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/question-bank.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/clean_content_csv_by_recency.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/generate_question_bank_js.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/reconcile_content_csvs.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/reconcile_operations_csvs.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/sync_official_blog_rss_curated.mjs`
+   - Residual risk / follow-up:
+     - fallback contact values are synthetic by design and should be replaced with verified customer details before any external send workflow.
+
 ## State Sync Guardrails (Critical, 2026-02-26)
 
 These are hard rules to prevent recurrence of the Tina Corp save-loss regression.

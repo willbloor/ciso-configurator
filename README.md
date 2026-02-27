@@ -1,6 +1,6 @@
 # CISO Configurator
 
-Last updated: 2026-02-26
+Last updated: 2026-02-27
 
 This repository contains the static configurator app used to generate customer dashboard pages.
 
@@ -832,6 +832,64 @@ Design and workflow updates deployed for self-service intake and dashboard follo
      - `node --check /Users/will.bloor/Documents/Configurator/scripts/sync_official_blog_rss_curated.mjs`
    - Residual risk / follow-up:
      - fallback contact values are synthetic by design and should be replaced with verified customer details before any external send workflow.
+
+42. Save-before-leaving guard, test-email governance toggle, and self-service modules import fix (2026-02-27)
+   - Added save-before-leaving behavior for configurator exits on saved records:
+     - when leaving `configurator` for `dashboard`, `archived`, `account`, `backend`, `interstitial`, or `export`, unsaved changes are committed first
+     - if save is already in progress, navigation is blocked with `Saving changes. Please wait a moment.`
+     - if save fails (permissions/read-only/lock), navigation is blocked with `Unable to save changes right now. Please try again.`
+   - Added targeted pre-save guards to flows that can mutate active record context before view switch:
+     - `openThreadOverview(...)`
+     - `openCrmExportView(...)`
+   - Added account advanced setting `Allow test emails` (`on` by default):
+     - when `off`, synthetic fallback emails (`@example.invalid`) are not treated as valid customer emails
+     - snapshot contact fallback now leaves email blank instead of injecting synthetic addresses when test emails are disabled
+     - follow-up/contact validation and consultation booking now use the same policy-aware validator
+   - Fixed self-service import normalization bug for record modules:
+     - `normalizeThreadModel(...)` now preserves object-shaped `modules` from imported/self-service records
+     - generated modules are used only when import payload modules are absent
+   - Principle:
+     - prevent stale overview completion caused by unsaved configurator exits, keep synthetic test contacts explicitly controllable, and preserve imported record fidelity.
+   - Cross-surface impact:
+     - configurator-to-overview/export transitions now reflect deselections and completion changes immediately after leave
+     - account advanced settings now directly influence follow-up/contact validity and booking prerequisites
+     - imported widget/self-service records retain authored module content in dashboard/interstitial surfaces
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/customer-self-service-widget-prototype.js`
+   - Residual risk / follow-up:
+     - save-before-leaving behavior should be manually smoke-tested across all exit controls (left nav, breadcrumb, header actions, and route hash navigation) for toast timing/read-only messaging consistency.
+
+43. Added structured capability-priority model and surfaced it in generated customer landing output (2026-02-27)
+   - Added a structured capability taxonomy layer in runtime generation logic:
+     - capability catalog includes pillars and modules aligned to Immersive One positioning (for example: `Prove`, `Improve`, `Benchmark & Report`, `Programs`, integration orchestration)
+     - each capability carries outcome alignment, stack-signal matching keywords, and evidence/proof-point prompts
+   - Added deterministic priority scoring for landing generation:
+     - `capabilityPriorityCardsForGate(...)` scores capabilities using record outcome signals (`gate.topOutcomes`) and stack/tooling signals (`gate.stackSignals`)
+     - output is a ranked capability list with `why now` rationale + proof points
+   - Wired the capability layer into customer landing-page model/output:
+     - `customerTemplateModelFromCandidate(...)` now adds `priorityCapabilities`
+     - hero primary CTA now points to `#priority-capabilities` when capability priorities are available
+     - generated HTML includes a new section:
+       - `Priority capabilities your selections demand`
+       - responsive card grid with pillar label, rationale, and proof points
+   - Principle:
+     - convert research/taxonomy intelligence into deterministic, per-record landing narrative that explains which capabilities should be prioritized and why.
+   - Cross-surface impact:
+     - customer landing pages now render capability-priority guidance directly from the same discovery/outcome/stack signals used in recommendations.
+     - keeps generated copy anchored to selected record context instead of static generic capability messaging.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/docs/workstreams.md`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+   - Residual risk / follow-up:
+     - capability ranking is heuristic and should be spot-checked with real records to tune weighting/rationale phrasing for edge combinations.
 
 ## State Sync Guardrails (Critical, 2026-02-26)
 

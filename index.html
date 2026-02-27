@@ -489,6 +489,14 @@
                 </div>
                 <p class="settingsFieldNote">Controls whether ROI estimate appears in the side snapshot summary.</p>
               </div>
+              <div class="settingsSubgroup">
+                <div class="settingsFieldLabel">Allow test emails</div>
+                <div class="settingsOptions settingsInlineOptions" id="accountTestEmailOptions">
+                  <button class="settingsOption" type="button" data-test-email="on" aria-pressed="true">Allow test emails</button>
+                  <button class="settingsOption" type="button" data-test-email="off" aria-pressed="false">Block test emails</button>
+                </div>
+                <p class="settingsFieldNote">When blocked, synthetic <code>@example.invalid</code> emails are rejected and follow-up actions require a real business email.</p>
+              </div>
             </div>
             <div class="settingsReset">
               <button class="btn small" id="resetLayoutWidths" type="button">Reset layout widths</button>

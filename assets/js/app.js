@@ -1004,6 +1004,23 @@
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(String(value || '').trim());
       }
 
+      function isSyntheticTestEmail(value){
+        return /@example\.invalid$/i.test(normalizeEmail(value || ''));
+      }
+
+      function customerEmailLooksValid(value, opts){
+        const cfg = (opts && typeof opts === 'object') ? opts : {};
+        const allowTestEmails = cfg.allowTestEmails !== false;
+        const emailRaw = normalizeEmail(value || '');
+        if(!emailLooksValid(emailRaw)){
+          return false;
+        }
+        if(!allowTestEmails && isSyntheticTestEmail(emailRaw)){
+          return false;
+        }
+        return true;
+      }
+
       function contactFallbackToken(value, fallback){
         const token = String(value || '')
           .trim()
@@ -1025,14 +1042,18 @@
       function ensureSnapshotContactIdentity(snapshotInput, opts){
         const snapshot = (snapshotInput && typeof snapshotInput === 'object') ? snapshotInput : {};
         const cfg = (opts && typeof opts === 'object') ? opts : {};
+        const allowTestEmails = cfg.allowTestEmails !== false;
         const fallbackName = 'Primary Contact';
         const recordId = String(cfg.recordId || '').trim();
         const company = String(cfg.company || '').trim();
         const fullNameRaw = String(snapshot.fullName || '').trim();
         const fullName = fullNameRaw || fallbackName;
         const emailRaw = normalizeEmail(snapshot.email || '');
-        if(emailLooksValid(emailRaw)){
+        if(customerEmailLooksValid(emailRaw, { allowTestEmails })){
           return { fullName, email: emailRaw };
+        }
+        if(!allowTestEmails){
+          return { fullName, email: '' };
         }
         const token = contactFallbackToken(company, recordId || 'record');
         const fallbackEmail = `contact.${token}@example.invalid`;
@@ -2303,6 +2324,15 @@
         return raw !== 'off';
       }
 
+      function accountAllowTestEmailsEnabled(){
+        try{
+          const account = (settingsState && settingsState.account) ? settingsState.account : {};
+          return resolveAccountTestEmailMode(account.testEmailMode) !== 'off';
+        }catch(err){
+          return true;
+        }
+      }
+
       function questionRequirementRows(){
         const bankRows = (window.immersiveQuestionBank && Array.isArray(window.immersiveQuestionBank.rows))
           ? window.immersiveQuestionBank.rows
@@ -3512,6 +3542,25 @@ const evidenceOpts = [
           view = 'interstitial';
         }
         const next = (view === 'dashboard' || view === 'archived' || view === 'interstitial' || view === 'account' || view === 'backend' || view === 'export') ? view : 'configurator';
+        const ensureSavedBeforeLeave = (()=>{
+          if(prev !== 'configurator' || next === 'configurator') return true;
+          if(!activeSavedThreadHasUnsavedState()) return true;
+          if(state.saveIsThinking){
+            toast('Saving changes. Please wait a moment.');
+            if(cfg.syncRoute !== false) syncRouteWithState({ replace:true });
+            return false;
+          }
+          const didSave = saveActiveRecord({ quiet:true, auto:true, thinkMs:0 });
+          if(didSave === false){
+            toast('Unable to save changes right now. Please try again.');
+            if(cfg.syncRoute !== false) syncRouteWithState({ replace:true });
+            return false;
+          }
+          return true;
+        })();
+        if(!ensureSavedBeforeLeave){
+          return false;
+        }
         if(next !== 'interstitial'){
           restoreContentRecommendationsMount();
         }
@@ -3579,6 +3628,7 @@ const evidenceOpts = [
           syncGlobalActionBar();
           renderWorkspaceBreadcrumb();
         }
+        return true;
       }
 
       function syncGlobalActionBar(){
@@ -5764,6 +5814,17 @@ const evidenceOpts = [
       }
 
       function openCrmExportView(preferredThreadId){
+        if((state.currentView || '') === 'configurator' && activeSavedThreadHasUnsavedState()){
+          if(state.saveIsThinking){
+            toast('Saving changes. Please wait a moment.');
+            return;
+          }
+          const didSave = saveActiveRecord({ quiet:true, auto:true, thinkMs:0 });
+          if(didSave === false){
+            toast('Unable to save changes right now. Please try again.');
+            return;
+          }
+        }
         const incomingId = String(preferredThreadId || '').trim();
         const nextId = incomingId || String(state.activeThread || '').trim() || 'current';
         if(nextId === 'current'){
@@ -6330,7 +6391,9 @@ const evidenceOpts = [
           outcomesText: String(source.outcomesText || '').trim() || 'Awaiting outcome signals',
           gapSummary: String(source.gapSummary || '').trim(),
           gaps: Array.isArray(source.gaps) ? source.gaps : [],
-          modules: Array.isArray(source.modules) ? source.modules : [],
+          modules: (source.modules && typeof source.modules === 'object' && !Array.isArray(source.modules))
+            ? source.modules
+            : undefined,
           viz: (source.viz && typeof source.viz === 'object') ? source.viz : {},
           snapshot,
           createdAt,
@@ -6511,13 +6574,18 @@ const evidenceOpts = [
         );
         const snapshotContact = ensureSnapshotContactIdentity(snapshot, {
           company: sourceCompany,
-          recordId: normalizedId
+          recordId: normalizedId,
+          allowTestEmails: accountAllowTestEmailsEnabled()
         });
         snapshot.fullName = snapshotContact.fullName;
         snapshot.email = snapshotContact.email;
         snapshot.fieldMode = resolveConfiguratorFieldMode(snapshot.fieldMode || 'guided');
         const progress = readinessProgressFromContext(snapshot);
-        const modules = threadModulesFromSnapshot(snapshot, { outcomes, outcomesText });
+        const generatedModules = threadModulesFromSnapshot(snapshot, { outcomes, outcomesText });
+        const importedModules = (source.modules && typeof source.modules === 'object' && !Array.isArray(source.modules))
+          ? (jsonClone(source.modules) || source.modules)
+          : null;
+        const modules = importedModules || generatedModules;
         const company = String(snapshot.company || sourceCompany || 'Record');
         const sourceUpdatedAt = coerceTimestamp(source.updatedAt);
         const sourceCreatedAt = coerceTimestamp(source.createdAt);
@@ -8117,6 +8185,17 @@ const evidenceOpts = [
 
       function openThreadOverview(threadId, opts){
         const cfg = Object.assign({ section:'overview' }, opts || {});
+        if((state.currentView || '') === 'configurator' && activeSavedThreadHasUnsavedState()){
+          if(state.saveIsThinking){
+            toast('Saving changes. Please wait a moment.');
+            return;
+          }
+          const didSave = saveActiveRecord({ quiet:true, auto:true, thinkMs:0 });
+          if(didSave === false){
+            toast('Unable to save changes right now. Please try again.');
+            return;
+          }
+        }
         const currentRecordId = currentEditableRecordId();
         if(currentRecordId){
           releaseRecordLock(currentRecordId, { force:false });
@@ -8662,7 +8741,7 @@ const evidenceOpts = [
       }
 
       function interstitialFollowupEmailValid(value){
-        return emailLooksValid(value);
+        return customerEmailLooksValid(value, { allowTestEmails: accountAllowTestEmailsEnabled() });
       }
 
       function interstitialFollowupContact(thread){
@@ -11420,6 +11499,206 @@ const evidenceOpts = [
         }) || 'manager';
       }
 
+      const capabilityPriorityCatalog = Object.freeze([
+        {
+          id: 'integrated-readiness',
+          pillar: 'Integration',
+          title: 'Integrated readiness automations',
+          summary: 'Embed readiness into Teams, GitHub, and LMS workflows with API-driven provisioning and synchronization.',
+          outcomeIds: ['cyberWorkforce', 'complianceEvidence', 'secureEnterprise'],
+          signalKeywords: ['microsoft teams', 'ms teams', 'github', 'rest api', 'api automation', 'workday', 'successfactors', 'cornerstone', 'lms', 'branch protection'],
+          proofPoints: ['Flow-of-work assignment and notification activity', 'Provisioning and hierarchy sync via API', 'Governance controls across SDLC and LMS systems'],
+          baseScore: 3
+        },
+        {
+          id: 'cyber-drills',
+          pillar: 'Prove',
+          title: 'Cyber Drills',
+          summary: 'Run cross-functional attack simulations to measure response speed, coordination quality, and decision outcomes.',
+          outcomeIds: ['fasterResponse', 'complianceEvidence'],
+          signalKeywords: ['incident response', 'coordination', 'executive', 'board', 'regulator', 'investor'],
+          proofPoints: ['Time-to-detect and time-to-respond trends', 'Cross-team escalation and handoff quality', 'After-action evidence for leadership review'],
+          baseScore: 2
+        },
+        {
+          id: 'crisis-sim',
+          pillar: 'Prove',
+          title: 'Cyber Crisis Simulation',
+          summary: 'Exercise executives and crisis stakeholders against high-pressure scenarios with measurable decision analytics.',
+          outcomeIds: ['fasterResponse', 'complianceEvidence'],
+          signalKeywords: ['executive', 'legal', 'communications', 'crisis', 'investor'],
+          proofPoints: ['Decision latency and accuracy metrics', 'Business impact analysis under stress', 'Crisis governance evidence for stakeholders'],
+          baseScore: 1
+        },
+        {
+          id: 'dynamic-threat-range',
+          pillar: 'Prove',
+          title: 'Dynamic Threat Range',
+          summary: 'Validate SOC capability in live-fire enterprise simulations aligned to real tool-stack workflows.',
+          outcomeIds: ['fasterResponse', 'secureEnterprise'],
+          signalKeywords: ['splunk', 'elastic', 'sentinel', 'crowdstrike', 'siem', 'soc', 'threat'],
+          proofPoints: ['Operational proficiency in production-like workflows', 'Objective hunt and response performance baselines', 'Role-level readiness evidence for SOC teams'],
+          baseScore: 1
+        },
+        {
+          id: 'hands-on-labs',
+          pillar: 'Improve',
+          title: 'Hands-On Labs',
+          summary: 'Target role-based skill gaps with realistic labs across AppSec, cloud, identity, OT, and secure AI topics.',
+          outcomeIds: ['secureEnterprise', 'secureAI', 'cyberWorkforce'],
+          signalKeywords: ['appsec', 'cloud', 'identity', 'ot', 'ai', 'secure coding'],
+          proofPoints: ['Role-by-role skill progression data', 'Gap-closure velocity by domain', 'Evidence of improvement after exercises'],
+          baseScore: 2
+        },
+        {
+          id: 'appsec-range-exercises',
+          pillar: 'Improve',
+          title: 'AppSec Range Exercises',
+          summary: 'Strengthen secure development behavior using collaborative remediation workflows and verification loops.',
+          outcomeIds: ['secureEnterprise'],
+          signalKeywords: ['github', 'branch protection', 'sdlc', 'devsecops', 'appsec'],
+          proofPoints: ['Remediation accuracy and completion metrics', 'Secure SDLC workflow behavior under pressure', 'Developer team benchmark progression'],
+          baseScore: 1
+        },
+        {
+          id: 'workforce-exercising',
+          pillar: 'Improve',
+          title: 'Workforce Exercising',
+          summary: 'Drive measurable behavior change across non-technical and mixed teams with targeted scenario exercises.',
+          outcomeIds: ['cyberWorkforce', 'complianceEvidence'],
+          signalKeywords: ['workforce', 'lms', 'workday', 'successfactors', 'cornerstone', 'teams'],
+          proofPoints: ['Behavioral risk reduction by cohort', 'Readiness distribution across business functions', 'Completion-to-capability uplift tracking'],
+          baseScore: 1
+        },
+        {
+          id: 'benchmark-reporting',
+          pillar: 'Benchmark & Report',
+          title: 'Resilience Score and reporting',
+          summary: 'Convert exercise and lab outcomes into board-ready benchmark views and audit-facing evidence packs.',
+          outcomeIds: ['complianceEvidence', 'fasterResponse'],
+          signalKeywords: ['audit', 'evidence', 'benchmark', 'board', 'regulator', 'governance'],
+          proofPoints: ['Stakeholder-grade readiness trend reporting', 'Framework and regulatory evidence alignment', 'Audit-ready exports and benchmark positioning'],
+          baseScore: 2
+        },
+        {
+          id: 'programs',
+          pillar: 'Programs',
+          title: 'Programs orchestration',
+          summary: 'Operationalize readiness as a continuous system with managed journeys, cohorts, and intervention controls.',
+          outcomeIds: ['cyberWorkforce', 'fasterResponse', 'complianceEvidence'],
+          signalKeywords: ['programmatic', 'cadence', 'journey', 'cohort', 'lms', 'workflow'],
+          proofPoints: ['Continuous readiness cadence evidence', 'Cohort-level progression and intervention history', 'Governed loop across prove/improve/report'],
+          baseScore: 1
+        },
+        {
+          id: 'secure-ai-readiness',
+          pillar: 'Improve',
+          title: 'Secure AI readiness',
+          summary: 'Build safe AI adoption with scenario-driven controls testing and secure development guardrails.',
+          outcomeIds: ['secureAI', 'secureEnterprise'],
+          signalKeywords: ['ai', 'llm', 'prompt injection', 'model', 'genai'],
+          proofPoints: ['AI threat scenario performance signals', 'Secure AI control validation outcomes', 'Governance evidence for AI deployment decisions'],
+          baseScore: 1
+        }
+      ]);
+
+      function capabilityPriorityCardsForGate(gateInput){
+        const gate = (gateInput && typeof gateInput === 'object') ? gateInput : {};
+        const topOutcomes = Array.isArray(gate.topOutcomes) ? gate.topOutcomes : [];
+        const outcomeIds = new Set(
+          topOutcomes
+            .map((row)=> String((row && row.id) || '').trim())
+            .filter(Boolean)
+        );
+        const outcomeLabelById = new Map(
+          topOutcomes
+            .map((row)=> [
+              String((row && row.id) || '').trim(),
+              String((row && (row.short || row.label)) || '').trim()
+            ])
+            .filter((entry)=> entry[0] && entry[1])
+        );
+        const signalRows = (Array.isArray(gate.stackSignals) ? gate.stackSignals : [])
+          .map((value)=> {
+            const raw = String(value || '').trim();
+            if(!raw) return null;
+            return { raw, norm: normalizeContentToken(raw) };
+          })
+          .filter(Boolean);
+
+        const signalMatchesForKeywords = (keywords, limit)=>{
+          const rows = Array.isArray(keywords) ? keywords : [];
+          const maxItems = Math.max(1, Number(limit) || 1);
+          if(!rows.length || !signalRows.length) return [];
+          const seen = new Set();
+          const matches = [];
+          rows.forEach((keyword)=>{
+            if(matches.length >= maxItems) return;
+            const needle = normalizeContentToken(keyword);
+            if(!needle) return;
+            signalRows.forEach((signal)=>{
+              if(matches.length >= maxItems) return;
+              if(!signal || !signal.norm || !signal.norm.includes(needle)) return;
+              const key = signal.raw.toLowerCase();
+              if(seen.has(key)) return;
+              seen.add(key);
+              matches.push(signal.raw);
+            });
+          });
+          return matches;
+        };
+
+        const scored = capabilityPriorityCatalog.map((capability, idx)=>{
+          const outcomeMatches = (Array.isArray(capability.outcomeIds) ? capability.outcomeIds : [])
+            .filter((id)=> outcomeIds.has(String(id || '').trim()));
+          const outcomeLabels = outcomeMatches
+            .map((id)=> outcomeLabelById.get(String(id || '').trim()) || '')
+            .filter(Boolean)
+            .slice(0, 3);
+          const signalMatches = signalMatchesForKeywords(capability.signalKeywords, 3);
+
+          let score = Number(capability.baseScore) || 0;
+          score += outcomeMatches.length * 9;
+          score += signalMatches.length * 4;
+          if(outcomeMatches.length && signalMatches.length){
+            score += 3;
+          }
+
+          const whyParts = [];
+          if(outcomeLabels.length){
+            whyParts.push(`Aligned to ${naturalList(outcomeLabels)}.`);
+          }
+          if(signalMatches.length){
+            whyParts.push(`Triggered by selected stack context: ${naturalList(signalMatches)}.`);
+          }
+          if(!whyParts.length){
+            whyParts.push('Selected as a foundational capability for this profile.');
+          }
+
+          return {
+            index: idx,
+            score,
+            id: String(capability.id || '').trim() || `capability-${idx + 1}`,
+            pillar: String(capability.pillar || 'Capability').trim() || 'Capability',
+            title: String(capability.title || `Priority capability ${idx + 1}`).trim() || `Priority capability ${idx + 1}`,
+            summary: String(capability.summary || 'Capability selected for this profile.').trim() || 'Capability selected for this profile.',
+            why: whyParts.join(' '),
+            proofPoints: Array.isArray(capability.proofPoints) ? capability.proofPoints.slice(0, 3) : []
+          };
+        }).sort((left, right)=> (right.score - left.score) || (left.index - right.index));
+
+        const positive = scored.filter((row)=> Number(row.score) > 0);
+        const picks = (positive.length ? positive : scored).slice(0, 4);
+        return picks.map((row)=> ({
+          id: row.id,
+          pillar: row.pillar,
+          title: row.title,
+          summary: row.summary,
+          why: row.why,
+          proofPoints: row.proofPoints
+        }));
+      }
+
       function customerTemplateModelFromCandidate(candidate){
         const record = candidate && candidate.thread ? candidate.thread : null;
         if(!record) return null;
@@ -11503,6 +11782,7 @@ const evidenceOpts = [
           coverageGroups: coverageFocus,
           pressureSignals: pressureFocus
         });
+        const priorityCapabilities = capabilityPriorityCardsForGate(gate).slice(0, 4);
 
         const valueCardsRaw = [
           {
@@ -11629,6 +11909,8 @@ const evidenceOpts = [
           }
         ];
         const generatedOn = new Date().toISOString().slice(0, 10);
+        const heroPrimaryCtaLabel = priorityCapabilities.length ? 'Priority capabilities' : 'Recommended resources';
+        const heroPrimaryCtaHref = priorityCapabilities.length ? '#priority-capabilities' : '#recommended-for-you';
         return {
           sourceThreadId: String(record.id || 'current'),
           company: String(record.company || '').trim() || 'Customer',
@@ -11641,8 +11923,8 @@ const evidenceOpts = [
             title: (landingCopy && String(landingCopy.heroTitle || '').trim()) || `${String(record.company || 'Customer')} readiness dashboard`,
             subtitle: (landingCopy && String(landingCopy.heroSubtitle || '').trim()) || `Built from what ${profileName} shared, with recommendations focused on your top priorities and delivery outcomes.`,
             imageUrl: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/678646ce52898299cc1134be_HERO%20IMAGE%20LABS.webp',
-            primaryCtaLabel: 'Recommended resources',
-            primaryCtaHref: '#recommended-for-you',
+            primaryCtaLabel: heroPrimaryCtaLabel,
+            primaryCtaHref: heroPrimaryCtaHref,
             secondaryCtaLabel: 'Contact your team',
             secondaryCtaHref: '#contact-your-team',
             stats: [
@@ -11661,6 +11943,7 @@ const evidenceOpts = [
           valueCards,
           demoCard,
           outcomeBlocks,
+          priorityCapabilities,
           commercialSignals,
           actions: agenda.length ? agenda : ['Align owners and convert the profile into a timed execution plan.'],
           resources: resources.length ? resources : ['Customer briefing pack', 'Outcome mapping workshop'],
@@ -11710,6 +11993,7 @@ const evidenceOpts = [
 
         const hero = (model.hero && typeof model.hero === 'object') ? model.hero : {};
         const outcomeBlocks = Array.isArray(model.outcomeBlocks) ? model.outcomeBlocks.filter(Boolean).slice(0, 3) : [];
+        const priorityCapabilities = Array.isArray(model.priorityCapabilities) ? model.priorityCapabilities.filter(Boolean).slice(0, 6) : [];
         const actions = Array.isArray(model.actions) ? model.actions.filter(Boolean).slice(0, 6) : [];
         const cards = Array.isArray(model.contentCards) ? model.contentCards.filter(Boolean).slice(0, 9) : [];
         const whatsNewCardsInput = Array.isArray(model.whatsNewCards) ? model.whatsNewCards.filter(Boolean).slice(0, 3) : [];
@@ -11910,6 +12194,18 @@ const evidenceOpts = [
           return `<article class="contentCard">${imageUrl ? `<div class="contentImageWrap"><img class="contentImage" loading="lazy" src="${esc(imageUrl)}" alt="${esc(item.title || 'Latest post image')}" /></div>` : ''}<p class="contentEyebrow">${esc(eyebrow)}</p>${titleHtml}<p class="contentText">${esc(summary)}</p>${linkHref ? `<a class="contentLink" href="${esc(linkHref)}" target="_blank" rel="noopener noreferrer">${esc(linkLabel)}</a>` : ''}</article>`;
         };
 
+        const renderCapabilityCard = (capability, idx)=>{
+          const item = (capability && typeof capability === 'object') ? capability : {};
+          const title = String(item.title || `Priority capability ${idx + 1}`).trim() || `Priority capability ${idx + 1}`;
+          const pillar = String(item.pillar || 'Capability').trim() || 'Capability';
+          const summary = String(item.summary || '').trim() || 'Capability selected from your profile.';
+          const why = String(item.why || '').trim();
+          const proofPoints = Array.isArray(item.proofPoints)
+            ? item.proofPoints.map((value)=> String(value || '').trim()).filter(Boolean).slice(0, 3)
+            : [];
+          return `<article class="capabilityCard"><p class="capabilityEyebrow">Priority capability ${idx + 1} · ${esc(pillar)}</p><h3>${esc(title)}</h3><p class="capabilitySummary">${esc(summary)}</p>${why ? `<p class="capabilityWhy"><strong>Why now:</strong> ${esc(why)}</p>` : ''}${proofPoints.length ? `<ul class="capabilityProofList">${proofPoints.map((point)=> `<li>${esc(point)}</li>`).join('')}</ul>` : ''}</article>`;
+        };
+
         const logoSrc = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg';
         const companyLabel = String(model.company || 'your organisation').trim() || 'your organisation';
         const readinessParagraph = `For ${companyLabel}, this means defensible evidence you can use with leadership and external stakeholders: clear baselines, visible movement over time, and proof aligned to board and regulatory expectations.`;
@@ -12066,6 +12362,13 @@ const evidenceOpts = [
     .detailsGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
     .detailCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 12%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(rgb(255, 255, 255), rgb(248, 250, 255)); padding: 16px; box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; }
     .detailCard h3 { margin: 0px 0px 10px; font-size: 24px; line-height: 1.1; color: rgb(36, 60, 104); }
+    .capabilityGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0px, 1fr)); }
+    .capabilityCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 16%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%); padding: 16px; box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; }
+    .capabilityEyebrow { margin: 0px; color: rgb(66, 91, 140); font-size: 12px; line-height: 1; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; }
+    .capabilityCard h3 { margin: 10px 0px 0px; font-size: 26px; line-height: 1.1; color: rgb(24, 45, 86); }
+    .capabilitySummary { margin: 10px 0px 0px; color: rgb(48, 66, 98); font-size: 17px; line-height: 1.35; }
+    .capabilityWhy { margin: 10px 0px 0px; color: rgb(55, 72, 103); font-size: 15px; line-height: 1.35; }
+    .capabilityProofList { margin: 10px 0px 0px; padding-left: 1.15rem; color: rgb(37, 55, 88); display: grid; gap: 6px; font-size: 14px; line-height: 1.35; }
     .kvRow { display: grid; grid-template-columns: 140px minmax(0px, 1fr); gap: 8px; font-size: 14px; line-height: 18px; padding: 6px 0px; border-bottom: 1px dashed rgba(15, 23, 42, 0.08); }
     .kvRow:last-child { border-bottom: none; }
     .kvLabel { color: rgb(96, 113, 143); }
@@ -12098,11 +12401,11 @@ const evidenceOpts = [
       .storyCard--tour .storyInner::before { background: linear-gradient(rgba(5, 10, 24, 0.66) 0%, rgba(5, 10, 24, 0.8) 100%); }
       .storyContent { padding: 30px 26px; }
       .contactGrid { grid-template-columns: 1fr; }
-      .outcomeGrid, .contentGrid, .detailsGrid { grid-template-columns: repeat(2, minmax(0px, 1fr)); }
+      .outcomeGrid, .contentGrid, .detailsGrid, .capabilityGrid { grid-template-columns: repeat(2, minmax(0px, 1fr)); }
       .kvRow { grid-template-columns: 1fr; gap: 0.2rem; }
     }
     @media (max-width: 760px) {
-      .outcomeGrid, .contentGrid, .detailsGrid { grid-template-columns: 1fr; }
+      .outcomeGrid, .contentGrid, .detailsGrid, .capabilityGrid { grid-template-columns: 1fr; }
       .header90_card-content { padding: 26px 20px; }
       .panel { padding: 16px; }
       .panel h2 { font-size: 28px; }
@@ -12174,6 +12477,7 @@ const evidenceOpts = [
     <section class="layout">
       ${outcomeBlocks.length ? `<article class="panel panel--outcomes"><h2>Your top outcomes</h2><p class="panelSub">The three priorities we recommend focusing on first.</p><div class="outcomeGrid">${outcomeBlocks.map((outcome, idx)=> `<article class="outcomeCard"><div class="outcomeHead"><div class="outcomeRing" style="--pct:${metricPercent(outcome.metric, idx)}"><span>${metricPercent(outcome.metric, idx)}%</span></div><h3>${esc(outcome.title || `Priority outcome ${idx + 1}`)}</h3></div><p>${esc(outcome.detail || '')}</p></article>`).join('')}</div></article>` : ''}
       ${details.length ? `<article class="panel"><h2>What you told us in the meeting</h2><p class="panelSub">Your context, constraints, and operating priorities as we captured them.</p><div class="detailsGrid">${details.map((section)=> `<article class="detailCard"><h3>${esc(section.title || 'Section')}</h3>${(Array.isArray(section.rows) ? section.rows : []).map((row)=> `<div class="kvRow"><span class="kvLabel">${esc((row && row.label) || 'Field')}</span><span class="kvValue">${esc((row && row.value) || '—')}</span></div>`).join('')}</article>`).join('')}</div></article>` : ''}
+      ${priorityCapabilities.length ? `<article class="panel" id="priority-capabilities"><h2>Priority capabilities your selections demand</h2><p class="panelSub">Based on your selected outcomes and operating stack, these are the highest-leverage capabilities to prioritize first.</p><div class="capabilityGrid">${priorityCapabilities.map((capability, idx)=> renderCapabilityCard(capability, idx)).join('')}</div></article>` : ''}
       <div class="sectionHead sectionHead--center"><div><h2>Our understanding of your needs</h2><p class="sectionHeadSub">Measuring cyber readiness with Immersive</p><p class="sectionHeadLead">${esc(readinessParagraph)}</p></div></div>
       <article class="panel panel--support">
         <div class="storyStack">
@@ -15766,6 +16070,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const accountDashboardDateModeSelect = $('#accountDashboardDateMode');
       const accountPrefillOptions = $$('#accountPrefillOptions [data-prefill]');
       const accountRoiEstimateOptions = $$('#accountRoiEstimateOptions [data-roi-estimate]');
+      const accountTestEmailOptions = $$('#accountTestEmailOptions [data-test-email]');
       const accountNotificationOptions = $$('#accountNotificationOptions [data-account-notify]');
       const accountLhnButtons = $$('#accountLhn [data-account-nav-target]');
       const accountLhnMode = $('#accountLhnMode');
@@ -15832,6 +16137,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           fieldMode: 'guided',
           prefillMode: 'on',
           roiEstimateMode: 'on',
+          testEmailMode: 'on',
           landingView: 'dashboard',
           dashboardDateMode: 'modified',
           notifyRecordUpdates: true,
@@ -15922,6 +16228,12 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         return String(next || '').toLowerCase() === 'off' ? 'off' : 'on';
       }
 
+      function resolveAccountTestEmailMode(next){
+        if(next === false) return 'off';
+        if(next === true) return 'on';
+        return String(next || '').toLowerCase() === 'off' ? 'off' : 'on';
+      }
+
       function resolveAccountLandingView(next){
         const value = String(next || '').trim().toLowerCase();
         if(value === 'account') return 'account';
@@ -15996,6 +16308,14 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         return resolveAccountRoiEstimateMode(settingsState.account && settingsState.account.roiEstimateMode);
       }
 
+      function readAccountTestEmailModeFromUI(){
+        const onBtn = accountTestEmailOptions.find((btn)=> btn && btn.getAttribute('data-test-email') === 'on');
+        if(onBtn){
+          return onBtn.getAttribute('aria-pressed') === 'true' ? 'on' : 'off';
+        }
+        return resolveAccountTestEmailMode(settingsState.account && settingsState.account.testEmailMode);
+      }
+
       function readAccountNotifyFlagFromUI(key, fallback){
         const btn = accountNotificationOptions.find((row)=> row && row.getAttribute('data-account-notify') === key);
         if(btn){
@@ -16029,6 +16349,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           fieldMode: resolveAccountFieldMode(src.fieldMode),
           prefillMode: resolveAccountPrefillMode(src.prefillMode),
           roiEstimateMode: resolveAccountRoiEstimateMode(src.roiEstimateMode),
+          testEmailMode: resolveAccountTestEmailMode(src.testEmailMode),
           landingView: resolveAccountLandingView(src.landingView),
           dashboardDateMode: sanitizeDashboardDateMode(src.dashboardDateMode),
           notifyRecordUpdates: resolveAccountNotifyFlag(src.notifyRecordUpdates, true),
@@ -16052,6 +16373,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           && a.fieldMode === b.fieldMode
           && a.prefillMode === b.prefillMode
           && a.roiEstimateMode === b.roiEstimateMode
+          && a.testEmailMode === b.testEmailMode
           && a.landingView === b.landingView
           && a.dashboardDateMode === b.dashboardDateMode
           && a.notifyRecordUpdates === b.notifyRecordUpdates
@@ -16100,6 +16422,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           fieldMode: accountFieldModeSelect ? accountFieldModeSelect.value : '',
           prefillMode: readAccountPrefillModeFromUI(),
           roiEstimateMode: readAccountRoiEstimateModeFromUI(),
+          testEmailMode: readAccountTestEmailModeFromUI(),
           landingView: accountLandingViewSelect ? accountLandingViewSelect.value : existing.landingView,
           dashboardDateMode: accountDashboardDateModeSelect ? accountDashboardDateModeSelect.value : existing.dashboardDateMode,
           notifyRecordUpdates: readAccountNotifyFlagFromUI('recordUpdates', existing.notifyRecordUpdates),
@@ -16183,6 +16506,10 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         const roiMode = resolveAccountRoiEstimateMode(acc.roiEstimateMode);
         accountRoiEstimateOptions.forEach((btn)=>{
           btn.setAttribute('aria-pressed', btn.getAttribute('data-roi-estimate') === roiMode ? 'true' : 'false');
+        });
+        const testEmailMode = resolveAccountTestEmailMode(acc.testEmailMode);
+        accountTestEmailOptions.forEach((btn)=>{
+          btn.setAttribute('aria-pressed', btn.getAttribute('data-test-email') === testEmailMode ? 'true' : 'false');
         });
         accountNotificationOptions.forEach((btn)=>{
           const key = btn.getAttribute('data-account-notify') || '';
@@ -16515,6 +16842,15 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           markAccountChangesDirty();
         });
       });
+      accountTestEmailOptions.forEach((btn)=>{
+        btn.addEventListener('click', ()=>{
+          const next = resolveAccountTestEmailMode(btn.getAttribute('data-test-email') || 'on');
+          accountTestEmailOptions.forEach((row)=>{
+            row.setAttribute('aria-pressed', row.getAttribute('data-test-email') === next ? 'true' : 'false');
+          });
+          markAccountChangesDirty();
+        });
+      });
       accountSdrModeToggleOptions.forEach((btn)=>{
         btn.addEventListener('click', ()=>{
           const next = btn.getAttribute('data-sdr-toggle') === 'on' ? 'on' : 'off';
@@ -16583,6 +16919,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
             fieldMode: 'guided',
             prefillMode: 'on',
             roiEstimateMode: 'on',
+            testEmailMode: 'on',
             landingView: 'dashboard',
             dashboardDateMode: 'modified',
             notifyRecordUpdates: true,
@@ -17546,6 +17883,12 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
 
           if(!state.email){
             toast('Add a business email to book a consultation.');
+            if(businessEmailField) businessEmailField.focus();
+            else if(emailField) emailField.focus();
+            return;
+          }
+          if(!customerEmailLooksValid(state.email, { allowTestEmails: accountAllowTestEmailsEnabled() })){
+            toast('Add a valid business email to book a consultation.');
             if(businessEmailField) businessEmailField.focus();
             else if(emailField) emailField.focus();
             return;

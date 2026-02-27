@@ -170,6 +170,9 @@
       flex: 0 0 auto;
     }
     .logo{ height:28px; width:auto; display:block; }
+    .workspaceDashboardBtn{
+      display:none;
+    }
     .nav-dashboard{
       appearance:none;
       border:1px solid var(--border);
@@ -1234,11 +1237,19 @@
     }
     .dash-created{
       display:inline-flex;
-      align-items:center;
-      gap:6px;
+      flex-direction:column;
+      align-items:flex-start;
+      gap:2px;
       color: var(--muted);
       font-size:.82rem;
       font-weight:620;
+      white-space:normal;
+      max-width: 100%;
+    }
+    .dash-createdMain{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
       white-space:nowrap;
     }
     .dash-createdDot{
@@ -1258,6 +1269,15 @@
     }
     .dash-createdLabel{
       display:inline-block;
+    }
+    .dash-createdBy{
+      display:block;
+      font-size:.72rem;
+      color: color-mix(in srgb, var(--muted) 92%, var(--text) 8%);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 180px;
     }
     .dashColResizer{
       appearance:none;
@@ -1716,6 +1736,28 @@
         radial-gradient(520px 220px at 20% -20%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%),
         radial-gradient(480px 180px at 90% -30%, color-mix(in srgb, var(--lilac) 8%, transparent), transparent 70%),
         linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, var(--accent) 8%), var(--surface));
+    }
+    .interSectionTrail{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .interSectionTrailPath{
+      font-size:.76rem;
+      color: var(--muted);
+      letter-spacing:.02em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .interSectionTrailSpacer{
+      width:1px;
+      height:1px;
+      opacity:0;
+      pointer-events:none;
+      flex:0 0 auto;
     }
     .interTitleRow{
       display:flex;
@@ -2365,6 +2407,12 @@
       color: var(--muted);
       line-height:1.45;
     }
+    .interPitchUse{
+      margin: -4px 0 11px;
+      font-size:.8rem;
+      color: color-mix(in srgb, var(--muted) 90%, var(--text) 10%);
+      line-height:1.4;
+    }
     .interPitchGrid{
       display:grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2699,6 +2747,10 @@
       }
       .interTitleRow{
         flex-direction:column;
+      }
+      .interSectionTrail{
+        flex-direction:column;
+        align-items:flex-start;
       }
       .interViz{
         grid-template-columns: 1fr;
@@ -3673,6 +3725,12 @@
   padding: 0;
   background: transparent;
   border: 0;
+}
+.roiCurrencyHint{
+  margin:8px 0 0;
+  color: color-mix(in srgb, var(--muted) 88%, var(--text) 12%);
+  font-size:.82rem;
+  line-height:1.35;
 }
 @media (max-width: 560px){
   .roiCtrlBar{ flex-wrap:wrap; }
@@ -7388,9 +7446,9 @@
         align-items:center;
         gap: 8px;
         width: 100%;
-        min-height: 51px;
+        min-height: 82px;
         box-sizing: border-box;
-        padding: 8px 8px 8px 20px;
+        padding: 12px 12px 12px 18px;
         margin: 0;
         border: 0;
         border-bottom: 1px solid var(--border);
@@ -7401,7 +7459,7 @@
       .brand{
         display:flex;
         align-items:center;
-        width: auto;
+        width: 100%;
         min-height: auto;
         box-sizing: border-box;
         padding: 0;
@@ -7431,6 +7489,50 @@
         border-color: color-mix(in srgb, var(--azure) 56%, var(--border));
         box-shadow: none;
       }
+      .workspaceDashboardBtn{
+        width:100%;
+        min-height: 52px;
+        appearance:none;
+        border:0;
+        border-top:1px solid var(--border);
+        border-bottom:1px solid var(--border);
+        background: color-mix(in srgb, var(--surface) 82%, var(--bg));
+        color: var(--text);
+        display:grid;
+        grid-template-columns: 24px minmax(0, 1fr);
+        align-items:center;
+        gap: 10px;
+        text-align:left;
+        padding: 6px 11px 6px 18px;
+        cursor:pointer;
+      }
+      .workspaceDashboardBtn:hover{
+        background: color-mix(in srgb, var(--surface) 90%, var(--bg));
+      }
+      .workspaceDashboardBtn[data-active="true"]{
+        background: color-mix(in srgb, var(--surface) 88%, var(--bg));
+      }
+      .workspaceDashboardIco{
+        width:24px;
+        height:24px;
+        color: color-mix(in srgb, var(--text) 88%, var(--muted));
+        display:grid;
+        place-items:center;
+      }
+      .workspaceDashboardIco svg{
+        width: 20px;
+        height: 20px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+      }
+      .workspaceDashboardLabel{
+        display:block;
+        font-size: 15px;
+        line-height: 1.2;
+        font-weight: 700;
+        letter-spacing: -.01em;
+      }
       .workspaceNav{
         border-top:0;
         border-bottom:1px solid var(--border);
@@ -7458,18 +7560,55 @@
       }
       .workspaceCompanies{
         border-bottom:1px solid var(--border);
+        background: color-mix(in srgb, var(--surface) 80%, var(--bg));
       }
       .accountLhn{
         border-bottom:1px solid var(--border);
       }
       .workspaceCompaniesHead{
-        padding: 8px 8px 8px 20px;
+        display:none;
       }
       .accountLhnHead{
         padding: 8px 8px 8px 20px;
       }
+      .workspaceCreateWrap{
+        display:none;
+      }
       .workspaceCompaniesList{
-        padding: 8px;
+        padding: 10px;
+        gap: 8px;
+      }
+      .workspaceCompanyBtn{
+        border:2px solid color-mix(in srgb, var(--border) 92%, transparent);
+        border-radius: 18px;
+        background: color-mix(in srgb, var(--surface) 94%, var(--bg));
+        padding: 9px 11px;
+        gap: 4px;
+        transform:none;
+        box-shadow:none;
+      }
+      .workspaceCompanyBtn:hover{
+        transform:none;
+        border-color: color-mix(in srgb, var(--border-strong) 90%, transparent);
+        background: color-mix(in srgb, var(--surface) 97%, var(--bg));
+        box-shadow:none;
+      }
+      .workspaceCompanyBtn[data-active="true"]{
+        border-color: color-mix(in srgb, var(--azure) 90%, var(--border));
+        background: var(--surface);
+      }
+      .workspaceCompanyName{
+        gap: 7px;
+        font-size: 15px;
+        line-height: 1.18;
+      }
+      .workspaceCompanyMeta{
+        font-size: 11px;
+        color: color-mix(in srgb, var(--muted) 90%, var(--text) 10%);
+      }
+      .workspacePriorityStar{
+        width: 16px;
+        font-size: 1rem;
       }
       .recordContext{
         padding: 8px 8px 8px 20px;
@@ -7488,7 +7627,9 @@
         font-size:13px;
       }
       .logo{
-        height: calc(27px * 0.9);
+        width: min(100%, 176px);
+        height: auto;
+        max-height: 40px;
       }
       .nav-scroll{
         width: 100%;

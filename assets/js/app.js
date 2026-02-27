@@ -3602,9 +3602,13 @@ const evidenceOpts = [
           }
         }
 
+        const workspaceDashboard = $('#workspaceDashboard');
         const workspaceArchive = $('#workspaceArchive');
         const workspaceAccount = $('#workspaceAccount');
         const workspaceBackend = $('#workspaceBackend');
+        if(workspaceDashboard){
+          workspaceDashboard.dataset.active = (next === 'dashboard') ? 'true' : 'false';
+        }
         if(workspaceArchive){
           workspaceArchive.dataset.active = (next === 'archived') ? 'true' : 'false';
         }
@@ -3642,9 +3646,11 @@ const evidenceOpts = [
         const interstitialSlot = $('#interstitialActionSlot');
         const createBtn = $('#globalCreateRecord');
         const deleteBtn = $('#globalDeleteRecord');
+        const backOverviewBtn = $('#globalBackOverview');
         const editBtn = $('#globalEditConfigurator');
         const view = state.currentView || 'configurator';
         const interThread = (view === 'interstitial') ? activeThreadModel() : null;
+        const interSection = resolveInterstitialSection(state.interstitialSection);
         const interPerms = interThread ? actorPermissionsForThread(interThread) : actorPermissionsForThread(null);
         const canManageThread = !!(
           interThread
@@ -3670,7 +3676,13 @@ const evidenceOpts = [
         };
         setActionBtnVisible(createBtn, view === 'dashboard');
         setActionBtnVisible(deleteBtn, view === 'interstitial' && !interArchiveOnly);
+        setActionBtnVisible(backOverviewBtn, view === 'interstitial' && interSection !== 'overview');
         setActionBtnVisible(editBtn, view === 'interstitial' && (!interArchiveOnly || canManageThread));
+        if(backOverviewBtn){
+          backOverviewBtn.disabled = view !== 'interstitial' || interSection === 'overview';
+          backOverviewBtn.setAttribute('aria-disabled', backOverviewBtn.disabled ? 'true' : 'false');
+          backOverviewBtn.title = 'Return to overview section';
+        }
         if(editBtn){
           if(interArchiveOnly){
             editBtn.textContent = 'Unarchive';
@@ -3752,7 +3764,16 @@ const evidenceOpts = [
           const thread = activeThreadModel();
           const company = String((thread && thread.company) || '').trim() || 'Record';
           const threadId = String((thread && thread.id) || state.activeThread || 'current');
-          items.push({ label:company, action:'interstitial-thread', threadId, current:true });
+          const section = resolveInterstitialSection(state.interstitialSection);
+          const sectionLabelByMode = {
+            overview: 'Overview',
+            gaps: 'Gaps',
+            content: 'Content',
+            meetings: 'Meetings',
+            integrations: 'Integrations'
+          };
+          items.push({ label:company, action:'interstitial-thread', threadId, current:false });
+          items.push({ label: sectionLabelByMode[section] || 'Overview', current:true });
         }else if(view === 'recommendations'){
           const thread = resolveRecommendationThread(state.recommendationsThreadId || state.activeThread || 'current');
           const company = String((thread && thread.company) || '').trim() || 'Record';
@@ -7389,6 +7410,7 @@ const evidenceOpts = [
           const progress = threadReadinessProgress(thread);
           const tierBadge = dashboardTierBadge(thread.tier);
           const status = dashboardStatusMeta(thread);
+          const updatedByLabel = String(thread.updatedBy || thread.updatedByEmail || 'Unknown collaborator').trim() || 'Unknown collaborator';
           return ({
           id: thread.id,
           company: thread.company,
@@ -7403,6 +7425,7 @@ const evidenceOpts = [
           statusTone: status.tone,
           outcomes: thread.outcomesText,
           gaps: progress.gapSummary,
+          updatedByLabel,
           collaborators: normalizeCollaboratorList(thread.collaborators),
           shareAccess: resolveShareAccess(thread.shareAccess),
           lockOwner: thread.lockOwner || null,
@@ -7420,6 +7443,7 @@ const evidenceOpts = [
           const progress = threadReadinessProgress(thread);
           const tierBadge = dashboardTierBadge(thread.tier);
           const status = dashboardStatusMeta(thread);
+          const updatedByLabel = String(thread.updatedBy || thread.updatedByEmail || 'Unknown collaborator').trim() || 'Unknown collaborator';
           return ({
           id: thread.id,
           company: thread.company,
@@ -7434,6 +7458,7 @@ const evidenceOpts = [
           statusTone: status.tone,
           outcomes: thread.outcomesText,
           gaps: progress.gapSummary,
+          updatedByLabel,
           collaborators: normalizeCollaboratorList(thread.collaborators),
           shareAccess: resolveShareAccess(thread.shareAccess),
           lockOwner: thread.lockOwner || null,
@@ -8186,7 +8211,7 @@ const evidenceOpts = [
       }
 
       function openThreadOverview(threadId, opts){
-        const cfg = Object.assign({ section:'overview' }, opts || {});
+        const cfg = Object.assign({ section:'overview', pushRoute:true }, opts || {});
         if((state.currentView || '') === 'configurator' && activeSavedThreadHasUnsavedState()){
           if(state.saveIsThinking){
             toast('Saving changes. Please wait a moment.');
@@ -8215,7 +8240,11 @@ const evidenceOpts = [
           state.navPreviewThreadId = null;
         }
         state.interstitialSection = resolveInterstitialSection(cfg.section);
-        setView('interstitial');
+        const didSet = setView('interstitial', { syncRoute:false });
+        if(didSet === false){
+          return;
+        }
+        syncRouteWithState({ replace: !cfg.pushRoute });
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
 
@@ -9227,12 +9256,12 @@ const evidenceOpts = [
                 <span class="interKvLabel">Current status</span>
                 <span class="interKvVal">${escapeHtml(progress.gapSummary || 'No open gaps')}</span>
               </div>
-              <div class="interKv">
-                <span class="interKvLabel">Snapshot confidence</span>
-                <span class="interKvVal">${escapeHtml(snapshotComplete ? 'Ready' : 'Needs outcome confirmation')} (${snapshotProgressPct}% · ${snapshotSignalCount}/${snapshotSignals.length} signals)</span>
-              </div>
-            </div>
-          </article>
+	              <div class="interKv">
+	                <span class="interKvLabel">Profile completeness signal</span>
+	                <span class="interKvVal">${escapeHtml(snapshotComplete ? 'Ready' : 'Needs outcome confirmation')} (${snapshotProgressPct}% from ${snapshotSignalCount}/${snapshotSignals.length} signals)</span>
+	              </div>
+	            </div>
+	          </article>
         `;
         const sectionNavHtml = `
           <div class="interSectionShell">
@@ -9263,8 +9292,8 @@ const evidenceOpts = [
 	        host.innerHTML = `
 	          <header class="interHead">
             <div class="interTitleRow">
-              <div>
-                <div class="interTitleMain" id="interTitleMain">
+	              <div>
+	                <div class="interTitleMain" id="interTitleMain">
                   ${interTitleStar}
                   <h2 id="interCompanyTitleText">${escapeHtml(companyDisplay)}</h2>
                   <input
@@ -9372,10 +9401,11 @@ const evidenceOpts = [
                       data-action="openConsultation"
                       ${thread.archived ? 'disabled aria-disabled="true"' : ''}
                     >Book consultation</button>
-                  </div>
-              </div>
-              <p class="interPitchSub">${pitch.isFinal ? 'Generated from current package fit, outcome weighting, and ROI signals.' : `Working draft while inputs are incomplete (${pitch.openGapCount} open gaps).`}</p>
-	              <div class="interPitchGrid">
+	                  </div>
+	              </div>
+	              <p class="interPitchSub">${pitch.isFinal ? 'Generated from current package fit, outcome weighting, and ROI signals.' : `Working draft while inputs are incomplete (${pitch.openGapCount} open gaps).`}</p>
+                <p class="interPitchUse">Use this for internal handoff, coaching, and pre-meeting alignment after discovery.</p>
+		              <div class="interPitchGrid">
                 <section class="interPitchItem">
                   <p class="interPitchLabel">15s</p>
                   <p class="interPitchText">${escapeHtml(pitch.pitch15)}</p>
@@ -9391,11 +9421,11 @@ const evidenceOpts = [
               </div>
 	            </article>
 
-              <article id="interSectionIntegrations" class="interCard interCardWide interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:414ms;"' : ''}${showIntegrationsSection ? '' : ' hidden'}>
-                <h3>Integrations</h3>
-                <p class="interPitchSub">Use CRM export for HubSpot/Salesforce handoff and downstream workflow integrations.</p>
-                <button type="button" class="btn secondaryBlue small" data-action="openCrmExport">Open CRM export</button>
-              </article>
+	              <article id="interSectionIntegrations" class="interCard interCardWide interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:414ms;"' : ''}${showIntegrationsSection ? '' : ' hidden'}>
+	                <h3>Integrations</h3>
+	                <p class="interPitchSub">Internal handoff only: use CRM export for HubSpot/Salesforce updates and downstream workflow integrations.</p>
+	                <button type="button" class="btn secondaryBlue small" data-action="openCrmExport">Open CRM export</button>
+	              </article>
 	          </section>
 	          </div>
 	        </div>
@@ -9727,10 +9757,11 @@ const evidenceOpts = [
             const createdLabel = formatDashboardDateCreated(dateValue);
             const createdTitle = formatDashboardDate(dateValue);
             const hasUnseenUpdate = !!row.hasUnseenUpdate;
+            const updatedByLabel = String(row.updatedByLabel || 'Unknown collaborator').trim() || 'Unknown collaborator';
             const showUnseenDot = hasUnseenUpdate && sanitizeDashboardDateMode(state.dashboardDateMode) === 'modified';
             const createdTitleFull = showUnseenDot
-              ? `Updated since your last view • ${createdTitle}`
-              : createdTitle;
+              ? `Updated since your last view • ${createdTitle} • Updated by ${updatedByLabel}`
+              : `${createdTitle} • Updated by ${updatedByLabel}`;
             const checked = state.dashboardSelectedIds.has(row.id) ? 'checked' : '';
             const animateStar = !!state.starPulseQueue && state.starPulseQueue.has(row.id);
             const shouldAnimateRing = !state.completionRingAnimatedIds.has(row.id);
@@ -9769,8 +9800,11 @@ const evidenceOpts = [
                 <td><span class="dash-gaps">${escapeHtml(row.gaps)}</span></td>
                 <td>
                   <span class="dash-created" data-unseen="${showUnseenDot ? 'true' : 'false'}" title="${escapeHtml(createdTitleFull)}">
-                    <span class="dash-createdDot" aria-hidden="true"></span>
-                    <span class="dash-createdLabel">${escapeHtml(createdLabel)}</span>
+                    <span class="dash-createdMain">
+                      <span class="dash-createdDot" aria-hidden="true"></span>
+                      <span class="dash-createdLabel">${escapeHtml(createdLabel)}</span>
+                    </span>
+                    <span class="dash-createdBy">by ${escapeHtml(updatedByLabel)}</span>
                   </span>
                 </td>
               </tr>
@@ -9866,10 +9900,11 @@ const evidenceOpts = [
             const createdLabel = formatDashboardDateCreated(dateValue);
             const createdTitle = formatDashboardDate(dateValue);
             const hasUnseenUpdate = !!row.hasUnseenUpdate;
+            const updatedByLabel = String(row.updatedByLabel || 'Unknown collaborator').trim() || 'Unknown collaborator';
             const showUnseenDot = hasUnseenUpdate && sanitizeDashboardDateMode(state.dashboardDateMode) === 'modified';
             const createdTitleFull = showUnseenDot
-              ? `Updated since your last view • ${createdTitle}`
-              : createdTitle;
+              ? `Updated since your last view • ${createdTitle} • Updated by ${updatedByLabel}`
+              : `${createdTitle} • Updated by ${updatedByLabel}`;
             const checked = state.archivedSelectedIds.has(row.id) ? 'checked' : '';
             const ringId = `archived:${row.id}`;
             const shouldAnimateRing = !state.completionRingAnimatedIds.has(ringId);
@@ -9898,8 +9933,11 @@ const evidenceOpts = [
                 <td><span class="dash-gaps">${escapeHtml(row.gaps)}</span></td>
                 <td>
                   <span class="dash-created" data-unseen="${showUnseenDot ? 'true' : 'false'}" title="${escapeHtml(createdTitleFull)}">
-                    <span class="dash-createdDot" aria-hidden="true"></span>
-                    <span class="dash-createdLabel">${escapeHtml(createdLabel)}</span>
+                    <span class="dash-createdMain">
+                      <span class="dash-createdDot" aria-hidden="true"></span>
+                      <span class="dash-createdLabel">${escapeHtml(createdLabel)}</span>
+                    </span>
+                    <span class="dash-createdBy">by ${escapeHtml(updatedByLabel)}</span>
                   </span>
                 </td>
               </tr>
@@ -12127,6 +12165,7 @@ const evidenceOpts = [
         const generatedOn = new Date().toISOString().slice(0, 10);
         const heroPrimaryCtaLabel = priorityCapabilities.length ? 'Priority features' : 'Recommended resources';
         const heroPrimaryCtaHref = priorityCapabilities.length ? '#priority-capabilities' : '#recommended-for-you';
+        const readinessPlanLabel = interTierModeShort(gate.tier || 'Core');
         return {
           sourceThreadId: String(record.id || 'current'),
           company: String(record.company || '').trim() || 'Customer',
@@ -12145,14 +12184,14 @@ const evidenceOpts = [
             secondaryCtaHref: '#contact-your-team',
             stats: [
               { label:'Primary outcome', value: (outcomeBlocks[0] && outcomeBlocks[0].title) || 'Priority outcome' },
-              { label:'Package', value: String(gate.tier || 'Core') },
+              { label:'Readiness plan', value: readinessPlanLabel },
               { label:'Operational focus', value: (outcomeBlocks[0] && outcomeBlocks[0].metric) || 'Primary focus' },
               { label:'Role', value: roleLabel }
             ]
           },
           packageRecommendation: {
             tier: String(gate.tier || 'Core'),
-            title: packageInfo.title || `${String(gate.tier || 'Core')} package`,
+            title: readinessPlanLabel,
             rationale: packageInfo.body || ''
           },
           needsSummary: (landingCopy && String(landingCopy.needsSummary || '').trim()) || needsSummary,
@@ -12216,7 +12255,7 @@ const evidenceOpts = [
         const details = Array.isArray(model.detailSections) ? model.detailSections.filter(Boolean).slice(0, 6) : [];
         const packageRecommendation = (model.packageRecommendation && typeof model.packageRecommendation === 'object')
           ? model.packageRecommendation
-          : { tier: String(model.tier || 'Core'), title: `${String(model.tier || 'Core')} package`, rationale: '' };
+          : { tier: String(model.tier || 'Core'), title: interTierModeShort(model.tier || 'Core'), rationale: '' };
         const valueCardsRaw = Array.isArray(model.valueCards) ? model.valueCards.filter(Boolean).slice(0, 6) : [];
         const demoCard = (model.demoCard && typeof model.demoCard === 'object')
           ? model.demoCard
@@ -12236,8 +12275,7 @@ const evidenceOpts = [
         const heroPrimaryCtaHref = safeLinkHref(hero.primaryCtaHref, { allowHash:true }) || '#recommended-for-you';
         const heroSecondaryCtaLabel = String(hero.secondaryCtaLabel || '').trim() || 'Contact your team';
         const heroSecondaryCtaHref = safeLinkHref(hero.secondaryCtaHref, { allowHash:true }) || '#contact-your-team';
-        const previewSlug = customerPagePreviewSlug(model.previewSlug || model.company || '');
-        const previewPath = previewSlug ? `/customer-pages/${encodeURIComponent(previewSlug)}` : '';
+        const publishedPreviewUrl = safeLinkHref(model.publishedUrl);
         const demoCardCtaHref = safeLinkHref(demoCard && demoCard.ctaUrl);
         const demoCardPosterHref = safeLinkHref(demoCard && demoCard.videoPoster);
         const demoCardVideoMp4Href = safeLinkHref(demoCard && demoCard.videoMp4);
@@ -12660,7 +12698,7 @@ const evidenceOpts = [
         <img src="${esc(logoSrc)}" alt="Immersive" />
       </a>
       <div class="topbarActions">
-        ${previewPath ? `<button class="topPreviewBtn" type="button" data-generated-preview-link="${esc(previewPath)}">View preview link</button>` : ''}
+        ${publishedPreviewUrl ? `<button class="topPreviewBtn" type="button" data-generated-preview-link="${esc(publishedPreviewUrl)}">View preview link</button>` : ''}
         <a class="topContactBtn" href="#contact-your-team">Contact us</a>
       </div>
     </div>
@@ -12958,32 +12996,9 @@ const evidenceOpts = [
         var generatedPreviewButton = document.querySelector('[data-generated-preview-link]');
         if(generatedPreviewButton){
           generatedPreviewButton.addEventListener('click', function(){
-            var path = String(generatedPreviewButton.getAttribute('data-generated-preview-link') || '').trim();
-            if(!path) return;
-            var protocol = String(window.location && window.location.protocol || '').toLowerCase();
-            if(protocol === 'http:' || protocol === 'https:'){
-              var base = String(window.location && window.location.origin || '').trim();
-              if(base){
-                var liveUrl = base + path;
-                window.open(liveUrl, '_blank', 'noopener,noreferrer');
-                return;
-              }
-            }
-            var currentUrl = String(window.location && window.location.href || '').trim();
-            if(!currentUrl) return;
-            if(navigator.clipboard && typeof navigator.clipboard.writeText === 'function'){
-              navigator.clipboard.writeText(currentUrl).then(function(){
-                var originalLabel = generatedPreviewButton.textContent;
-                generatedPreviewButton.textContent = 'Preview link copied';
-                window.setTimeout(function(){
-                  generatedPreviewButton.textContent = originalLabel;
-                }, 1600);
-              }).catch(function(){
-                window.open(currentUrl, '_blank', 'noopener,noreferrer');
-              });
-            }else{
-              window.open(currentUrl, '_blank', 'noopener,noreferrer');
-            }
+            var liveUrl = String(generatedPreviewButton.getAttribute('data-generated-preview-link') || '').trim();
+            if(!liveUrl) return;
+            window.open(liveUrl, '_blank', 'noopener,noreferrer');
           });
         }
         if('ResizeObserver' in window){
@@ -13327,7 +13342,7 @@ const evidenceOpts = [
           ? publishedMap[draftThreadId]
           : null;
         const publishedUrl = safeLinkHref(publishedMeta && publishedMeta.url);
-        const previewUrl = publishedUrl || customerPagePreviewUrlForSlug((publishedMeta && publishedMeta.slug) || draft.company || '');
+        const previewUrl = publishedUrl;
         if(publishInlineBtn){
           publishInlineBtn.disabled = !!state.customerTemplatePublishPending;
           publishInlineBtn.textContent = state.customerTemplatePublishPending ? 'Publishing...' : 'Publish customer page';
@@ -13346,7 +13361,7 @@ const evidenceOpts = [
         const heroStats = Array.isArray(hero.stats) ? hero.stats.filter(Boolean).slice(0, 4) : [];
         const packageRecommendation = (draft.packageRecommendation && typeof draft.packageRecommendation === 'object')
           ? draft.packageRecommendation
-          : { title: `${String(draft.tier || 'Core')} package`, rationale:'' };
+          : { title: interTierModeShort(draft.tier || 'Core'), rationale:'' };
         const outcomeBlocks = Array.isArray(draft.outcomeBlocks) ? draft.outcomeBlocks.filter(Boolean).slice(0, 3) : [];
         const priorityCapabilities = Array.isArray(draft.priorityCapabilities) ? draft.priorityCapabilities.filter(Boolean).slice(0, 6) : [];
         const valueCards = Array.isArray(draft.valueCards) ? draft.valueCards.filter(Boolean).slice(0, 3) : [];
@@ -13420,7 +13435,7 @@ const evidenceOpts = [
             <a class="customerPreviewBrand" href="https://www.immersivelabs.com/" target="_blank" rel="noopener noreferrer" aria-label="Immersive">
               <img src="${esc(logoSrc)}" alt="Immersive" />
             </a>
-            <span class="customerPreviewTopPackage">Recommended package: ${esc(packageRecommendation.title || `${draft.tier || 'Core'} package`)}</span>
+            <span class="customerPreviewTopPackage">Recommended readiness plan: ${esc(packageRecommendation.title || interTierModeShort(draft.tier || 'Core'))}</span>
           </article>
           <article class="customerPreviewHero">
             <div>
@@ -13766,18 +13781,6 @@ const evidenceOpts = [
           .slice(0, 80);
       }
 
-      function customerPagePreviewUrlForSlug(slugInput){
-        const slug = customerPagePreviewSlug(slugInput);
-        if(!slug) return '';
-        const path = `/customer-pages/${encodeURIComponent(slug)}`;
-        const protocol = String((window.location && window.location.protocol) || '').trim().toLowerCase();
-        const origin = String((window.location && window.location.origin) || '').trim();
-        if((protocol === 'http:' || protocol === 'https:') && origin){
-          return `${origin}${path}`;
-        }
-        return '';
-      }
-
       function syncCustomerTemplatePublishButtons(preferredThreadId){
         const requestedThreadId = String(
           preferredThreadId
@@ -13785,7 +13788,6 @@ const evidenceOpts = [
           || state.activeThread
           || 'current'
         ).trim() || 'current';
-        const topPublishBtn = $('#publishCustomerPageTemplateBtn');
         const inlinePublishBtn = $('#publishCustomerPageTemplateInlineBtn');
         const activeDraft = (
           state.customerTemplateDraft
@@ -13799,10 +13801,6 @@ const evidenceOpts = [
         const canPublish = !!(hasDraft || candidate);
         const busy = !!state.customerTemplatePublishPending;
         const label = busy ? 'Publishing...' : 'Publish customer page';
-        if(topPublishBtn){
-          topPublishBtn.textContent = label;
-          topPublishBtn.disabled = busy || !canPublish;
-        }
         if(inlinePublishBtn){
           inlinePublishBtn.textContent = label;
           inlinePublishBtn.disabled = busy || !canPublish;
@@ -13905,6 +13903,10 @@ const evidenceOpts = [
             slug: String(payload.slug || '').trim(),
             publishedAt: String(payload.publishedAt || new Date().toISOString()).trim()
           };
+          if(state.customerTemplateDraft && typeof state.customerTemplateDraft === 'object'){
+            state.customerTemplateDraft.publishedUrl = publishedUrl;
+            state.customerTemplateDraft.publishedAt = String(payload.publishedAt || new Date().toISOString()).trim();
+          }
           renderCustomerTemplatePreview();
           toast(`Published customer page for ${(model && model.company) || 'customer'}.`);
           return true;
@@ -13944,15 +13946,15 @@ const evidenceOpts = [
         const published = publishedMap[lookupThreadId] && typeof publishedMap[lookupThreadId] === 'object'
           ? publishedMap[lookupThreadId]
           : null;
-        const explicitButton = $('#openPublishedCustomerPageBtn');
-        const explicitUrl = explicitButton ? normalizedHttpUrl(explicitButton.getAttribute('data-live-url')) : '';
-        const draft = (state.customerTemplateDraft && typeof state.customerTemplateDraft === 'object')
-          ? state.customerTemplateDraft
-          : null;
-        const draftUrl = customerPagePreviewUrlForSlug((published && published.slug) || (draft && draft.company) || '');
-        const liveUrl = explicitUrl || safeLinkHref(published && published.url) || draftUrl;
+        const explicitButtons = [
+          $('#openPublishedCustomerPageBtn')
+        ].filter(Boolean);
+        const explicitUrl = explicitButtons
+          .map((btn)=> normalizedHttpUrl(btn.getAttribute('data-live-url')))
+          .find(Boolean) || '';
+        const liveUrl = explicitUrl || safeLinkHref(published && published.url);
         if(!liveUrl){
-          toast('No preview link available yet. Open this app from your deployed URL.');
+          toast('Publish customer page first to get a preview link.');
           return;
         }
         window.open(liveUrl, '_blank', 'noopener,noreferrer');
@@ -14055,6 +14057,7 @@ const evidenceOpts = [
         const gate = (gateInput && typeof gateInput === 'object')
           ? gateInput
           : recommendationsGateFromThread(resolveRecommendationThread(state.recommendationsThreadId || 'current'));
+        const thread = resolveRecommendationThread(gate.threadId || state.recommendationsThreadId || 'current');
 
         const setText = (sel, value)=>{
           const el = $(sel);
@@ -14080,7 +14083,7 @@ const evidenceOpts = [
                 ? `Generate page from ${candidateForView.thread.company} (${candidateForView.gate.completion})`
                 : 'No complete (100%) profile is available yet.');
         }
-        const publishCustomerPageBtn = $('#publishCustomerPageTemplateBtn');
+        const publishCustomerPageBtn = $('#publishCustomerPageTemplateInlineBtn');
         if(publishCustomerPageBtn){
           publishCustomerPageBtn.disabled = !canGenerateCustomerPage || !!state.customerTemplatePublishPending;
           publishCustomerPageBtn.textContent = state.customerTemplatePublishPending ? 'Publishing...' : 'Publish customer page';
@@ -14090,6 +14093,17 @@ const evidenceOpts = [
                 ? `Publish page from ${candidateForView.thread.company} (${candidateForView.gate.completion})`
                 : 'No complete (100%) profile is available yet.');
         }
+        const sendCustomerBtn = $('#openRecommendationEmailBtn');
+        const canSendContent = !!gate.eligible && !(thread && thread.id && thread.id !== 'current' && thread.archived);
+        const sendLockedTitle = gate.eligible
+          ? 'Unarchive this record to send content.'
+          : `Content is locked until 90% completion (current: ${gate.completion}).`;
+        [sendCustomerBtn].forEach((btn)=> {
+          if(!btn) return;
+          btn.disabled = !canSendContent;
+          btn.setAttribute('aria-disabled', btn.disabled ? 'true' : 'false');
+          btn.title = canSendContent ? '' : sendLockedTitle;
+        });
 
         const companyName = gate.company || 'Untitled company';
         setText('#contentRecommendationsTitle', `Customer page for ${companyName}`);
@@ -14102,6 +14116,10 @@ const evidenceOpts = [
         const recommendationsIntro = $('#contentRecommendationsIntro');
         if(recommendationsIntro){
           recommendationsIntro.hidden = true;
+        }
+        const recommendationsHead = $('#contentRecommendationsHead');
+        if(recommendationsHead){
+          recommendationsHead.hidden = true;
         }
 
         const gateEl = $('#contentRecommendationsGate');
@@ -14336,6 +14354,25 @@ const evidenceOpts = [
         }
         state.recommendationsThreadId = gate.threadId;
         toggleEmailBuilder(true, { threadId: gate.threadId });
+        return true;
+      }
+
+      function openRecommendationEmailClient(threadId){
+        const resolvedThreadId = String(threadId || '').trim();
+        const thread = resolveRecommendationThread(resolvedThreadId || state.recommendationsThreadId || state.activeThread || 'current');
+        if(thread && thread.id && thread.id !== 'current' && thread.archived){
+          toast('Unarchive this record to send content.');
+          return false;
+        }
+        const gate = recommendationsGateFromThread(thread);
+        if(!gate.eligible){
+          toast(`Content is locked until 90% completion (current: ${gate.completion}).`);
+          return false;
+        }
+        const model = recommendationEmailModelForThread(gate.threadId);
+        const subject = encodeURIComponent(String(model.subject || '').trim());
+        const body = encodeURIComponent(String(model.body || '').trim());
+        window.location.href = `mailto:?subject=${subject}&body=${body}`;
         return true;
       }
 
@@ -16195,6 +16232,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         });
       }
       const brandHome = $('#brandHome');
+      const workspaceDashboard = $('#workspaceDashboard');
       const workspaceArchive = $('#workspaceArchive');
       const workspaceAccount = $('#workspaceAccount');
       const workspaceBackend = $('#workspaceBackend');
@@ -16202,6 +16240,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const workspaceCreateRecord = $('#workspaceCreateRecord');
       const globalCreateRecord = $('#globalCreateRecord');
       const globalDeleteRecord = $('#globalDeleteRecord');
+      const globalBackOverview = $('#globalBackOverview');
       const globalEditConfigurator = $('#globalEditConfigurator');
       const consultationPanel = $('#consultationPanel');
       const closeConsultationBtn = $('#closeConsultation');
@@ -16227,6 +16266,12 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       if(brandHome){
         brandHome.addEventListener('click', (e)=>{
           e.preventDefault();
+          setView('dashboard');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      }
+      if(workspaceDashboard){
+        workspaceDashboard.addEventListener('click', ()=>{
           setView('dashboard');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         });
@@ -16330,6 +16375,12 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           }
           const nextMode = thread.archived ? 'restore' : 'archive';
           openArchivePrompt([thread.id], nextMode);
+        });
+      }
+      if(globalBackOverview){
+        globalBackOverview.addEventListener('click', ()=>{
+          if(resolveInterstitialSection(state.interstitialSection) === 'overview') return;
+          openThreadOverview(state.activeThread || 'current', { section:'overview', pushRoute:true });
         });
       }
       if(closeConsultationBtn){
@@ -18271,6 +18322,14 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
                 ? activeThreadModel()
                 : currentThreadModel());
           openRecommendationEmailBuilder((targetThread && targetThread.id) ? targetThread.id : 'current');
+        }
+        if(action === 'openRecommendationEmailClient'){
+          const targetThread = (state.currentView === 'recommendations')
+            ? resolveRecommendationThread(state.recommendationsThreadId || state.activeThread || 'current')
+            : ((state.currentView === 'interstitial')
+                ? activeThreadModel()
+                : currentThreadModel());
+          openRecommendationEmailClient((targetThread && targetThread.id) ? targetThread.id : 'current');
         }
         if(action === 'generateCustomerPageTemplate'){
           const preferredThreadId = preferredCustomerTemplateThreadIdForCurrentView();

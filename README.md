@@ -13,13 +13,38 @@ This repository contains the static configurator app used to generate customer d
 - Exports a downloadable customer dashboard HTML file.
 - Publishes a live customer dashboard URL via Vercel Blob (`/api/publish-customer-page`).
 
+## Interstitial + Content UX Simplification (2026-02-27)
+
+Implemented usability clean-up based on walkthrough feedback:
+
+- Removed duplicate in-card breadcrumb trail from record interstitial header.
+  - Top workspace breadcrumb remains the single navigation trail.
+- Added `Back to overview` to the global action cluster (between archive and edit), shown only when a non-overview interstitial section is active.
+- Simplified embedded content actions to a single action row in preview:
+  - `Email customer`
+  - `Publish customer page`
+  - `Download current preview`
+  - `View preview link` (shown after publish)
+- Removed duplicated/secondary content actions:
+  - `Open in email client`
+  - `Copy email`
+  - `Clear preview`
+  - duplicate top content action strip
+- Reduced left-nav `Dashboard` row height by ~30% and rebalanced icon/text spacing for desktop density.
+
+Files:
+
+- `/Users/will.bloor/Documents/Configurator/index.html`
+- `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+- `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
 ## Vercel Live Publish Endpoint (2026-02-27)
 
 Customer page publishing is now available directly from the Content view and Customer page preview:
 
 - UI actions:
   - `Publish customer page`
-  - `Open live page` (appears after a successful publish in the current session)
+  - `View preview link` (appears after a successful publish in the current session)
 - API route:
   - `/api/publish-customer-page` (POST)
   - `/api/customer-page?slug=<slug>` (GET redirect target)
@@ -1046,6 +1071,24 @@ Design and workflow updates deployed for self-service intake and dashboard follo
      - `/Users/will.bloor/Documents/Configurator/README.md`
    - Validation performed:
      - `node --check /Users/will.bloor/Documents/Configurator/api/customer-page.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+49. Customer-facing landing language pass: removed internal package phrasing (2026-02-27)
+   - Updated landing hero copy generation in `buildLandingCopy(...)`:
+     - removed `This view is tuned for ... and aligned to ... package priorities.`
+     - replaced with customer language: `Based on what you shared, this plan focuses on ...`
+   - Updated customer landing model/preview labels:
+     - hero stat changed from `Package` to `Readiness plan`
+     - preview top-bar label changed from `Recommended package` to `Recommended readiness plan`
+     - customer-facing plan title now uses external naming (`Foundation`, `Performance Readiness`, `Assurance`) instead of package labels.
+   - Principle:
+     - customer outputs should use outcome-led language and avoid internal packaging terminology.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/copy-rules.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/copy-rules.js`
      - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
 
 ## State Sync Guardrails (Critical, 2026-02-26)

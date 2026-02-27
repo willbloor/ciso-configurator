@@ -27,6 +27,16 @@
         </a>
       </div>
       <div class="nav-scroll" aria-label="Configurator navigation">
+        <button type="button" class="workspaceDashboardBtn" id="workspaceDashboard" data-active="true" aria-label="Open dashboard">
+          <span class="workspaceDashboardIco" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img" aria-hidden="true">
+              <path d="M3.5 10.5L12 3.8l8.5 6.7"></path>
+              <path d="M6.2 9.8v9.2h11.6V9.8"></path>
+              <path d="M10 19v-5h4v5"></path>
+            </svg>
+          </span>
+          <span class="workspaceDashboardLabel">Dashboard</span>
+        </button>
         <section class="workspaceCompanies" id="workspaceCompanies" aria-label="Starred companies">
           <div class="workspaceCompaniesHead">
             <span class="workspaceCompaniesLabel">Starred</span>
@@ -136,6 +146,7 @@
             <path d="M10 13.5h4"></path>
           </svg>
         </button>
+        <button class="btn small" type="button" id="globalBackOverview" hidden>Back to overview</button>
         <button class="btn primary small" type="button" id="globalEditConfigurator" hidden>Edit record</button>
       </div>
     </div>
@@ -556,14 +567,10 @@
 
     <section id="contentRecommendationsView" aria-label="Content view">
       <article class="recommendationsShell">
-        <header class="recommendationsHead">
+        <header class="recommendationsHead" id="contentRecommendationsHead" hidden>
           <div id="contentRecommendationsIntro">
             <h2 id="contentRecommendationsTitle">Content for this company</h2>
             <p class="recommendationsSub" id="contentRecommendationsSub">Recommended content tailored for this account.</p>
-          </div>
-          <div class="recommendationsHeadActions">
-            <button class="btn primary small" type="button" id="publishCustomerPageTemplateBtn" data-action="publishCustomerPageTemplate">Publish customer page</button>
-            <button class="btn secondaryBlue small" type="button" id="generateCustomerPageTemplateBtn" data-action="generateCustomerPageTemplate">Download customer page</button>
           </div>
         </header>
         <div class="recommendationsGate" id="contentRecommendationsGate" hidden></div>
@@ -582,9 +589,9 @@
               <p id="customerTemplatePreviewMeta">Preview not generated yet.</p>
             </div>
             <div class="customerTemplatePreviewActions">
-              <button class="btn small" type="button" data-action="clearCustomerPagePreview">Clear preview</button>
+              <button class="btn primary small" type="button" id="openRecommendationEmailBtn" data-action="openRecommendationEmail">Email customer</button>
               <button class="btn primary small" type="button" id="publishCustomerPageTemplateInlineBtn" data-action="publishCustomerPageTemplate">Publish customer page</button>
-              <button class="btn secondaryBlue small" type="button" data-action="generateCustomerPageTemplate">Download current preview</button>
+              <button class="btn secondaryBlue small" type="button" id="generateCustomerPageTemplateBtn" data-action="generateCustomerPageTemplate">Download current preview</button>
               <button class="btn small" type="button" id="openPublishedCustomerPageBtn" data-action="openPublishedCustomerPage" hidden>View preview link</button>
             </div>
           </header>
@@ -1117,6 +1124,7 @@
                       <span class="resetIcon" aria-hidden="true">↺</span>
                     </button>
                   </div>
+                  <p class="roiCurrencyHint">Currency changes display and planning context. Baseline model values are normalized in USD under the hood.</p>
                 </div>
               </div>
 
@@ -1742,6 +1750,7 @@
           <div class="consultationActions">
             <button class="btn secondaryBlue small" type="button" data-action="copyRecommendationEmail">Copy email</button>
             <button class="btn small" type="button" data-action="copyRecommendationSubject">Copy subject</button>
+            <button class="btn small" type="button" data-action="openRecommendationEmailClient">Open in email client</button>
           </div>
         </section>
       </div>

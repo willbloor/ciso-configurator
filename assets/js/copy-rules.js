@@ -103,7 +103,6 @@
 
   function buildLandingCopy(input){
     const company = asText(input && input.company) || 'This organization';
-    const tier = asText(input && input.tier) || 'Core';
     const audience = inferAudience(input);
     const lens = audienceLens(audience);
     const outcomes = asList(input && input.topOutcomes);
@@ -116,7 +115,7 @@
     const subtitle = normalizeTerminology([
       `Prove, improve, benchmark, and report cyber resilience with Immersive One.`,
       `${company} can ${lens.need} across ${coverageText}.`,
-      `This view is tuned for ${outcomeText} and aligned to ${tier} package priorities.`
+      `Based on what you shared, this plan focuses on ${outcomeText}.`
     ].join(' '));
 
     const needsSummary = normalizeTerminology([

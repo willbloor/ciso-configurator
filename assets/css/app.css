@@ -648,6 +648,10 @@
       display:none;
       padding: 16px 0 30px;
     }
+    #storyMappingView{
+      display:none;
+      padding: 16px 0 30px;
+    }
     #crmExportView{
       display:none;
       padding: 16px 0 30px;
@@ -788,6 +792,9 @@
     body.is-interstitial-view #contentRecommendationsView{
       display:none;
     }
+    body.is-interstitial-view #storyMappingView{
+      display:none;
+    }
     body.is-interstitial-view #crmExportView{
       display:none;
     }
@@ -801,6 +808,9 @@
       display:none;
     }
     body.is-account-view #contentRecommendationsView{
+      display:none;
+    }
+    body.is-account-view #storyMappingView{
       display:none;
     }
     body.is-account-view #crmExportView{
@@ -824,6 +834,9 @@
     body.is-backend-view #contentRecommendationsView{
       display:none;
     }
+    body.is-backend-view #storyMappingView{
+      display:none;
+    }
     body.is-backend-view #crmExportView{
       display:none;
     }
@@ -837,6 +850,9 @@
       display:none;
     }
     body.is-archived-view #contentRecommendationsView{
+      display:none;
+    }
+    body.is-archived-view #storyMappingView{
       display:none;
     }
     body.is-archived-view #crmExportView{
@@ -869,6 +885,9 @@
     body.is-recommendations-view #crmExportView{
       display:none;
     }
+    body.is-recommendations-view #storyMappingView{
+      display:none;
+    }
     body.is-recommendations-view #backendConfigView{
       display:none;
     }
@@ -885,6 +904,9 @@
       display:none;
     }
     body.is-export-view #contentRecommendationsView{
+      display:none;
+    }
+    body.is-export-view #storyMappingView{
       display:none;
     }
     body.is-export-view #backendConfigView{
@@ -2003,6 +2025,21 @@
       box-shadow:none;
     }
     .interSectionBody #contentRecommendationsView.interEmbeddedContent .recommendationsShell::before{
+      display:none;
+    }
+    .interSectionBody #storyMappingView.interEmbeddedContent{
+      display:block;
+      padding:0;
+      margin:0;
+    }
+    .interSectionBody #storyMappingView.interEmbeddedContent .recommendationsShell{
+      border:0;
+      border-radius:0;
+      background:transparent;
+      padding:0;
+      box-shadow:none;
+    }
+    .interSectionBody #storyMappingView.interEmbeddedContent .recommendationsShell::before{
       display:none;
     }
     @media (min-width: 981px){
@@ -5166,6 +5203,155 @@
   margin:8px 0 0;
   color: var(--muted);
 }
+.pyramidMapWrap{
+  margin-top:16px;
+  border:1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 97%, var(--accent) 3%), var(--surface));
+  padding:14px;
+  display:grid;
+  gap:10px;
+}
+.pyramidMapHead{
+  display:grid;
+  gap:4px;
+}
+.pyramidMapHead h3{
+  margin:0;
+  font-size:1.02rem;
+  line-height:1.28;
+  color: var(--text);
+}
+.pyramidMapGrid{
+  display:grid;
+  gap:12px;
+  grid-template-columns: minmax(0, 1fr);
+}
+.pyramidLayerCard{
+  border:1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 98%, var(--accent) 2%), var(--surface));
+  display:grid;
+  gap:8px;
+  padding:13px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.78);
+}
+.pyramidLayerEyebrow{
+  margin:0;
+  font-size:.76rem;
+  font-weight:800;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+  color: var(--azure);
+}
+.pyramidLayerCard h4{
+  margin:0;
+  font-size:1rem;
+  line-height:1.3;
+  color: var(--text);
+}
+.pyramidLayerTop{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+}
+.pyramidLayerMeta,
+.pyramidLayerCoverage,
+.pyramidLayerEmpty{
+  margin:0;
+  color: var(--muted);
+  font-size:.86rem;
+  line-height:1.4;
+}
+.pyramidLayerCoverage{
+  font-weight:700;
+  color: color-mix(in srgb, var(--text) 70%, var(--azure) 30%);
+}
+.pyramidLayerWeightingNote{
+  margin:0;
+  color: color-mix(in srgb, var(--muted) 86%, var(--text) 14%);
+  font-size:.81rem;
+}
+.pyramidLayerThemeGrid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:10px;
+}
+.pyramidThemeCard{
+  border:1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 97%, var(--soft2) 3%);
+  padding:10px;
+  display:grid;
+  gap:8px;
+}
+.pyramidThemeCardHead{
+  display:flex;
+  gap:8px;
+  justify-content:space-between;
+  align-items:flex-start;
+}
+.pyramidThemeCardHead h5{
+  margin:0;
+  font-size:.95rem;
+  line-height:1.32;
+  color: var(--text);
+}
+.pyramidThemeWeightPill{
+  flex:0 0 auto;
+  font-size:.78rem;
+  font-weight:800;
+  color: color-mix(in srgb, var(--azure) 86%, var(--text) 14%);
+  background: color-mix(in srgb, var(--azure) 10%, var(--surface));
+  border:1px solid color-mix(in srgb, var(--azure) 30%, var(--border));
+  border-radius:999px;
+  padding:2px 8px;
+  line-height:1.25;
+}
+.pyramidThemeCardBody{
+  display:grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap:10px;
+  align-items:flex-start;
+}
+.pyramidThemeRing{
+  width:54px;
+  height:54px;
+}
+.pyramidThemeRing > span{
+  font-size:.76rem;
+}
+.pyramidThemeCardCopy{
+  min-width:0;
+  display:grid;
+  gap:7px;
+}
+.pyramidThemeDescription{
+  margin:0;
+  font-size:.84rem;
+  line-height:1.4;
+  color: var(--muted);
+}
+.pyramidThemeSignalList{
+  margin:0;
+  padding:0 0 0 16px;
+  display:grid;
+  gap:5px;
+}
+.pyramidThemeSignalList li{
+  margin:0;
+  color: var(--muted);
+  font-size:.79rem;
+  line-height:1.35;
+}
+.pyramidThemeHint{
+  margin:0;
+  font-size:.79rem;
+  font-weight:700;
+  color: color-mix(in srgb, var(--text) 72%, var(--azure) 28%);
+}
 .priorityFeaturesWrap{
   margin-top:16px;
   border:1px solid color-mix(in srgb, var(--border) 88%, transparent);
@@ -5192,31 +5378,9 @@
 }
 .contentRecCard.priorityFeatureCard{
   background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
-  display:grid;
-  grid-template-columns:minmax(84px, 24%) minmax(0, 1fr);
-  gap:0;
-  padding:0;
-  overflow:hidden;
-}
-.priorityFeatureMedia{
-  border-right:1px solid color-mix(in srgb, var(--azure) 18%, var(--border));
-  background:#d8e5ff;
-  min-height:196px;
-}
-.priorityFeatureMedia img{
-  width:100%;
-  height:100%;
-  display:block;
-  object-fit:cover;
-}
-.priorityFeatureBody{
-  padding:14px;
-  display:grid;
-  gap:8px;
-  align-content:start;
 }
 .priorityFeaturePill,
-.priorityFeatureProof{
+.priorityFeatureOutcome{
   margin:0;
   font-size:.84rem;
   line-height:1.4;
@@ -5411,20 +5575,15 @@
 }
 @media (max-width: 980px){
   .recommendationsGrid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pyramidMapGrid{ grid-template-columns: 1fr; }
+  .pyramidLayerThemeGrid{ grid-template-columns: 1fr; }
   .priorityFeaturesGrid{ grid-template-columns: 1fr; }
-  .contentRecCard.priorityFeatureCard{ grid-template-columns: minmax(96px, 24%) minmax(0, 1fr); }
   .crmExportPreviewWrap{ grid-template-columns: 1fr; }
 }
 @media (max-width: 760px){
   .recommendationsHead{ flex-direction:column; }
   .recommendationsHeadActions{ justify-content:flex-start; }
   .recommendationsGrid{ grid-template-columns: 1fr; }
-  .contentRecCard.priorityFeatureCard{ grid-template-columns: 1fr; }
-  .priorityFeatureMedia{
-    border-right:none;
-    border-bottom:1px solid color-mix(in srgb, var(--azure) 18%, var(--border));
-    min-height:180px;
-  }
   .crmExportControls{ grid-template-columns: 1fr; }
 }
 

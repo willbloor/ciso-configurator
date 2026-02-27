@@ -593,17 +593,21 @@
         'regs'
       ]);
       const ROUTE_HASH_PREFIX = '#/';
-      const INTERSTITIAL_SECTION_MODES = Object.freeze(['overview', 'gaps', 'content', 'meetings', 'integrations']);
+      const INTERSTITIAL_SECTION_MODES = Object.freeze(['overview', 'gaps', 'content', 'story', 'meetings', 'integrations']);
       const INTERSTITIAL_SECTION_ROUTE_MAP = Object.freeze({
         overview: 'overview',
         gaps: 'gaps',
         content: 'record-content',
+        story: 'record-story-mapping',
         meetings: 'meetings',
         integrations: 'integrations'
       });
       const contentRecommendationsViewEl = $('#contentRecommendationsView');
       const contentRecommendationsOriginalParent = contentRecommendationsViewEl ? contentRecommendationsViewEl.parentElement : null;
       const contentRecommendationsOriginalNextSibling = contentRecommendationsViewEl ? contentRecommendationsViewEl.nextElementSibling : null;
+      const storyMappingViewEl = $('#storyMappingView');
+      const storyMappingOriginalParent = storyMappingViewEl ? storyMappingViewEl.parentElement : null;
+      const storyMappingOriginalNextSibling = storyMappingViewEl ? storyMappingViewEl.nextElementSibling : null;
       const AUTO_SAVE_FAST_MS = 30000;
       const AUTO_SAVE_BASE_MS = 60000;
       const MAX_IMPORT_CSV_BYTES = 5 * 1024 * 1024;
@@ -3405,6 +3409,21 @@ const evidenceOpts = [
         contentRecommendationsViewEl.classList.remove('interEmbeddedContent');
       }
 
+      function restoreStoryMappingMount(){
+        if(!storyMappingViewEl || !storyMappingOriginalParent) return;
+        if(storyMappingViewEl.parentElement === storyMappingOriginalParent){
+          storyMappingViewEl.classList.remove('interEmbeddedContent');
+          return;
+        }
+        const anchor = storyMappingOriginalNextSibling;
+        if(anchor && anchor.parentElement === storyMappingOriginalParent){
+          storyMappingOriginalParent.insertBefore(storyMappingViewEl, anchor);
+        }else{
+          storyMappingOriginalParent.appendChild(storyMappingViewEl);
+        }
+        storyMappingViewEl.classList.remove('interEmbeddedContent');
+      }
+
       function routeHashFromState(){
         const view = state.currentView || 'dashboard';
         const recordId = String(state.activeThread || 'current').trim() || 'current';
@@ -3565,6 +3584,7 @@ const evidenceOpts = [
         }
         if(next !== 'interstitial'){
           restoreContentRecommendationsMount();
+          restoreStoryMappingMount();
         }
         if(prev === 'configurator' && next !== 'configurator'){
           const prevRecordId = String(state.activeThread || '').trim();
@@ -3769,6 +3789,7 @@ const evidenceOpts = [
             overview: 'Overview',
             gaps: 'Gaps',
             content: 'Content',
+            story: 'Story mapping',
             meetings: 'Meetings',
             integrations: 'Integrations'
           };
@@ -8978,10 +8999,12 @@ const evidenceOpts = [
         const showOverviewSection = activeInterSection === 'overview';
         const showGapsSection = activeInterSection === 'gaps';
         const showContentSection = activeInterSection === 'content';
+        const showStorySection = activeInterSection === 'story';
         const showMeetingsSection = activeInterSection === 'meetings';
         const showIntegrationsSection = activeInterSection === 'integrations';
         const showSnapshotDataSection = showOverviewSection;
         restoreContentRecommendationsMount();
+        restoreStoryMappingMount();
         const pkg = packageOverviewForTier(thread.tier);
         const interPerms = actorPermissionsForThread(thread);
         const companyDisplay = String((thread && thread.company) || '').trim() || 'Untitled company';
@@ -9016,6 +9039,11 @@ const evidenceOpts = [
         const contentProgressPct = clamp(Math.round((contentCompleteCount / contentSectionCount) * 100), 0, 100);
         const meetingProgressPct = pitch.isFinal ? 100 : clamp(Number(pitch.completionPct) || 0, 0, 100);
         const meetingStatusText = pitch.isFinal ? 'Ready' : `Draft (${meetingProgressPct}%)`;
+        const storyGate = recommendationsGateFromThread(thread);
+        const storyReady = !!(storyGate && storyGate.eligible);
+        const storyReadinessPct = storyReady
+          ? 100
+          : clamp(Number(storyGate && storyGate.completionPct) || completionPctFromSummary(progress.completion), 0, 100);
         const canTogglePriority = !!(thread && thread.id && thread.id !== 'current' && !!findSavedThread(thread.id));
         const animateInterStar = canTogglePriority && !!state.starPulseQueue && state.starPulseQueue.has(thread.id);
         const interTitleStar = canTogglePriority
@@ -9162,6 +9190,7 @@ const evidenceOpts = [
           { section:'overview', icon:'OV', label:'Overview', meta:`Status summary (${INTERSTITIAL_SECTION_MODES.length - 1} pages)` },
           { section:'gaps', icon:'GP', label:'Gaps', meta:gapCount ? `${gapCount} open` : 'No open gaps' },
           { section:'content', icon:'CT', label:'Content', meta:`${contentCompleteCount}/${contentSectionCount} sections captured` },
+          { section:'story', icon:'SM', label:'Story mapping', meta:'Pain → outcomes → PIBR map' },
           { section:'meetings', icon:'MT', label:'Meetings', meta:meetingStatusText },
           { section:'integrations', icon:'IN', label:'Integrations', meta:'CRM export & handoff' }
         ];
@@ -9193,6 +9222,17 @@ const evidenceOpts = [
             metricValue: `${contentProgressPct}%`,
             metricLabel: 'Content completeness',
             progressPct: contentProgressPct
+          },
+          {
+            section: 'story',
+            label: 'Story mapping page',
+            status: storyReady
+              ? 'Ready for outcome-to-capability narrative mapping'
+              : `Locked until 90% completion (${storyGate.completion})`,
+            tone: storyReady ? 'ready' : 'open',
+            metricValue: `${storyReadinessPct}%`,
+            metricLabel: 'Story mapping readiness',
+            progressPct: storyReadinessPct
           },
           {
             section: 'meetings',
@@ -9370,9 +9410,13 @@ const evidenceOpts = [
                 <div id="interEmbeddedContentHost"></div>
               </article>
 
-	            <article id="interSectionSnapshotOrganisation" class="interCard interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:224ms;"' : ''}${showSnapshotDataSection ? '' : ' hidden'}>
-	              <h3>Organisation</h3>
-	              <div class="interKvs">${renderInterstitialKvs((thread.modules && thread.modules.organisation) || [])}</div>
+              <article id="interSectionStoryMapping" class="interCard interCardWide interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:244ms;"' : ''}${showStorySection ? '' : ' hidden'}>
+                <div id="interEmbeddedStoryMappingHost"></div>
+              </article>
+
+		            <article id="interSectionSnapshotOrganisation" class="interCard interSectionAnchor${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:224ms;"' : ''}${showSnapshotDataSection ? '' : ' hidden'}>
+		              <h3>Organisation</h3>
+		              <div class="interKvs">${renderInterstitialKvs((thread.modules && thread.modules.organisation) || [])}</div>
 	            </article>
 
 	            <article class="interCard${shouldAnimateInter ? ' is-enter' : ''}"${shouldAnimateInter ? ' style="--inter-enter-delay:262ms;"' : ''}${showSnapshotDataSection ? '' : ' hidden'}>
@@ -9442,6 +9486,17 @@ const evidenceOpts = [
             state.recommendationsThreadId = contentThreadId;
             state.recommendationsReturnView = 'interstitial';
             renderContentRecommendationsView(recommendationsGateFromThread(resolveRecommendationThread(contentThreadId)));
+          }
+        }
+        if(showStorySection && storyMappingViewEl){
+          const embeddedStoryHost = $('#interEmbeddedStoryMappingHost');
+          if(embeddedStoryHost){
+            storyMappingViewEl.classList.add('interEmbeddedContent');
+            embeddedStoryHost.appendChild(storyMappingViewEl);
+            const storyThreadId = String((thread && thread.id) || state.recommendationsThreadId || 'current').trim() || 'current';
+            state.recommendationsThreadId = storyThreadId;
+            state.recommendationsReturnView = 'interstitial';
+            renderStoryMappingView(recommendationsGateFromThread(resolveRecommendationThread(storyThreadId)));
           }
         }
 
@@ -11953,6 +12008,988 @@ const evidenceOpts = [
         return `https://picsum.photos/seed/${encodeURIComponent(seed || `priority-feature-${rank}`)}/360/640`;
       }
 
+      function recommendationOptionLabel(id){
+        const rawId = String(id || '').trim();
+        if(!rawId) return '';
+        const banks = [
+          pressureOpts,
+          urgentWinOpts,
+          riskEnvOpts,
+          measuredOnOpts,
+          orgPainOpts,
+          groupOpts,
+          regMaster,
+          stackMaster,
+          driverOpts,
+          evidenceOpts
+        ];
+        for(let i = 0; i < banks.length; i += 1){
+          const rows = Array.isArray(banks[i]) ? banks[i] : [];
+          const match = rows.find((row)=> String((row && row.id) || '').trim() === rawId);
+          if(match){
+            const label = String((match && (match.label || match.title || match.id)) || '').trim();
+            if(label) return label;
+          }
+        }
+        const outcome = primaryOutcomeOpts.find((row)=> String((row && row.id) || '').trim() === rawId);
+        if(outcome){
+          return String((outcome.short || outcome.label || outcome.id) || '').trim() || rawId;
+        }
+        return rawId;
+      }
+
+      function readinessPyramidModelRows(){
+        try{
+          const model = window.immersiveReadinessPyramidModel;
+          if(!model || !Array.isArray(model.rows)) return [];
+          return model.rows
+            .map((row)=> (row && typeof row === 'object') ? row : null)
+            .filter((row)=> !!row && row.enabled !== false);
+        }catch(err){
+          return [];
+        }
+      }
+
+      function readinessPyramidModelByType(){
+        const rows = readinessPyramidModelRows();
+        return rows.reduce((acc, row)=>{
+          const key = String((row && row.type) || '').trim().toLowerCase() || 'unknown';
+          if(!acc[key]) acc[key] = [];
+          acc[key].push(row);
+          return acc;
+        }, Object.create(null));
+      }
+
+      function readinessOutcomeIdForRow(row){
+        const outputIds = Array.isArray(row && row.outcomeIds)
+          ? row.outcomeIds.map((value)=> String(value || '').trim()).filter(Boolean)
+          : [];
+        if(outputIds.length) return outputIds[0];
+        const rowId = String((row && row.id) || '').trim();
+        if(rowId.startsWith('outcome_')){
+          return rowId.slice('outcome_'.length);
+        }
+        return '';
+      }
+
+      function readinessAnsweredQuestionKeys(ctxInput, rowsInput){
+        const ctx = (ctxInput && typeof ctxInput === 'object') ? ctxInput : {};
+        const rows = Array.isArray(rowsInput) ? rowsInput : [];
+        const keys = Array.from(new Set(
+          rows.flatMap((row)=> (Array.isArray(row && row.questionKeys) ? row.questionKeys : []))
+            .map((value)=> String(value || '').trim())
+            .filter(Boolean)
+        ));
+        const answered = new Set();
+        keys.forEach((key)=>{
+          if(requirementDoneForContext(key, ctx)){
+            answered.add(key);
+            return;
+          }
+          const value = ctx[key];
+          if(value instanceof Set && value.size){
+            answered.add(key);
+            return;
+          }
+          if(Array.isArray(value) && value.length){
+            answered.add(key);
+            return;
+          }
+          if(typeof value === 'string' && String(value || '').trim()){
+            answered.add(key);
+          }
+        });
+        return answered;
+      }
+
+      function readinessSelectedOptionIds(ctxInput){
+        const ctx = (ctxInput && typeof ctxInput === 'object') ? ctxInput : {};
+        const out = [];
+        const pushMany = (items)=>{
+          (Array.isArray(items) ? items : []).forEach((value)=>{
+            const raw = String(value || '').trim();
+            if(raw) out.push(raw);
+          });
+        };
+        const pushOne = (value)=>{
+          const raw = String(value || '').trim();
+          if(raw) out.push(raw);
+        };
+        pushMany(ctx.pressureSources);
+        pushOne(ctx.urgentWin);
+        pushMany(ctx.riskEnvs);
+        pushOne(ctx.measuredOn);
+        pushOne(ctx.orgPain);
+        pushMany(listFromCollection(ctx.groups));
+        pushMany(listFromCollection(ctx.regs));
+        pushMany(listFromCollection(ctx.stack));
+        pushMany(ctx.drivers);
+        pushMany(listFromCollection(ctx.evidence));
+        pushOne(ctx.rhythm);
+        pushOne(ctx.measure);
+        pushOne(ctx.fitRealism);
+        pushOne(ctx.fitScope);
+        pushOne(ctx.fitToday);
+        pushOne(ctx.fitServices);
+        pushOne(ctx.fitRiskFrame);
+        const stackOther = String(ctx.stackOther || '').trim();
+        if(stackOther){
+          stackOther
+            .split(/[,\n;|/]+/)
+            .map((part)=> part.trim())
+            .filter(Boolean)
+            .forEach((part)=> out.push(part));
+        }
+        return Array.from(new Set(out));
+      }
+
+      const READINESS_SIGNAL_KEY_LABELS = Object.freeze({
+        role: 'Role',
+        fullName: 'Full name',
+        email: 'Business email',
+        company: 'Company',
+        companySize: 'Company size',
+        operatingCountry: 'Operating country',
+        pressureSources: 'Pressure sources',
+        urgentWin: 'Urgent 90-day win',
+        riskEnvs: 'Risk environment',
+        measuredOn: 'Measured on today',
+        orgPain: 'Organisation challenge',
+        groups: 'Coverage groups',
+        rhythm: 'Cadence',
+        measure: 'Measurement model',
+        fitRealism: 'Realism',
+        fitScope: 'Scope',
+        fitToday: 'Current state',
+        fitServices: 'Delivery model',
+        fitRiskFrame: 'Risk frame',
+        industry: 'Industry',
+        region: 'Region',
+        regs: 'Regulatory references',
+        stack: 'Tools / stack',
+        roiVisited: 'ROI estimate'
+      });
+
+      const IMMERSIVE_BRAND_STORY = Object.freeze({
+        brandIdea: 'Be ready',
+        purpose: "To make the world ready for what's next",
+        positioning: 'We give organisations the human edge',
+        values: Object.freeze([
+          'Driven',
+          'Resilience',
+          'Customer Delight',
+          'Inclusive',
+          'One Team'
+        ]),
+        personality: Object.freeze([
+          'Intelligent',
+          'Pioneering',
+          'Empathetic'
+        ]),
+        narrative: 'Be Ready with Immersive means turning uncertainty into confident action through measurable human readiness.'
+      });
+
+      function readinessSignalSupportedKeys(){
+        return Object.keys(READINESS_SIGNAL_KEY_LABELS);
+      }
+
+      function schemaLabelFromValue(rows, value){
+        const raw = String(value || '').trim();
+        if(!raw) return '';
+        const match = (Array.isArray(rows) ? rows : []).find((row)=> String((row && row.value) || '').trim() === raw);
+        return String((match && (match.label || match.value)) || raw).trim();
+      }
+
+      function readinessSignalLabelForKey(keyInput){
+        const key = String(keyInput || '').trim();
+        if(!key) return 'Signal';
+        return READINESS_SIGNAL_KEY_LABELS[key] || key;
+      }
+
+      function readinessSignalRowsForKey(ctxInput, keyInput){
+        const ctx = (ctxInput && typeof ctxInput === 'object') ? ctxInput : {};
+        const key = String(keyInput || '').trim();
+        if(!key) return [];
+        const toRowsFromIds = (ids, list)=>{
+          return listFromCollection(ids)
+            .map((id)=> {
+              const raw = String(id || '').trim();
+              if(!raw) return null;
+              const label = String(optionLabel(list, raw) || '').trim();
+              if(!label || label === '—') return null;
+              return { id: raw, label };
+            })
+            .filter(Boolean);
+        };
+        switch(key){
+          case 'role': {
+            const raw = String(ctx.role || '').trim();
+            if(!raw) return [];
+            return [{ id: raw, label: String(optionLabel(roleOpts, raw) || raw).trim() }];
+          }
+          case 'fullName': {
+            const raw = String(ctx.fullName || '').trim();
+            return raw ? [{ id: raw, label: raw }] : [];
+          }
+          case 'email': {
+            const raw = String(ctx.email || '').trim();
+            return raw ? [{ id: raw, label: raw }] : [];
+          }
+          case 'company': {
+            const raw = String(ctx.company || '').trim();
+            return raw ? [{ id: raw, label: raw }] : [];
+          }
+          case 'companySize': {
+            const raw = String(ctx.companySize || '').trim();
+            const label = schemaLabelFromValue(selectSchema.companySizeOptions, raw);
+            return label ? [{ id: raw, label }] : [];
+          }
+          case 'operatingCountry': {
+            const raw = String(ctx.operatingCountry || '').trim();
+            const label = schemaLabelFromValue(selectSchema.operatingCountryOptions, raw);
+            return raw ? [{ id: raw, label: label || raw }] : [];
+          }
+          case 'pressureSources': {
+            const list = pressureOpts.map((row)=> ({ id:row.id, label:row.title || row.label || row.id }));
+            return toRowsFromIds(ctx.pressureSources, list);
+          }
+          case 'urgentWin': {
+            const raw = String(ctx.urgentWin || '').trim();
+            if(!raw) return [];
+            return [{ id: raw, label: String(optionLabel(urgentWinOpts, raw) || raw).trim() }];
+          }
+          case 'riskEnvs': {
+            const list = riskEnvOpts.map((row)=> ({ id:row.id, label:row.title || row.label || row.id }));
+            return toRowsFromIds(ctx.riskEnvs, list);
+          }
+          case 'measuredOn': {
+            const raw = String(ctx.measuredOn || '').trim();
+            if(!raw) return [];
+            return [{ id: raw, label: String(optionLabel(measuredOnOpts, raw) || raw).trim() }];
+          }
+          case 'orgPain': {
+            const raw = String(ctx.orgPain || '').trim();
+            if(!raw) return [];
+            return [{ id: raw, label: String(optionLabel(orgPainOpts, raw) || raw).trim() }];
+          }
+          case 'groups':
+            return toRowsFromIds(ctx.groups, groupOpts);
+          case 'rhythm': {
+            const raw = String(ctx.rhythm || '').trim();
+            if(!raw) return [];
+            return [{ id: raw, label: String(optionLabel(rhythmOpts, raw) || raw).trim() }];
+          }
+          case 'measure': {
+            const raw = String(ctx.measure || '').trim();
+            if(!raw) return [];
+            return [{ id: raw, label: String(optionLabel(measureOpts, raw) || raw).trim() }];
+          }
+          case 'fitRealism': {
+            const raw = String(ctx.fitRealism || '').trim();
+            if(!raw) return [];
+            return [{ id: raw, label: String(optionLabel(fitRealismOpts, raw) || raw).trim() }];
+          }
+          case 'fitScope': {
+            const raw = String(ctx.fitScope || '').trim();
+            if(!raw) return [];
+            return [{ id: raw, label: String(optionLabel(fitScopeOpts, raw) || raw).trim() }];
+          }
+          case 'fitToday': {
+            const raw = String(ctx.fitToday || '').trim();
+            if(!raw) return [];
+            return [{ id: raw, label: String(optionLabel(fitTodayOpts, raw) || raw).trim() }];
+          }
+          case 'fitServices': {
+            const raw = String(ctx.fitServices || '').trim();
+            if(!raw) return [];
+            return [{ id: raw, label: String(optionLabel(fitServicesOpts, raw) || raw).trim() }];
+          }
+          case 'fitRiskFrame': {
+            const raw = String(ctx.fitRiskFrame || '').trim();
+            if(!raw) return [];
+            return [{ id: raw, label: String(optionLabel(fitRiskFrameOpts, raw) || raw).trim() }];
+          }
+          case 'industry': {
+            const raw = String(ctx.industry || '').trim();
+            return raw ? [{ id: raw, label: raw }] : [];
+          }
+          case 'region': {
+            const raw = String(ctx.region || '').trim();
+            const label = schemaLabelFromValue(selectSchema.regionOptions, raw);
+            return raw ? [{ id: raw, label: label || raw }] : [];
+          }
+          case 'regs':
+            return toRowsFromIds(ctx.regs, regMaster);
+          case 'stack': {
+            const stackRows = toRowsFromIds(ctx.stack, stackMaster);
+            const stackOther = String(ctx.stackOther || '').trim();
+            const otherRows = stackOther
+              ? stackOther
+                  .split(/[,\n;|/]+/)
+                  .map((value)=> String(value || '').trim())
+                  .filter(Boolean)
+                  .map((value)=> ({ id:value, label:value }))
+              : [];
+            return [...stackRows, ...otherRows];
+          }
+          case 'roiVisited':
+            return ctx.visited && ctx.visited.has(maxQuestionStep())
+              ? [{ id:'visited', label:'ROI estimate reviewed' }]
+              : [];
+          default:
+            return [];
+        }
+      }
+
+      function readinessSignalDetailsFromContext(ctxInput, questionKeysInput, optionIdsInput, limitsInput){
+        const ctx = (ctxInput && typeof ctxInput === 'object') ? ctxInput : {};
+        const keys = Array.from(new Set(
+          listFromCollection(questionKeysInput)
+            .map((value)=> String(value || '').trim())
+            .filter(Boolean)
+        ));
+        const optionIds = Array.from(new Set(
+          listFromCollection(optionIdsInput)
+            .map((value)=> String(value || '').trim())
+            .filter(Boolean)
+        ));
+        const optionTokens = new Set(optionIds.map((value)=> normalizeContentToken(value)).filter(Boolean));
+        const limits = Object.assign({ maxGroups:4, maxValuesPerGroup:3 }, limitsInput || {});
+        const details = [];
+        keys.forEach((key)=>{
+          if(details.length >= limits.maxGroups) return;
+          const rows = readinessSignalRowsForKey(ctx, key);
+          if(!rows.length) return;
+          let selected = rows;
+          if(optionTokens.size){
+            const filtered = rows.filter((row)=> {
+              const idToken = normalizeContentToken(row && row.id);
+              const labelToken = normalizeContentToken(row && row.label);
+              return optionTokens.has(idToken) || optionTokens.has(labelToken);
+            });
+            if(!filtered.length) return;
+            selected = filtered;
+          }
+          const values = uniqueList(
+            selected
+              .map((row)=> String((row && row.label) || '').trim())
+              .filter(Boolean),
+            limits.maxValuesPerGroup
+          );
+          if(!values.length) return;
+          details.push({
+            key,
+            label: readinessSignalLabelForKey(key),
+            values
+          });
+        });
+        return details;
+      }
+
+      function mergeReadinessSignalDetails(groupsInput, limitsInput){
+        const groups = Array.isArray(groupsInput) ? groupsInput : [];
+        const limits = Object.assign({ maxGroups:4, maxValuesPerGroup:3 }, limitsInput || {});
+        const merged = new Map();
+        groups.forEach((groupList)=>{
+          (Array.isArray(groupList) ? groupList : []).forEach((group)=>{
+            const key = String((group && group.key) || '').trim() || String((group && group.label) || '').trim().toLowerCase();
+            const label = String((group && group.label) || '').trim();
+            if(!label) return;
+            if(!merged.has(key)){
+              merged.set(key, { key, label, values: [] });
+            }
+            const target = merged.get(key);
+            const values = (Array.isArray(group && group.values) ? group.values : [])
+              .map((value)=> String(value || '').trim())
+              .filter(Boolean);
+            values.forEach((value)=>{
+              if(target.values.length >= limits.maxValuesPerGroup) return;
+              if(!target.values.includes(value)) target.values.push(value);
+            });
+          });
+        });
+        return Array.from(merged.values())
+          .filter((group)=> group.values.length > 0)
+          .slice(0, limits.maxGroups);
+      }
+
+      function readinessPyramidViewModel(threadInput, gateInput, priorityCapabilitiesInput){
+        const rowsByType = readinessPyramidModelByType();
+        const hasRows = Object.keys(rowsByType).some((key)=> Array.isArray(rowsByType[key]) && rowsByType[key].length);
+        if(!hasRows) return null;
+
+        const thread = (threadInput && typeof threadInput === 'object') ? threadInput : currentThreadModel();
+        const gate = (gateInput && typeof gateInput === 'object') ? gateInput : recommendationsGateFromThread(thread);
+        const snapshot = (thread && thread.snapshot && typeof thread.snapshot === 'object')
+          ? thread.snapshot
+          : defaultSnapshotForThread(thread);
+        const ctx = buildReadinessContext(snapshot);
+        const selectedOptionIds = readinessSelectedOptionIds(ctx);
+        const selectedOptionTokens = new Set(
+          selectedOptionIds.map((value)=> normalizeContentToken(value)).filter(Boolean)
+        );
+        const answeredQuestionKeys = readinessAnsweredQuestionKeys(ctx, readinessPyramidModelRows());
+        const allQuestionKeys = Array.from(new Set(
+          readinessPyramidModelRows().flatMap((row)=> (Array.isArray(row && row.questionKeys) ? row.questionKeys : []))
+            .map((value)=> String(value || '').trim())
+            .filter(Boolean)
+        ));
+        const topOutcomes = Array.isArray(gate.topOutcomes) ? gate.topOutcomes : [];
+        const topOutcomeIds = new Set(
+          topOutcomes
+            .map((row)=> normalizeContentToken(row && row.id))
+            .filter(Boolean)
+        );
+        const topOutcomeLabelById = new Map(
+          topOutcomes
+            .map((row)=> [
+              normalizeContentToken(row && row.id),
+              String((row && (row.short || row.label || row.id)) || '').trim()
+            ])
+            .filter((entry)=> entry[0] && entry[1])
+        );
+        const priorityCapabilities = Array.isArray(priorityCapabilitiesInput) && priorityCapabilitiesInput.length
+          ? priorityCapabilitiesInput
+          : capabilityPriorityCardsForGate(gate).slice(0, 4);
+        const priorityCapabilityIds = new Set(
+          priorityCapabilities
+            .map((row)=> normalizeContentToken(row && row.id))
+            .filter(Boolean)
+        );
+
+        const painRows = Array.isArray(rowsByType.pain) ? rowsByType.pain : [];
+        const outcomeRows = Array.isArray(rowsByType.outcome) ? rowsByType.outcome : [];
+        const capabilityRows = Array.isArray(rowsByType.capability) ? rowsByType.capability : [];
+        const platformRows = Array.isArray(rowsByType.platform) ? rowsByType.platform : [];
+        const brandRows = Array.isArray(rowsByType.brand) ? rowsByType.brand : [];
+
+        const activePainRows = painRows
+          .map((row)=>{
+            const optionIds = Array.isArray(row.optionIds) ? row.optionIds : [];
+            const questionKeys = Array.isArray(row.questionKeys) ? row.questionKeys : [];
+            const matchedOptionIds = optionIds.filter((id)=> selectedOptionTokens.has(normalizeContentToken(id)));
+            const matchedQuestionKeys = questionKeys.filter((key)=> answeredQuestionKeys.has(String(key || '').trim()));
+            const matchedOutcomeIds = (Array.isArray(row.outcomeIds) ? row.outcomeIds : [])
+              .filter((id)=> topOutcomeIds.has(normalizeContentToken(id)));
+            const score = (matchedOptionIds.length * 4) + (matchedQuestionKeys.length) + (matchedOutcomeIds.length * 2);
+            return {
+              row,
+              score,
+              matchedOptionIds,
+              matchedQuestionKeys,
+              matchedOutcomeIds
+            };
+          })
+          .filter((entry)=> entry.score > 0)
+          .sort((left, right)=> (right.score - left.score) || (Number(left.row.order) - Number(right.row.order)));
+        const activePainIds = new Set(
+          activePainRows
+            .map((entry)=> normalizeContentToken(entry && entry.row && entry.row.id))
+            .filter(Boolean)
+        );
+
+        const activeOutcomeRows = outcomeRows
+          .map((row)=>{
+            const outcomeId = readinessOutcomeIdForRow(row);
+            const normalizedOutcomeId = normalizeContentToken(outcomeId);
+            const linkedPainIds = (Array.isArray(row.painIds) ? row.painIds : [])
+              .map((id)=> normalizeContentToken(id))
+              .filter(Boolean);
+            const matchedPainIds = linkedPainIds.filter((id)=> activePainIds.has(id));
+            const matchedTopOutcome = normalizedOutcomeId && topOutcomeIds.has(normalizedOutcomeId);
+            const score = (matchedTopOutcome ? 6 : 0) + (matchedPainIds.length * 3);
+            return {
+              row,
+              outcomeId,
+              score,
+              matchedTopOutcome,
+              matchedPainIds
+            };
+          })
+          .filter((entry)=> entry.score > 0)
+          .sort((left, right)=> (right.score - left.score) || (Number(left.row.order) - Number(right.row.order)));
+        const activeOutcomeIds = new Set(
+          activeOutcomeRows
+            .map((entry)=> normalizeContentToken(entry && entry.outcomeId))
+            .filter(Boolean)
+        );
+
+        const activeCapabilityRows = capabilityRows
+          .map((row)=>{
+            const capabilityIds = Array.isArray(row.capabilityIds) ? row.capabilityIds : [];
+            const normalizedCapabilityIds = capabilityIds.map((id)=> normalizeContentToken(id)).filter(Boolean);
+            const matchedPriorityCapabilities = normalizedCapabilityIds.filter((id)=> priorityCapabilityIds.has(id));
+            const matchedOutcomeIds = (Array.isArray(row.outcomeIds) ? row.outcomeIds : [])
+              .map((id)=> normalizeContentToken(id))
+              .filter((id)=> activeOutcomeIds.has(id));
+            const optionIds = Array.isArray(row.optionIds) ? row.optionIds : [];
+            const matchedOptionIds = optionIds.filter((id)=> selectedOptionTokens.has(normalizeContentToken(id)));
+            const score = (matchedPriorityCapabilities.length * 6) + (matchedOutcomeIds.length * 3) + matchedOptionIds.length;
+            return {
+              row,
+              score,
+              matchedPriorityCapabilities,
+              matchedOutcomeIds,
+              matchedOptionIds
+            };
+          })
+          .filter((entry)=> entry.score > 0)
+          .sort((left, right)=> (right.score - left.score) || (Number(left.row.order) - Number(right.row.order)));
+
+        const activeCapabilities = activeCapabilityRows.map((entry)=> entry.row);
+        const activeCapabilityTitles = activeCapabilities
+          .map((row)=> String((row && row.title) || '').trim())
+          .filter(Boolean)
+          .slice(0, 4);
+        const activeCapabilityIds = new Set(
+          activeCapabilities.map((row)=> normalizeContentToken(row && row.id)).filter(Boolean)
+        );
+
+        const toLayerItems = (entries, buildHints, buildSignalDetails)=>{
+          const rankedEntries = entries.slice(0, 6);
+          const scoreTotal = rankedEntries.reduce((sum, entry)=> sum + Math.max(0, Number(entry && entry.score) || 0), 0);
+          const fallbackWeight = rankedEntries.length ? Math.max(1, Math.round(100 / rankedEntries.length)) : 0;
+          return rankedEntries.map((entry)=>{
+            const row = entry && entry.row ? entry.row : {};
+            const hints = buildHints(entry)
+              .map((line)=> String(line || '').trim())
+              .filter(Boolean)
+              .slice(0, 3);
+            const signalDetails = (typeof buildSignalDetails === 'function' ? buildSignalDetails(entry) : [])
+              .map((group)=> ({
+                key: String((group && group.key) || '').trim(),
+                label: String((group && group.label) || '').trim(),
+                values: uniqueList(
+                  (Array.isArray(group && group.values) ? group.values : [])
+                    .map((value)=> String(value || '').trim())
+                    .filter(Boolean),
+                  4
+                )
+              }))
+              .filter((group)=> group.label && group.values.length)
+              .slice(0, 4);
+            const score = Math.max(0, Number(entry && entry.score) || 0);
+            const weightPct = scoreTotal > 0
+              ? Math.max(1, Math.round((score / scoreTotal) * 100))
+              : fallbackWeight;
+            return {
+              id: String(row.id || '').trim(),
+              title: String(row.title || '').trim() || 'Mapped item',
+              description: String(row.description || '').trim(),
+              hints,
+              score,
+              weightPct,
+              signalDetails
+            };
+          });
+        };
+
+        const painSignalDetailsById = new Map();
+        const painItems = toLayerItems(
+          activePainRows,
+          (entry)=>{
+            const matchedOptionLabels = (entry && Array.isArray(entry.matchedOptionIds) ? entry.matchedOptionIds : [])
+              .map((id)=> recommendationOptionLabel(id))
+              .filter(Boolean)
+              .slice(0, 3);
+            const hints = [];
+            if(matchedOptionLabels.length){
+              hints.push(`Triggered by ${naturalList(matchedOptionLabels, { conjunction:'and' })}.`);
+            }
+            return hints;
+          },
+          (entry)=>{
+            const row = entry && entry.row ? entry.row : {};
+            const keys = (entry && Array.isArray(entry.matchedQuestionKeys) && entry.matchedQuestionKeys.length)
+              ? entry.matchedQuestionKeys
+              : (Array.isArray(row.questionKeys) ? row.questionKeys : []);
+            const optionIds = (entry && Array.isArray(entry.matchedOptionIds) && entry.matchedOptionIds.length)
+              ? entry.matchedOptionIds
+              : (Array.isArray(row.optionIds) ? row.optionIds : []);
+            const details = readinessSignalDetailsFromContext(ctx, keys, optionIds, { maxGroups:4, maxValuesPerGroup:3 });
+            const tags = uniqueList(
+              (Array.isArray(row.contentTags) ? row.contentTags : [])
+                .map((tag)=> String(tag || '').trim())
+                .filter(Boolean),
+              4
+            );
+            if(tags.length && details.length < 4){
+              details.push({ key:'contentTags', label:'Contributing tags', values: tags });
+            }
+            const rowId = normalizeContentToken(row && row.id);
+            if(rowId){
+              painSignalDetailsById.set(rowId, details);
+            }
+            return details;
+          }
+        );
+
+        const outcomeItems = toLayerItems(
+          activeOutcomeRows,
+          (entry)=>{
+            const outcomeId = normalizeContentToken(entry && entry.outcomeId);
+            const label = topOutcomeLabelById.get(outcomeId);
+            const hints = [];
+            if(label){
+              hints.push(`Directly aligned to your priority outcome: ${label}.`);
+            }
+            if(entry && Array.isArray(entry.matchedPainIds) && entry.matchedPainIds.length){
+              hints.push(`Mapped from ${entry.matchedPainIds.length} active pain themes.`);
+            }
+            return hints;
+          },
+          (entry)=>{
+            const row = entry && entry.row ? entry.row : {};
+            const details = [];
+            const outcomeId = normalizeContentToken(entry && entry.outcomeId);
+            const outcomeLabel = topOutcomeLabelById.get(outcomeId);
+            if(outcomeLabel){
+              details.push({ key:'priorityOutcome', label:'Priority outcome selected', values:[outcomeLabel] });
+            }
+            const painIds = (entry && Array.isArray(entry.matchedPainIds) ? entry.matchedPainIds : [])
+              .map((id)=> normalizeContentToken(id))
+              .filter(Boolean);
+            const linkedPainTitles = painIds
+              .map((id)=> {
+                const pain = activePainRows.find((painEntry)=> normalizeContentToken(painEntry && painEntry.row && painEntry.row.id) === id);
+                return String((pain && pain.row && pain.row.title) || '').trim();
+              })
+              .filter(Boolean)
+              .slice(0, 4);
+            if(linkedPainTitles.length){
+              details.push({ key:'painThemes', label:'Linked pain themes', values: linkedPainTitles });
+            }
+            const inherited = mergeReadinessSignalDetails(
+              painIds.map((id)=> painSignalDetailsById.get(id)),
+              { maxGroups: 3, maxValuesPerGroup: 3 }
+            );
+            inherited.forEach((group)=>{
+              if(details.length >= 4) return;
+              details.push(group);
+            });
+            const tags = uniqueList(
+              (Array.isArray(row.contentTags) ? row.contentTags : [])
+                .map((tag)=> String(tag || '').trim())
+                .filter(Boolean),
+              4
+            );
+            if(tags.length && details.length < 4){
+              details.push({ key:'contentTags', label:'Contributing tags', values: tags });
+            }
+            return details;
+          }
+        );
+
+        const capabilityItems = toLayerItems(
+          activeCapabilityRows,
+          (entry)=>{
+            const row = entry && entry.row ? entry.row : {};
+            const matchedOutcomeLabels = (Array.isArray(row.outcomeIds) ? row.outcomeIds : [])
+              .map((id)=> topOutcomeLabelById.get(normalizeContentToken(id)))
+              .filter(Boolean)
+              .slice(0, 2);
+            const hints = [];
+            if(entry && Array.isArray(entry.matchedPriorityCapabilities) && entry.matchedPriorityCapabilities.length){
+              hints.push('Included in your priority feature selection.');
+            }
+            if(matchedOutcomeLabels.length){
+              hints.push(`Supports ${naturalList(matchedOutcomeLabels, { conjunction:'and' })}.`);
+            }
+            return hints;
+          },
+          (entry)=>{
+            const row = entry && entry.row ? entry.row : {};
+            const details = [];
+            const matchedOutcomeLabels = (Array.isArray(row.outcomeIds) ? row.outcomeIds : [])
+              .map((id)=> topOutcomeLabelById.get(normalizeContentToken(id)))
+              .filter(Boolean)
+              .slice(0, 4);
+            if(matchedOutcomeLabels.length){
+              details.push({ key:'outcomes', label:'Mapped outcomes', values: matchedOutcomeLabels });
+            }
+            if(entry && Array.isArray(entry.matchedPriorityCapabilities) && entry.matchedPriorityCapabilities.length){
+              details.push({ key:'priority', label:'Priority capability fit', values:['Matched to your top PIBR feature set'] });
+            }
+            const optionIds = (entry && Array.isArray(entry.matchedOptionIds) && entry.matchedOptionIds.length)
+              ? entry.matchedOptionIds
+              : (Array.isArray(row.optionIds) ? row.optionIds : []);
+            const contextSignals = readinessSignalDetailsFromContext(
+              ctx,
+              (Array.isArray(row.questionKeys) && row.questionKeys.length) ? row.questionKeys : readinessSignalSupportedKeys(),
+              optionIds,
+              { maxGroups:3, maxValuesPerGroup:3 }
+            );
+            contextSignals.forEach((group)=>{
+              if(details.length >= 4) return;
+              details.push(group);
+            });
+            const tags = uniqueList(
+              (Array.isArray(row.contentTags) ? row.contentTags : [])
+                .map((tag)=> String(tag || '').trim())
+                .filter(Boolean),
+              4
+            );
+            if(tags.length && details.length < 4){
+              details.push({ key:'contentTags', label:'Contributing tags', values: tags });
+            }
+            return details;
+          }
+        );
+
+        const allOutcomeLabels = uniqueList(
+          activeOutcomeRows
+            .map((entry)=> topOutcomeLabelById.get(normalizeContentToken(entry && entry.outcomeId)))
+            .filter(Boolean),
+          4
+        );
+        const allPainTitles = uniqueList(
+          activePainRows
+            .map((entry)=> String((entry && entry.row && entry.row.title) || '').trim())
+            .filter(Boolean),
+          4
+        );
+        const platformItems = (()=> {
+          const row = platformRows[0];
+          if(!row || !activeCapabilityIds.size) return [];
+          const platformSignals = [];
+          if(activeCapabilityTitles.length){
+            platformSignals.push({ key:'capabilityThemes', label:'Capability themes connected', values: activeCapabilityTitles.slice(0, 4) });
+          }
+          if(allOutcomeLabels.length){
+            platformSignals.push({ key:'outcomes', label:'Outcome priorities linked', values: allOutcomeLabels });
+          }
+          const stackSignals = uniqueList(
+            (Array.isArray(gate.stackSignals) ? gate.stackSignals : [])
+              .map((value)=> String(value || '').trim())
+              .filter(Boolean),
+            4
+          );
+          if(stackSignals.length){
+            platformSignals.push({ key:'stack', label:'Workflow context', values: stackSignals });
+          }
+          return [{
+            id: String(row.id || '').trim() || 'platform',
+            title: String(row.title || 'Immersive One').trim() || 'Immersive One',
+            description: String(row.description || '').trim(),
+            hints: activeCapabilityTitles.length
+              ? [`Connects ${naturalList(activeCapabilityTitles, { conjunction:'and' })} into one operating model.`]
+              : [],
+            score: activeCapabilityTitles.length,
+            weightPct: 100,
+            signalDetails: platformSignals.slice(0, 4)
+          }];
+        })();
+
+        const brandItems = (()=> {
+          const row = brandRows[0];
+          if(!row || !platformItems.length) return [];
+          const brandSignals = [
+            { key:'brandIdea', label:'Brand idea', values:[IMMERSIVE_BRAND_STORY.brandIdea] },
+            { key:'purpose', label:'Purpose', values:[IMMERSIVE_BRAND_STORY.purpose] },
+            { key:'positioning', label:'Positioning', values:[IMMERSIVE_BRAND_STORY.positioning] },
+            { key:'values', label:'Values', values: IMMERSIVE_BRAND_STORY.values.slice(0, 5) },
+            { key:'personality', label:'Personality', values: IMMERSIVE_BRAND_STORY.personality.slice(0, 4) }
+          ];
+          if(allPainTitles.length){
+            brandSignals.push({ key:'painThemes', label:'Pain themes reflected', values: allPainTitles });
+          }
+          if(allOutcomeLabels.length){
+            brandSignals.push({ key:'outcomes', label:'Outcome commitments', values: allOutcomeLabels });
+          }
+          if(activeCapabilityTitles.length){
+            brandSignals.push({ key:'capabilities', label:'Capability proof points', values: activeCapabilityTitles.slice(0, 4) });
+          }
+          const rowDescription = String(row.description || '').trim();
+          const description = [rowDescription, IMMERSIVE_BRAND_STORY.narrative]
+            .map((value)=> String(value || '').trim())
+            .filter(Boolean)
+            .join(' ');
+          return [{
+            id: String(row.id || '').trim() || 'brand',
+            title: String(row.title || 'Immersive: Be Ready').trim() || 'Immersive: Be Ready',
+            description,
+            hints: [
+              'Ties your selected priorities to the Be Ready narrative and measurable confidence.',
+              `Values in action: ${naturalList(IMMERSIVE_BRAND_STORY.values, { conjunction:'and' })}.`,
+              `Brand personality: ${naturalList(IMMERSIVE_BRAND_STORY.personality, { conjunction:'and' })}.`
+            ],
+            score: Math.max(1, activeCapabilityTitles.length),
+            weightPct: 100,
+            signalDetails: brandSignals.slice(0, 7)
+          }];
+        })();
+
+        return {
+          mappedQuestionCount: allQuestionKeys.length,
+          answeredQuestionCount: allQuestionKeys.filter((key)=> answeredQuestionKeys.has(key)).length,
+          layers: [
+            {
+              key: 'pain',
+              layerOrder: 1,
+              title: 'Pain points and challenges',
+              description: 'Mapped from discovery signals captured during your questionnaire.',
+              matchedCount: painItems.length,
+              totalCount: painRows.length,
+              weightingNote: painItems.length > 1 ? 'Weighting reflects matched signal strength and is not equally distributed.' : '',
+              items: painItems
+            },
+            {
+              key: 'outcome',
+              layerOrder: 2,
+              title: 'Outcomes you are targeting',
+              description: 'Outcomes selected from active pain themes and top-priority goals.',
+              matchedCount: outcomeItems.length,
+              totalCount: outcomeRows.length,
+              weightingNote: outcomeItems.length > 1 ? 'Weighting reflects linked pain and priority-outcome signal strength.' : '',
+              items: outcomeItems
+            },
+            {
+              key: 'capability',
+              layerOrder: 3,
+              title: 'PIBR capabilities to prioritize',
+              description: 'Product capabilities mapped to the outcomes and context you selected.',
+              matchedCount: capabilityItems.length,
+              totalCount: capabilityRows.length,
+              weightingNote: capabilityItems.length > 1 ? 'Weighting reflects capability fit against your selected outcomes and context signals.' : '',
+              items: capabilityItems
+            },
+            {
+              key: 'platform',
+              layerOrder: 4,
+              title: 'Immersive One platform narrative',
+              description: 'How selected capabilities connect inside the platform.',
+              matchedCount: platformItems.length,
+              totalCount: platformRows.length,
+              items: platformItems
+            },
+            {
+              key: 'brand',
+              layerOrder: 5,
+              title: 'Immersive brand promise',
+              description: 'How this mapped plan supports the Be Ready positioning.',
+              matchedCount: brandItems.length,
+              totalCount: brandRows.length,
+              items: brandItems
+            }
+          ]
+        };
+      }
+
+      function renderContentRecommendationCardMarkup(cardInput, idx){
+        const card = (cardInput && typeof cardInput === 'object') ? cardInput : {};
+        const rank = Number.isFinite(Number(idx)) ? (Number(idx) + 1) : 1;
+        const formatLabel = String(card.format || 'Content').trim() || 'Content';
+        const imageHref = safeLinkHref(card.imageUrl);
+        const linkHref = safeLinkHref(card.url);
+        const publishedLabel = String(card.publishedOn || '').trim();
+        const sourceLabel = String(card.source || '').trim();
+        return `
+          <article class="contentRecCard">
+            ${imageHref ? `<div class="contentRecImageWrap"><img class="contentRecImage" src="${escapeHtml(imageHref)}" alt="${escapeHtml(card.title || 'Recommended content image')}" loading="lazy" /></div>` : ''}
+            <p class="contentRecEyebrow">Content ${rank} · ${escapeHtml(formatLabel)}</p>
+            <h3>${escapeHtml(card.title || 'Recommended content')}</h3>
+            <p class="contentRecOutcome"><strong>Outcome:</strong> ${escapeHtml(card.outcomeLabel || 'Priority outcome')}</p>
+            <p class="contentRecSummary">${escapeHtml(card.summary || '')}</p>
+            <p class="contentRecWhy"><strong>Why this is relevant:</strong> ${escapeHtml(card.why || '')}</p>
+            ${linkHref ? `<a class="contentRecLink" href="${escapeHtml(linkHref)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Read more')}</a>` : ''}
+            ${publishedLabel ? `<p class="contentRecMeta"><strong>Published:</strong> ${escapeHtml(publishedLabel)}</p>` : ''}
+            ${sourceLabel ? `<p class="contentRecSource"><strong>Source:</strong> ${escapeHtml(sourceLabel)}</p>` : ''}
+          </article>
+        `;
+      }
+
+      function renderPriorityFeatureCardMarkup(capabilityInput, idx){
+        const capability = (capabilityInput && typeof capabilityInput === 'object') ? capabilityInput : {};
+        const display = capabilityCardDisplayModel(capability, idx);
+        const outcomes = Array.isArray(capability.outcomes)
+          ? capability.outcomes.map((line)=> String(line || '').trim()).filter(Boolean).slice(0, 3)
+          : [];
+        return `
+          <article class="contentRecCard priorityFeatureCard">
+            <p class="contentRecEyebrow">${escapeHtml(display.eyebrow)}</p>
+            <h3>${escapeHtml(display.title)}</h3>
+            <p class="priorityFeaturePill">${escapeHtml(display.pillarLabel)}</p>
+            ${outcomes.length ? `<p class="priorityFeatureOutcome"><strong>Best supports:</strong> ${escapeHtml(naturalList(outcomes, { conjunction:'and' }))}</p>` : ''}
+            <p class="contentRecSummary">${escapeHtml(display.description)}</p>
+            ${display.whyBullets.length ? `<p class="priorityFeatureWhyTitle">${escapeHtml(display.whyTitle)}</p><ul class="priorityFeatureWhyList">${display.whyBullets.map((line)=> `<li>${escapeHtml(line)}</li>`).join('')}</ul>` : ''}
+          </article>
+        `;
+      }
+
+      function renderPyramidLayerCardMarkup(layerInput){
+        const layer = (layerInput && typeof layerInput === 'object') ? layerInput : {};
+        const items = Array.isArray(layer.items) ? layer.items : [];
+        const layerNumber = Number(layer.layerOrder) || 0;
+        const title = String(layer.title || `Layer ${layerNumber}`).trim() || `Layer ${layerNumber}`;
+        const description = String(layer.description || '').trim();
+        const weightingNote = String(layer.weightingNote || '').trim();
+        const matchedCount = Math.max(0, Number(layer.matchedCount) || items.length);
+        const totalCount = Math.max(matchedCount, Number(layer.totalCount) || 0);
+        const layerKey = String(layer.key || '').trim() || 'layer';
+        const maxSignalGroupsPerCard = layerKey === 'brand' ? 5 : 3;
+        const cards = items.map((item, idx)=>{
+          const itemId = String((item && item.id) || '').trim() || `item-${idx + 1}`;
+          const ringId = `pyramid:${layerKey}:${itemId}`;
+          const weightPct = clamp(Number(item && item.weightPct) || 0, 0, 100);
+          const shouldAnimateRing = !(
+            (state.completionRingAnimatedIds instanceof Set)
+            && state.completionRingAnimatedIds.has(ringId)
+          );
+          const signalDetails = (Array.isArray(item && item.signalDetails) ? item.signalDetails : [])
+            .map((group)=> ({
+              label: String((group && group.label) || '').trim(),
+              values: uniqueList(
+                (Array.isArray(group && group.values) ? group.values : [])
+                  .map((value)=> String(value || '').trim())
+                  .filter(Boolean),
+                3
+              )
+            }))
+            .filter((group)=> group.label && group.values.length)
+            .slice(0, maxSignalGroupsPerCard);
+          const hints = uniqueList(
+            (Array.isArray(item && item.hints) ? item.hints : [])
+              .map((line)=> String(line || '').trim())
+              .filter(Boolean),
+            2
+          );
+          return `
+            <article class="pyramidThemeCard">
+              <div class="pyramidThemeCardHead">
+                <h5>${escapeHtml(item && item.title || 'Mapped theme')}</h5>
+                ${weightPct > 0 ? `<span class="pyramidThemeWeightPill">${Math.max(1, Math.round(weightPct))}%</span>` : ''}
+              </div>
+              <div class="pyramidThemeCardBody">
+                <span class="dashCompletionRing pyramidThemeRing${shouldAnimateRing ? ' is-enter' : ''}" data-ring-id="${escapeHtml(ringId)}" data-target-pct="${Math.max(1, Math.round(weightPct))}" data-animate="${shouldAnimateRing ? 'true' : 'false'}" style="--pct:${shouldAnimateRing ? 0 : Math.max(1, Math.round(weightPct))};"><span>${shouldAnimateRing ? '0%' : `${Math.max(1, Math.round(weightPct))}%`}</span></span>
+                <div class="pyramidThemeCardCopy">
+                  ${item && item.description ? `<p class="pyramidThemeDescription">${escapeHtml(item.description)}</p>` : ''}
+                  ${signalDetails.length
+                    ? `<ul class="pyramidThemeSignalList">${signalDetails.map((detail)=> `<li><strong>${escapeHtml(detail.label)}:</strong> ${escapeHtml(naturalList(detail.values, { conjunction:'and' }))}</li>`).join('')}</ul>`
+                    : ''
+                  }
+                  ${hints.length ? `<p class="pyramidThemeHint">${escapeHtml(hints[0])}</p>` : ''}
+                </div>
+              </div>
+            </article>
+          `;
+        });
+        return `
+          <article class="pyramidLayerCard" data-layer="${escapeHtml(String(layer.key || '').trim() || 'layer')}">
+            <p class="pyramidLayerEyebrow">Layer ${layerNumber}</p>
+            <div class="pyramidLayerTop">
+              <h4>${escapeHtml(title)}</h4>
+              <p class="pyramidLayerCoverage">Mapped ${matchedCount} of ${totalCount} themes.</p>
+            </div>
+            ${description ? `<p class="pyramidLayerMeta">${escapeHtml(description)}</p>` : ''}
+            ${weightingNote ? `<p class="pyramidLayerWeightingNote">${escapeHtml(weightingNote)}</p>` : ''}
+            ${cards.length
+              ? `<div class="pyramidLayerThemeGrid">${cards.join('')}</div>`
+              : '<p class="pyramidLayerEmpty">No mapped themes yet for this layer.</p>'
+            }
+          </article>
+        `;
+      }
+
       function customerTemplateModelFromCandidate(candidate){
         const record = candidate && candidate.thread ? candidate.thread : null;
         if(!record) return null;
@@ -14157,6 +15194,21 @@ const evidenceOpts = [
 
         gateEl.hidden = true;
         gateEl.innerHTML = '';
+        const cards = recommendationCardsForGate(gate);
+        if(cards.length){
+          gridEl.hidden = false;
+          gridEl.innerHTML = cards.map((card, idx)=> renderContentRecommendationCardMarkup(card, idx)).join('');
+        }else{
+          gridEl.hidden = false;
+          gridEl.innerHTML = '<article class="contentRecCard"><h3>No mapped content found</h3><p class="contentRecSummary">No curated recommendations are available yet for this profile and current catalog.</p></article>';
+        }
+        const priorityCapabilities = capabilityPriorityCardsForGate(gate).slice(0, 4);
+        if(priorityCapabilities.length && priorityWrapEl && priorityGridEl){
+          priorityWrapEl.hidden = false;
+          priorityGridEl.innerHTML = priorityCapabilities
+            .map((capability, idx)=> renderPriorityFeatureCardMarkup(capability, idx))
+            .join('');
+        }
         if(candidateForView){
           const model = customerTemplateModelFromCandidate(candidateForView);
           if(model){
@@ -14168,6 +15220,80 @@ const evidenceOpts = [
         }
         renderCustomerTemplatePreview();
         syncCustomerTemplatePublishButtons(preferredThreadId);
+      }
+
+      function renderStoryMappingView(gateInput){
+        const shell = $('#storyMappingView');
+        if(!shell) return;
+        const gate = (gateInput && typeof gateInput === 'object')
+          ? gateInput
+          : recommendationsGateFromThread(resolveRecommendationThread(state.recommendationsThreadId || 'current'));
+        const thread = resolveRecommendationThread(gate.threadId || state.recommendationsThreadId || 'current');
+
+        const setText = (sel, value)=>{
+          const el = $(sel);
+          if(!el) return;
+          el.textContent = String(value || '');
+        };
+        const titleEl = $('#storyMappingTitle');
+        const subEl = $('#storyMappingSub');
+        const headEl = $('#storyMappingHead');
+        if(headEl){
+          headEl.hidden = false;
+        }
+        if(titleEl){
+          titleEl.textContent = `Story mapping for ${gate.company || 'this record'}`;
+        }
+        if(subEl){
+          subEl.textContent = 'Map discovery pain points through outcomes and PIBR capabilities.';
+        }
+
+        const gateEl = $('#storyMappingGate');
+        const pyramidWrapEl = $('#storyMappingPyramidWrap');
+        const pyramidGridEl = $('#storyMappingPyramidGrid');
+        const pyramidSubEl = $('#storyMappingPyramidSub');
+        const resetPyramid = ()=>{
+          if(pyramidWrapEl) pyramidWrapEl.hidden = true;
+          if(pyramidGridEl) pyramidGridEl.innerHTML = '';
+          setText('#storyMappingPyramidSub', 'Track how your answers map from pain points to outcomes, PIBR features, and platform narrative.');
+        };
+        if(!gateEl || !pyramidWrapEl || !pyramidGridEl){
+          return;
+        }
+        resetPyramid();
+        gateEl.hidden = true;
+        gateEl.innerHTML = '';
+
+        if(!gate.eligible){
+          gateEl.hidden = false;
+          gateEl.innerHTML = `
+            <strong>Story mapping is locked.</strong>
+            <p>Current completion is ${escapeHtml(gate.completion)}. Reach at least 90% to unlock mapping.</p>
+          `;
+          return;
+        }
+
+        const priorityCapabilities = capabilityPriorityCardsForGate(gate).slice(0, 4);
+        const pyramid = readinessPyramidViewModel(thread, gate, priorityCapabilities);
+        const layers = Array.isArray(pyramid && pyramid.layers) ? pyramid.layers : [];
+        const hasMappedLayer = layers.some((layer)=> Array.isArray(layer.items) && layer.items.length > 0);
+        if(!hasMappedLayer){
+          gateEl.hidden = false;
+          gateEl.innerHTML = '<strong>No story mapping available yet.</strong><p>Complete more discovery inputs to map pain points through outcomes and PIBR capabilities.</p>';
+          return;
+        }
+
+        pyramidWrapEl.hidden = false;
+        pyramidGridEl.innerHTML = layers
+          .map((layer)=> renderPyramidLayerCardMarkup(layer))
+          .join('');
+        if(pyramidSubEl){
+          const answered = Math.max(0, Number(pyramid.answeredQuestionCount) || 0);
+          const total = Math.max(answered, Number(pyramid.mappedQuestionCount) || 0);
+          pyramidSubEl.textContent = total
+            ? `Mapped from ${answered}/${total} answered discovery signals, from pain themes through outcomes and PIBR capabilities.`
+            : 'Track how your answers map from pain points to outcomes, PIBR features, and platform narrative.';
+        }
       }
 
       function moduleValueByLabel(rows, label){

@@ -1091,6 +1091,115 @@ Design and workflow updates deployed for self-service intake and dashboard follo
      - `node --check /Users/will.bloor/Documents/Configurator/assets/js/copy-rules.js`
      - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
 
+50. Added readiness-pyramid mapping layer and wired it into Content view generation (2026-02-27)
+   - Added and normalized the readiness pyramid data model:
+     - new source file: `/Users/will.bloor/Documents/Configurator/assets/data/readiness-pyramid-model.v1.csv`
+     - fixed malformed CSV rows and aligned all rows to the canonical 13-column schema
+   - Hardened pyramid model generation:
+     - updated `/Users/will.bloor/Documents/Configurator/scripts/generate_readiness_pyramid_model_js.mjs` to fail fast on malformed row column counts
+     - regenerated runtime payload: `/Users/will.bloor/Documents/Configurator/assets/js/readiness-pyramid-model.js`
+   - Wired runtime mapping in app logic:
+     - added `readinessPyramidViewModel(...)` with layer-by-layer mapping from answered discovery signals:
+       - pain points -> outcomes -> PIBR capabilities -> platform -> brand
+     - uses thread snapshot selections, inferred top outcomes, and ranked priority capabilities to build mapped layer cards
+   - Updated Content view rendering:
+     - now renders:
+       - `Your readiness pyramid mapping`
+       - `Your priority Immersive One features mapped to PIBR`
+       - mapped recommendation cards from catalog
+     - added structured card renderers for recommendation cards, priority feature cards, and pyramid layer cards
+   - Updated styles:
+     - added dedicated pyramid section/card styles in `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+     - simplified priority feature cards to fixed capability description + "Why this matters to you" bullets
+   - Principle:
+     - make the content model explicit and customer-readable so outputs reflect a clear narrative chain from discovered pain to platform capability and brand promise.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/data/readiness-pyramid-model.v1.csv`
+     - `/Users/will.bloor/Documents/Configurator/scripts/generate_readiness_pyramid_model_js.mjs`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/readiness-pyramid-model.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/generate_readiness_pyramid_model_js.mjs`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/readiness-pyramid-model.js`
+   - Residual risk / follow-up:
+     - layer relevance scoring is heuristic; tune row-level option mappings and score weights as real account permutations are reviewed.
+
+51. Split pyramid mapping into a dedicated "Story mapping" record nav section (2026-02-27)
+   - Added a new interstitial record section directly under `Content`:
+     - label: `Story mapping`
+     - route segment: `#/records/:recordId/record-story-mapping`
+   - Moved readiness pyramid rendering out of the Content section:
+     - removed `Your readiness pyramid mapping` block from embedded `record-content`
+     - Content now focuses on:
+       - `Your priority Immersive One features mapped to PIBR`
+       - mapped content recommendation cards
+       - customer page preview/publish actions
+   - Added a dedicated Story Mapping surface and renderer:
+     - new mounted view shell: `#storyMappingView`
+     - gate behavior aligned with content readiness threshold (`>= 90%`)
+     - renders readiness pyramid layers from:
+       - pain points -> outcomes -> PIBR capabilities -> platform -> brand
+   - Refined Story Mapping layer cards to explicit two-column narrative + evidence rows:
+     - left column (`~70%`) now shows mapped theme descriptions with relative weighting by matched-signal score
+     - right column (`~30%`) now lists explicit driving signals (question labels + captured values), replacing generic "backed by X signals" phrasing
+     - evidence now includes concrete drivers such as:
+       - pressure sources
+       - urgent 90-day win
+       - risk environment
+       - measured baseline
+       - coverage/tooling/regulatory context when matched
+   - Reworked Story Mapping for dashboard scanability:
+     - each layer now renders a 2-up grid of per-theme cards (instead of dense list blocks)
+     - each theme card includes:
+       - weighting ring visualization
+       - theme title + description
+       - compact signal evidence list inside the same card
+     - preserves full mapping logic while reducing visual overload for high-theme layers.
+   - Updated interstitial left-nav and overview summaries:
+     - section rail now includes `Story mapping` beneath `Content`
+     - overview status cards include a `Story mapping page` readiness row
+   - Principle:
+     - separate narrative mapping from content recommendation execution so both tracks can be worked in parallel without overloading the Content page.
+   - Cross-surface impact:
+     - deep links to content remain `record-content`
+     - new story links route to `record-story-mapping` while preserving existing interstitial navigation flow.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/readiness-pyramid-model.js`
+   - Residual risk / follow-up:
+     - run a manual interstitial route smoke pass for both sections:
+       - `#/records/:recordId/record-content`
+       - `#/records/:recordId/record-story-mapping`
+     - verify section-state persistence when switching quickly between `Content` and `Story mapping`.
+
+52. Enriched Story Mapping brand layer with brand architecture signals (2026-02-27)
+   - Updated brand-layer narrative content in Story Mapping to include explicit brand strategy anchors:
+     - `Brand idea`: `Be ready`
+     - `Purpose`: `To make the world ready for what's next`
+     - `Positioning`: `We give organisations the human edge`
+     - `Values`: `Driven`, `Resilience`, `Customer Delight`, `Inclusive`, `One Team`
+     - `Personality`: `Intelligent`, `Pioneering`, `Empathetic`
+   - Brand layer card output now combines:
+     - static brand architecture signals above
+     - mapped account context signals (pain themes, outcomes, capability proof points)
+   - Added brand-specific narrative line in card description:
+     - `Be Ready with Immersive means turning uncertainty into confident action through measurable human readiness.`
+   - Principle:
+     - keep the top-of-pyramid brand story explicit and consistent with brand strategy while still grounded in account-specific mapping context.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
 ## State Sync Guardrails (Critical, 2026-02-26)
 
 These are hard rules to prevent recurrence of the Tina Corp save-loss regression.

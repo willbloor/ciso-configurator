@@ -9233,15 +9233,6 @@ const evidenceOpts = [
             metricValue: `${storyReadinessPct}%`,
             metricLabel: 'Story mapping readiness',
             progressPct: storyReadinessPct
-          },
-          {
-            section: 'meetings',
-            label: 'Meetings page',
-            status: pitch.isFinal ? 'Initial recommendation generated' : 'Draft in progress',
-            tone: pitch.isFinal ? 'ready' : 'open',
-            metricValue: `${meetingProgressPct}%`,
-            metricLabel: pitch.isFinal ? 'Pitch quality' : 'Draft confidence',
-            progressPct: meetingProgressPct
           }
         ];
         const overviewSummaryHtml = `
@@ -9267,15 +9258,20 @@ const evidenceOpts = [
                           : `<button type="button" class="btn small" data-inter-open-section="${escapeHtml(row.section)}">Open</button>`
                         }
                       </div>
-                      <div class="interOverviewVizRow">
-                        <span class="dashCompletionRing interOverviewRing${shouldAnimateRing ? ' is-enter' : ''}" data-ring-id="${escapeHtml(ringId)}" data-target-pct="${pct}" data-animate="${shouldAnimateRing ? 'true' : 'false'}" style="--pct:${shouldAnimateRing ? 0 : pct};">
-                          <span>${shouldAnimateRing ? '0%' : `${pct}%`}</span>
-                        </span>
-                        <div class="interOverviewMetricWrap">
-                          <p class="interOverviewMacro${row.section === 'gaps' ? ' is-gaps' : ''}">${escapeHtml(String(row.metricValue || '0'))}</p>
-                          <p class="interOverviewMacroLabel">${escapeHtml(String(row.metricLabel || 'Metric'))}</p>
-                        </div>
-                      </div>
+                      ${row.showProgress === false
+                        ? ''
+                        : `
+                          <div class="interOverviewVizRow">
+                            <span class="dashCompletionRing interOverviewRing${shouldAnimateRing ? ' is-enter' : ''}" data-ring-id="${escapeHtml(ringId)}" data-target-pct="${pct}" data-animate="${shouldAnimateRing ? 'true' : 'false'}" style="--pct:${shouldAnimateRing ? 0 : pct};">
+                              <span>${shouldAnimateRing ? '0%' : `${pct}%`}</span>
+                            </span>
+                            <div class="interOverviewMetricWrap">
+                              <p class="interOverviewMacro${row.section === 'gaps' ? ' is-gaps' : ''}">${escapeHtml(String(row.metricValue || '0'))}</p>
+                              <p class="interOverviewMacroLabel">${escapeHtml(String(row.metricLabel || 'Metric'))}</p>
+                            </div>
+                          </div>
+                        `
+                      }
                       <p class="interOverviewStatusMeta">${escapeHtml(String(row.status || 'Pending'))}</p>
                     </article>
                   `;

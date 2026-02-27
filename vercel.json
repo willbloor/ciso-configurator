@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/customer-pages/:slug",
+      "destination": "/api/customer-page?slug=:slug"
+    },
+    {
+      "source": "/customer-pages/:slug/",
+      "destination": "/api/customer-page?slug=:slug"
+    },
+    {
       "source": "/widget",
       "destination": "/landing-pages/customer-self-service-widget-prototype.html"
     },

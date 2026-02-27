@@ -11,6 +11,26 @@ This repository contains the static configurator app used to generate customer d
 - Curates "Recommended for you" cards from reconciled Webflow CSV data.
 - Curates "What's new" from RSS (with fallback data).
 - Exports a downloadable customer dashboard HTML file.
+- Publishes a live customer dashboard URL via Vercel Blob (`/api/publish-customer-page`).
+
+## Vercel Live Publish Endpoint (2026-02-27)
+
+Customer page publishing is now available directly from the Content view and Customer page preview:
+
+- UI actions:
+  - `Publish customer page`
+  - `Open live page` (appears after a successful publish in the current session)
+- API route:
+  - `/api/publish-customer-page` (POST)
+  - `/api/customer-page?slug=<slug>` (GET redirect target)
+- Storage target:
+  - Vercel Blob, deterministic key: `customer-pages/<slug>.html` (overwrite-on-republish)
+- Public route:
+  - `/customer-pages/<slug>` (rewrites to `/api/customer-page`)
+
+Required environment variable in Vercel project settings:
+
+- `BLOB_READ_WRITE_TOKEN`
 
 ## Platform Direction Update (2026-02-25)
 
@@ -890,6 +910,121 @@ Design and workflow updates deployed for self-service intake and dashboard follo
      - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
    - Residual risk / follow-up:
      - capability ranking is heuristic and should be spot-checked with real records to tune weighting/rationale phrasing for edge combinations.
+
+44. Added in-app section "Your priority Immersive One features mapped to PIBR" in Content view (2026-02-27)
+   - Added a dedicated capability-priority section directly in the `record-content` workspace:
+     - section title: `Your priority Immersive One features mapped to PIBR`
+     - rendered above mapped content cards in the Content view
+   - Extended capability model payload returned by `capabilityPriorityCardsForGate(...)`:
+     - added explicit `pibrTrack` mapping (`Prove`, `Improve`, `Benchmark & Report`, or `Cross-PIBR`)
+     - added matched questionnaire outcome labels per capability (`outcomes`)
+   - Wired the section to questionnaire outcomes + profile context:
+     - uses `gate.topOutcomes` and selected stack signals to score/rank features
+     - each feature card now shows:
+       - PIBR mapping
+       - Immersive One capability pillar
+       - mapped outcomes from the questionnaire
+       - rationale (`why now`) and proof focus
+   - Updated generated customer-page wording to match this naming:
+     - renamed capability section heading to `Your priority Immersive One features mapped to PIBR`
+     - updated hero CTA label to `Priority features` when this section is available
+   - Principle:
+     - make capability recommendations explicit in the operator workspace, not only in generated customer-page output.
+   - Cross-surface impact:
+     - Content view now surfaces platform-feature priorities alongside content recommendations.
+     - Existing customer-page generation keeps using the same capability-priority model, now with richer metadata.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+   - Residual risk / follow-up:
+     - `Cross-PIBR` mapping is intentional for integration/program orchestration features and may be tuned if a stricter single-pillar mapping is required in future copy.
+
+45. Added CSV-driven natural-language rules for priority feature cards (2026-02-27)
+   - Reworked priority feature card copy to be more natural and audience-ready:
+     - cards now render fixed capability descriptions + `Why this matters to you` bullets
+     - removed repetitive replay labels in the Content view card body
+   - Added a configurable natural-language rule layer for copy permutations:
+     - new source CSV: `/Users/will.bloor/Documents/Configurator/assets/data/capability-language-rules.v1.csv`
+     - supports capability/outcome/signal-conditioned bullet templates with priority ordering
+   - Added generation pipeline for runtime rules payload:
+     - new script: `/Users/will.bloor/Documents/Configurator/scripts/generate_capability_language_rules_js.mjs`
+     - generated runtime file: `/Users/will.bloor/Documents/Configurator/assets/js/capability-language-rules.js`
+     - loaded in UI shell before app runtime
+   - Runtime logic updates:
+     - `capabilityPriorityCardsForGate(...)` now resolves rule-matched bullets first, then falls back to heuristic bullet generation
+     - feature cards in both Content view and generated customer-page output now consume `description` + `whyBullets`
+   - Principle:
+     - move from hardcoded, repetitive rationale strings to editable copy rules that can scale with new questionnaire permutations.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+     - `/Users/will.bloor/Documents/Configurator/assets/data/capability-language-rules.v1.csv`
+     - `/Users/will.bloor/Documents/Configurator/scripts/generate_capability_language_rules_js.mjs`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/capability-language-rules.js`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/capability-language-rules.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/scripts/generate_capability_language_rules_js.mjs`
+   - Residual risk / follow-up:
+     - copy quality is now data-driven; rule coverage should be expanded over time for niche signal combinations to reduce fallback usage.
+
+46. Refined customer content preview build animation to section-by-section stagger (no opacity wash)
+   - Reworked customer page preview build behavior to remove the clunky full-canvas loading/opacity effect.
+   - New behavior:
+     - no dark overlay theatre during preview build
+     - each top-level preview section now fades in sequentially from top to bottom
+     - reduced timing for faster, cleaner perceived load
+   - Implementation details:
+     - `runCustomerPreviewBuildTheatre(...)` now stages and reveals section blocks directly without loader overlay timing.
+     - `customerPreviewBuildBlock` pending state now uses true fade-in (`opacity: 0 -> 1`) with slight vertical lift.
+   - Principle:
+     - make preview generation feel intentional and readable, not blocked or visually noisy.
+   - File:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+47. Added live customer-page publish flow on Vercel Blob with server-side guardrails (2026-02-27)
+   - Added live publish actions in Content and preview workflows:
+     - `Publish customer page` button in Content header and preview actions.
+     - `Open live page` button in preview after successful publish.
+   - Added backend publish/resolve endpoints:
+     - `POST /api/publish-customer-page` writes deterministic blob keys (`customer-pages/<slug>.html`) with overwrite enabled.
+     - `GET /api/customer-page?slug=<slug>` resolves exact blob pathname and redirects to the stored public blob URL.
+   - Added Vercel route rewrites for public-friendly URLs:
+     - `/customer-pages/:slug` and `/customer-pages/:slug/` -> `/api/customer-page?slug=:slug`
+   - Added endpoint hardening for obvious abuse paths:
+     - publish endpoint now requires `Content-Type: application/json`.
+     - publish endpoint rejects cross-origin requests via host/origin validation.
+     - publish endpoint sanitizes forwarded host/protocol before composing `liveUrl`.
+     - resolve endpoint now requires exact pathname match (no prefix fallback redirect).
+   - Added runtime dependency required by serverless endpoints:
+     - `@vercel/blob` in `/Users/will.bloor/Documents/Configurator/package.json`
+   - Principle:
+     - allow controlled live sharing of generated customer pages while reducing trivial cross-origin publish abuse and ambiguous blob resolution.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+     - `/Users/will.bloor/Documents/Configurator/vercel.json`
+     - `/Users/will.bloor/Documents/Configurator/api/publish-customer-page.js`
+     - `/Users/will.bloor/Documents/Configurator/api/customer-page.js`
+     - `/Users/will.bloor/Documents/Configurator/package.json`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/api/publish-customer-page.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/api/customer-page.js`
+     - `node -e "const fs=require('fs'); JSON.parse(fs.readFileSync('/Users/will.bloor/Documents/Configurator/vercel.json','utf8')); console.log('vercel.json parse: PASS');"`
+   - Residual risk / follow-up:
+     - endpoint authorization is currently environment/perimeter-based; if this surface is exposed to broad/public traffic, add explicit authenticated actor controls and rate limiting before external rollout.
 
 ## State Sync Guardrails (Critical, 2026-02-26)
 

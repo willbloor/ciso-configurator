@@ -557,26 +557,35 @@
     <section id="contentRecommendationsView" aria-label="Content view">
       <article class="recommendationsShell">
         <header class="recommendationsHead">
-          <div>
+          <div id="contentRecommendationsIntro">
             <h2 id="contentRecommendationsTitle">Content for this company</h2>
             <p class="recommendationsSub" id="contentRecommendationsSub">Recommended content tailored for this account.</p>
           </div>
           <div class="recommendationsHeadActions">
-            <button class="btn secondaryBlue small" type="button" id="previewCustomerPageTemplateBtn" data-action="previewCustomerPageTemplate">Preview customer page</button>
+            <button class="btn primary small" type="button" id="publishCustomerPageTemplateBtn" data-action="publishCustomerPageTemplate">Publish customer page</button>
             <button class="btn secondaryBlue small" type="button" id="generateCustomerPageTemplateBtn" data-action="generateCustomerPageTemplate">Download customer page</button>
           </div>
         </header>
         <div class="recommendationsGate" id="contentRecommendationsGate" hidden></div>
-        <div class="recommendationsGrid" id="contentRecommendationsGrid"></div>
+        <section class="priorityFeaturesWrap" id="contentPriorityFeaturesWrap" hidden aria-label="Priority Immersive One features mapped to PIBR">
+          <header class="priorityFeaturesHead">
+            <h3>Your priority Immersive One features mapped to PIBR</h3>
+            <p class="recommendationsSub" id="contentPriorityFeaturesSub">Mapped to your discovery outcomes and selected operating stack, these are the most relevant Immersive One features to prioritize first.</p>
+          </header>
+          <div class="priorityFeaturesGrid" id="contentPriorityFeaturesGrid"></div>
+        </section>
+        <div class="recommendationsGrid" id="contentRecommendationsGrid" hidden></div>
         <section class="customerTemplatePreviewWrap" id="customerTemplatePreviewWrap" hidden aria-label="Customer page template preview">
           <header class="customerTemplatePreviewHead">
             <div>
-              <h3>Customer page preview</h3>
+              <h3 id="customerTemplatePreviewTitle">Customer page preview</h3>
               <p id="customerTemplatePreviewMeta">Preview not generated yet.</p>
             </div>
             <div class="customerTemplatePreviewActions">
               <button class="btn small" type="button" data-action="clearCustomerPagePreview">Clear preview</button>
+              <button class="btn primary small" type="button" id="publishCustomerPageTemplateInlineBtn" data-action="publishCustomerPageTemplate">Publish customer page</button>
               <button class="btn secondaryBlue small" type="button" data-action="generateCustomerPageTemplate">Download current preview</button>
+              <button class="btn small" type="button" id="openPublishedCustomerPageBtn" data-action="openPublishedCustomerPage" hidden>Open live page</button>
             </div>
           </header>
           <div class="customerTemplatePreviewCanvas" id="customerTemplatePreviewCanvas"></div>
@@ -1822,6 +1831,7 @@
     <script src="assets/js/content-catalog.js"></script>
     <script src="assets/js/official-blog-rss-fallback.js"></script>
     <script src="assets/js/copy-rules.js"></script>
+    <script src="assets/js/capability-language-rules.js"></script>
     <script src="assets/js/app.js"></script>
 </body>
 </html>

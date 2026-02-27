@@ -1,3 +1,7 @@
+    *[hidden]{
+      display:none !important;
+    }
+
     :root{
       /* Brand palette */
       --azure:#3C64FF;
@@ -5104,6 +5108,84 @@
   margin:8px 0 0;
   color: var(--muted);
 }
+.priorityFeaturesWrap{
+  margin-top:16px;
+  border:1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 97%, var(--accent) 3%), var(--surface));
+  padding:14px;
+  display:grid;
+  gap:10px;
+}
+.priorityFeaturesHead{
+  display:grid;
+  gap:4px;
+}
+.priorityFeaturesHead h3{
+  margin:0;
+  font-size:1.02rem;
+  line-height:1.28;
+  color: var(--text);
+}
+.priorityFeaturesGrid{
+  display:grid;
+  gap:12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.contentRecCard.priorityFeatureCard{
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
+  display:grid;
+  grid-template-columns:minmax(84px, 24%) minmax(0, 1fr);
+  gap:0;
+  padding:0;
+  overflow:hidden;
+}
+.priorityFeatureMedia{
+  border-right:1px solid color-mix(in srgb, var(--azure) 18%, var(--border));
+  background:#d8e5ff;
+  min-height:196px;
+}
+.priorityFeatureMedia img{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit:cover;
+}
+.priorityFeatureBody{
+  padding:14px;
+  display:grid;
+  gap:8px;
+  align-content:start;
+}
+.priorityFeaturePill,
+.priorityFeatureProof{
+  margin:0;
+  font-size:.84rem;
+  line-height:1.4;
+  color: var(--muted);
+}
+.priorityFeaturePill{
+  font-weight:700;
+}
+.priorityFeatureWhyTitle{
+  margin:0;
+  font-size:.9rem;
+  line-height:1.35;
+  font-weight:800;
+  color: var(--text);
+}
+.priorityFeatureWhyList{
+  margin:0 0 0 18px;
+  padding:0;
+  display:grid;
+  gap:6px;
+}
+.priorityFeatureWhyList li{
+  margin:0;
+  color: var(--muted);
+  font-size:.88rem;
+  line-height:1.4;
+}
 .recommendationsGrid{
   margin-top:16px;
   display:grid;
@@ -5271,23 +5353,31 @@
 }
 @media (max-width: 980px){
   .recommendationsGrid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .priorityFeaturesGrid{ grid-template-columns: 1fr; }
+  .contentRecCard.priorityFeatureCard{ grid-template-columns: minmax(96px, 24%) minmax(0, 1fr); }
   .crmExportPreviewWrap{ grid-template-columns: 1fr; }
 }
 @media (max-width: 760px){
   .recommendationsHead{ flex-direction:column; }
   .recommendationsHeadActions{ justify-content:flex-start; }
   .recommendationsGrid{ grid-template-columns: 1fr; }
+  .contentRecCard.priorityFeatureCard{ grid-template-columns: 1fr; }
+  .priorityFeatureMedia{
+    border-right:none;
+    border-bottom:1px solid color-mix(in srgb, var(--azure) 18%, var(--border));
+    min-height:180px;
+  }
   .crmExportControls{ grid-template-columns: 1fr; }
 }
 
 .customerTemplatePreviewWrap{
   margin-top:18px;
-  border:1px solid var(--border);
-  border-radius:8px;
-  background: var(--soft2);
-  padding:14px;
+  border:none;
+  border-radius:0;
+  background: transparent;
+  padding:0;
   display:grid;
-  gap:12px;
+  gap:10px;
 }
 .customerTemplatePreviewHead{
   display:flex;
@@ -5388,18 +5478,17 @@
   animation:customerPreviewBuildPulse 1s ease-in-out infinite;
 }
 .customerPreviewBuildBlock{
-  transition:opacity .48s ease, transform .48s ease, filter .48s ease;
-}
-.customerTemplatePreviewCanvas.is-build-loading .customerPreviewBuildBlock,
-.customerPreviewBuildBlock.is-pending{
   opacity:1;
-  transform:translateY(8px) scale(.997);
-  filter:brightness(.88);
+  transform:none;
+  transition:opacity .32s ease, transform .32s ease;
+}
+.customerPreviewBuildBlock.is-pending{
+  opacity:0;
+  transform:translateY(8px);
 }
 .customerPreviewBuildBlock.is-visible{
   opacity:1;
   transform:none;
-  filter:brightness(1);
 }
 @keyframes customerPreviewBuildSpin{
   from{ transform:rotate(0deg); }
@@ -5840,6 +5929,85 @@
   gap:8px;
   grid-template-columns:repeat(3, minmax(0, 1fr));
 }
+.customerPreviewCapabilityGrid{
+  margin-top:9px;
+  display:grid;
+  gap:8px;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+}
+.customerPreviewCapabilityCard{
+  border:1px solid color-mix(in srgb, var(--azure) 18%, var(--border));
+  border-radius:8px;
+  background:linear-gradient(180deg, #f8fbff, #f3f8ff);
+  display:grid;
+  grid-template-columns:minmax(86px, 24%) minmax(0, 1fr);
+  gap:0;
+  overflow:hidden;
+}
+.customerPreviewCapabilityMedia{
+  border-right:1px solid color-mix(in srgb, var(--azure) 18%, var(--border));
+  background:#d8e5ff;
+  min-height:182px;
+}
+.customerPreviewCapabilityMedia img{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit:cover;
+}
+.customerPreviewCapabilityBody{
+  padding:12px;
+  display:grid;
+  gap:7px;
+  align-content:start;
+}
+.customerPreviewCapabilityEyebrow{
+  margin:0;
+  font-size:.7rem;
+  line-height:1;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#4f6fa6;
+  font-weight:700;
+}
+.customerPreviewCapabilityCard h6{
+  margin:0;
+  font-size:1.03rem;
+  line-height:1.22;
+  color:#1a2c4f;
+}
+.customerPreviewCapabilityPill{
+  margin:0;
+  font-size:.84rem;
+  line-height:1.35;
+  color:#425a88;
+  font-weight:700;
+}
+.customerPreviewCapabilitySummary{
+  margin:0;
+  font-size:.9rem;
+  line-height:1.35;
+  color:var(--muted);
+}
+.customerPreviewCapabilityWhyTitle{
+  margin:0;
+  font-size:.84rem;
+  line-height:1.35;
+  color:var(--text);
+  font-weight:700;
+}
+.customerPreviewCapabilityWhyList{
+  margin:0 0 0 17px;
+  padding:0;
+  display:grid;
+  gap:5px;
+}
+.customerPreviewCapabilityWhyList li{
+  margin:0;
+  color:var(--muted);
+  font-size:.86rem;
+  line-height:1.35;
+}
 .customerPreviewDetailCard{
   border:1px solid var(--border);
   border-radius:8px;
@@ -5974,6 +6142,12 @@
   .customerPreviewStoryMedia--benchmark-report::before{
     display:none;
   }
+  .customerPreviewCapabilityGrid{
+    grid-template-columns:1fr;
+  }
+  .customerPreviewCapabilityCard{
+    grid-template-columns:minmax(96px, 24%) minmax(0, 1fr);
+  }
   .customerPreviewOutcomeGrid{
     grid-template-columns:repeat(2, minmax(0, 1fr));
   }
@@ -5997,6 +6171,14 @@
   }
   .customerPreviewOutcomeGrid{
     grid-template-columns:1fr;
+  }
+  .customerPreviewCapabilityCard{
+    grid-template-columns:1fr;
+  }
+  .customerPreviewCapabilityMedia{
+    border-right:none;
+    border-bottom:1px solid color-mix(in srgb, var(--azure) 18%, var(--border));
+    min-height:168px;
   }
   .customerPreviewDetailsGrid{
     grid-template-columns:1fr;

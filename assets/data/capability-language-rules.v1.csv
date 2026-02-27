@@ -1,0 +1,32 @@
+rule_id,capability_id,outcome_id,signal_token,priority,bullet_template,enabled
+outcome_faster_response,*,fasterResponse,*,90,"Helps your teams detect, decide, and respond faster when pressure is highest.",true
+outcome_secure_enterprise,*,secureEnterprise,*,90,"Reduces exploitable risk across code, cloud, and identity with practical, repeatable workflows.",true
+outcome_compliance,*,complianceEvidence,*,90,"Turns readiness activity into defensible evidence for board, audit, and regulator conversations.",true
+outcome_workforce,*,cyberWorkforce,*,90,"Builds role-based capability and gives leaders clearer visibility of readiness across teams.",true
+outcome_secure_ai,*,secureAI,*,90,"Supports secure AI adoption with tested controls and accountable governance practices.",true
+outcome_supply_chain,*,supplyChain,*,90,"Improves confidence in third-party resilience with measurable exercises and follow-through.",true
+capability_integrated,integrated-readiness,*,*,70,"Connects readiness into daily systems so capability is built in, not bolted on.",true
+capability_drills,cyber-drills,*,*,70,"Runs cross-functional cyber simulations that show how teams perform when decisions matter most.",true
+capability_crisis,crisis-sim,*,*,70,"Tests leadership judgment and crisis coordination under realistic pressure.",true
+capability_dtr,dynamic-threat-range,*,*,70,"Places SOC teams in high-fidelity enterprise scenarios to prove operational readiness.",true
+capability_labs,hands-on-labs,*,*,70,"Targets practical skill gaps with role-based labs that are tied to real threat patterns.",true
+capability_appsec_range,appsec-range-exercises,*,*,70,"Builds secure development behavior through collaborative remediation and verification loops.",true
+capability_workforce,workforce-exercising,*,*,70,"Drives measurable behavior change across non-technical and mixed teams.",true
+capability_benchmark,benchmark-reporting,*,*,70,"Converts performance data into benchmark and evidence views leaders can act on.",true
+capability_programs,programs,*,*,70,"Establishes a governed cadence so readiness improves continuously, not sporadically.",true
+capability_secure_ai,secure-ai-readiness,*,*,70,"Improves AI risk readiness with scenario-based controls testing and practical guardrails.",true
+signal_teams,*,*,microsoft teams,75,"Keeps assignments and nudges in Microsoft Teams so adoption is easier for operational teams.",true
+signal_github,*,*,github,75,"Aligns to your GitHub workflow and helps make secure development behavior measurable.",true
+signal_rest_api,*,*,rest api,75,"Supports automation and provisioning through API-first workflows already used by your teams.",true
+signal_workday,*,*,workday,75,"Fits your Workday ecosystem so readiness progress can be tracked in existing HR and L&D workflows.",true
+signal_successfactors,*,*,successfactors,75,"Fits SAP SuccessFactors workflows so readiness records stay aligned with talent operations.",true
+signal_cornerstone,*,*,cornerstone,75,"Fits Cornerstone workflows to keep workforce readiness evidence connected to existing learning systems.",true
+signal_splunk,*,*,splunk,75,"Maps to Splunk-led SOC workflows so detection and response capability is tested in realistic conditions.",true
+signal_elastic,*,*,elastic,75,"Maps to Elastic workflows so threat detection and investigation readiness can be measured more directly.",true
+signal_crowdstrike,*,*,crowdstrike,75,"Reinforces CrowdStrike-centered response workflows with measurable execution under pressure.",true
+dtr_faster_response,dynamic-threat-range,fasterResponse,*,100,"Gives your SOC a controlled way to improve time-to-detect and time-to-respond against realistic attack paths.",true
+benchmark_compliance,benchmark-reporting,complianceEvidence,*,100,"Creates reporting views that make compliance progress easier to communicate externally.",true
+appsec_enterprise,appsec-range-exercises,secureEnterprise,github,100,"Strengthens secure SDLC behavior by linking remediation quality to real development workflows.",true
+workforce_uplift,workforce-exercising,cyberWorkforce,*,100,"Improves workforce behavior where human risk concentrates and tracks uplift by cohort.",true
+secure_ai_focus,secure-ai-readiness,secureAI,*,100,"Focuses teams on practical AI risks such as prompt injection, unsafe output, and data leakage.",true
+integrated_evidence,integrated-readiness,complianceEvidence,*,100,"Makes readiness evidence easier to collect continuously across collaboration, code, and LMS systems.",true

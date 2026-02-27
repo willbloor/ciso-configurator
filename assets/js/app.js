@@ -538,6 +538,8 @@
         customerTemplateEditorOpen: false,
         customerTemplateEditorTarget: null,
         customerTemplateBuildTheatrePending: false,
+        customerTemplatePublishPending: false,
+        customerTemplatePublishedByThread: Object.create(null),
         recommendationsThreadId: 'current',
         recommendationsReturnView: 'configurator',
         crmExportScope: 'active',
@@ -11602,6 +11604,147 @@ const evidenceOpts = [
         }
       ]);
 
+      function capabilityPibrTrackForPillar(pillarInput){
+        const pillar = normalizeContentToken(pillarInput);
+        if(!pillar) return 'Cross-PIBR';
+        if(pillar === 'prove') return 'Prove';
+        if(pillar === 'improve') return 'Improve';
+        if(pillar === 'benchmarkreport' || pillar === 'benchmarkreporting' || pillar === 'report'){
+          return 'Benchmark & Report';
+        }
+        return 'Cross-PIBR';
+      }
+
+      function ensureTerminalPeriod(value){
+        const text = String(value || '').trim();
+        if(!text) return '';
+        return /[.!?]$/.test(text) ? text : `${text}.`;
+      }
+
+      function uniqueList(values, limit){
+        const maxItems = Math.max(1, Number(limit) || 1);
+        const seen = new Set();
+        const rows = [];
+        (Array.isArray(values) ? values : []).forEach((value)=>{
+          if(rows.length >= maxItems) return;
+          const raw = String(value || '').trim();
+          if(!raw) return;
+          const key = raw.toLowerCase();
+          if(seen.has(key)) return;
+          seen.add(key);
+          rows.push(raw);
+        });
+        return rows;
+      }
+
+      function capabilityLanguageRuleRows(){
+        try{
+          const source = window.immersiveCapabilityLanguageRules;
+          return (source && Array.isArray(source.rows)) ? source.rows : [];
+        }catch(err){
+          return [];
+        }
+      }
+
+      function capabilityLanguageTemplate(templateInput, contextInput){
+        const template = String(templateInput || '').trim();
+        if(!template) return '';
+        const context = (contextInput && typeof contextInput === 'object') ? contextInput : {};
+        return template
+          .replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (full, key)=>{
+            const value = context[key];
+            return value == null ? '' : String(value);
+          })
+          .replace(/\s{2,}/g, ' ')
+          .replace(/\s+([,.;:!?])/g, '$1')
+          .trim();
+      }
+
+      function capabilityWhyBulletsFromRules(capability, matchedOutcomeRows, signalRows, signalMatches, gate){
+        const rules = capabilityLanguageRuleRows();
+        if(!rules.length){
+          return [];
+        }
+        const normalizedCapabilityId = normalizeContentToken(capability && capability.id);
+        const outcomes = Array.isArray(matchedOutcomeRows) ? matchedOutcomeRows : [];
+        const outcomeById = new Map(
+          outcomes
+            .map((row)=> [normalizeContentToken(row && row.id), row])
+            .filter((entry)=> entry[0] && entry[1])
+        );
+        const normalizedOutcomeIds = new Set(Array.from(outcomeById.keys()));
+        const signals = Array.isArray(signalRows) ? signalRows : [];
+        const selectedSignals = Array.isArray(signalMatches) ? signalMatches : [];
+        const company = String((gate && gate.company) || '').trim() || 'your team';
+        const description = String((capability && capability.summary) || '').trim() || 'This capability supports measurable readiness outcomes.';
+
+        const matchedRules = rules
+          .filter((rule)=> rule && rule.enabled !== false && String(rule.bulletTemplate || '').trim())
+          .map((rule)=>{
+            const capKey = normalizeContentToken(rule.capabilityId || '*') || '*';
+            const outcomeKey = normalizeContentToken(rule.outcomeId || '*') || '*';
+            const signalKey = normalizeContentToken(rule.signalToken || '*') || '*';
+            if(capKey !== '*' && capKey !== normalizedCapabilityId){
+              return null;
+            }
+            if(outcomeKey !== '*' && !normalizedOutcomeIds.has(outcomeKey)){
+              return null;
+            }
+            let matchedSignal = null;
+            if(signalKey !== '*'){
+              matchedSignal = signals.find((row)=> row && row.norm && row.norm.includes(signalKey)) || null;
+              if(!matchedSignal){
+                return null;
+              }
+            }
+            const specificity = (capKey === '*' ? 0 : 1) + (outcomeKey === '*' ? 0 : 1) + (signalKey === '*' ? 0 : 1);
+            const outcomeRow = outcomeKey !== '*' ? outcomeById.get(outcomeKey) : (outcomes[0] || null);
+            return {
+              rule,
+              specificity,
+              outcomeRow,
+              signalRow: matchedSignal
+            };
+          })
+          .filter(Boolean)
+          .sort((left, right)=>{
+            const leftPriority = Number(left.rule && left.rule.priority) || 0;
+            const rightPriority = Number(right.rule && right.rule.priority) || 0;
+            if(rightPriority !== leftPriority){
+              return rightPriority - leftPriority;
+            }
+            if(right.specificity !== left.specificity){
+              return right.specificity - left.specificity;
+            }
+            const leftOrder = Number(left.rule && left.rule.order) || 0;
+            const rightOrder = Number(right.rule && right.rule.order) || 0;
+            return leftOrder - rightOrder;
+          });
+
+        const bullets = [];
+        matchedRules.forEach((row)=>{
+          if(bullets.length >= 3){
+            return;
+          }
+          const outcome = row.outcomeRow || {};
+          const signal = row.signalRow || {};
+          const rendered = capabilityLanguageTemplate(row.rule.bulletTemplate, {
+            company,
+            capability_title: String((capability && capability.title) || '').trim(),
+            capability_description: description,
+            outcome_short: String((outcome && (outcome.short || outcome.label)) || '').trim(),
+            outcome_desc: String((outcome && (outcome.desc || outcome.oneLiner)) || '').trim(),
+            outcome_why: String((outcome && outcome.why) || '').trim(),
+            signal_label: String(signal.raw || '').trim(),
+            signal_list: selectedSignals.length ? naturalList(selectedSignals, { conjunction:'and' }) : ''
+          });
+          if(rendered){
+            bullets.push(ensureTerminalPeriod(rendered));
+          }
+        });
+        return uniqueList(bullets, 3);
+      }
+
       function capabilityPriorityCardsForGate(gateInput){
         const gate = (gateInput && typeof gateInput === 'object') ? gateInput : {};
         const topOutcomes = Array.isArray(gate.topOutcomes) ? gate.topOutcomes : [];
@@ -11651,6 +11794,9 @@ const evidenceOpts = [
         const scored = capabilityPriorityCatalog.map((capability, idx)=>{
           const outcomeMatches = (Array.isArray(capability.outcomeIds) ? capability.outcomeIds : [])
             .filter((id)=> outcomeIds.has(String(id || '').trim()));
+          const matchedOutcomeRows = outcomeMatches
+            .map((id)=> topOutcomes.find((row)=> String((row && row.id) || '').trim() === String(id || '').trim()))
+            .filter(Boolean);
           const outcomeLabels = outcomeMatches
             .map((id)=> outcomeLabelById.get(String(id || '').trim()) || '')
             .filter(Boolean)
@@ -11674,15 +11820,49 @@ const evidenceOpts = [
           if(!whyParts.length){
             whyParts.push('Selected as a foundational capability for this profile.');
           }
+          const summary = String(capability.summary || 'Capability selected for this profile.').trim() || 'Capability selected for this profile.';
+
+          const whyBullets = capabilityWhyBulletsFromRules(capability, matchedOutcomeRows, signalRows, signalMatches, gate);
+          matchedOutcomeRows.slice(0, 2).forEach((outcome, outcomeIdx)=>{
+            if(whyBullets.length >= 3) return;
+            if(outcomeIdx === 0){
+              const rationale = String((outcome && (outcome.why || outcome.desc || outcome.oneLiner)) || '').trim();
+              if(rationale){
+                whyBullets.push(ensureTerminalPeriod(rationale));
+              }
+            }else{
+              const shortLabel = String((outcome && (outcome.short || outcome.label)) || '').trim();
+              if(shortLabel){
+                whyBullets.push(`Also strengthens ${shortLabel.toLowerCase()} across the same teams and workflows.`);
+              }
+            }
+          });
+          if(signalMatches.length && whyBullets.length < 3){
+            whyBullets.push(`Fits directly into your existing environment, including ${naturalList(signalMatches, { conjunction:'and' })}.`);
+          }
+          const leadingProof = (Array.isArray(capability.proofPoints) ? capability.proofPoints : [])
+            .map((point)=> String(point || '').trim())
+            .filter(Boolean)[0];
+          if(leadingProof && whyBullets.length < 3){
+            whyBullets.push(`Provides measurable progress you can track through ${String(leadingProof).toLowerCase()}.`);
+          }
+          const finalWhyBullets = uniqueList(whyBullets, 3);
+          if(!finalWhyBullets.length){
+            finalWhyBullets.push(`Gives ${String(gate.company || 'your team').trim() || 'your team'} a practical way to move from activity to measurable readiness outcomes.`);
+          }
 
           return {
             index: idx,
             score,
             id: String(capability.id || '').trim() || `capability-${idx + 1}`,
             pillar: String(capability.pillar || 'Capability').trim() || 'Capability',
+            pibrTrack: capabilityPibrTrackForPillar(capability.pillar),
             title: String(capability.title || `Priority capability ${idx + 1}`).trim() || `Priority capability ${idx + 1}`,
-            summary: String(capability.summary || 'Capability selected for this profile.').trim() || 'Capability selected for this profile.',
+            description: summary,
+            summary,
             why: whyParts.join(' '),
+            whyBullets: finalWhyBullets,
+            outcomes: outcomeLabels,
             proofPoints: Array.isArray(capability.proofPoints) ? capability.proofPoints.slice(0, 3) : []
           };
         }).sort((left, right)=> (right.score - left.score) || (left.index - right.index));
@@ -11692,11 +11872,47 @@ const evidenceOpts = [
         return picks.map((row)=> ({
           id: row.id,
           pillar: row.pillar,
+          pibrTrack: row.pibrTrack,
           title: row.title,
+          description: row.description,
           summary: row.summary,
           why: row.why,
+          whyBullets: row.whyBullets,
+          outcomes: row.outcomes,
           proofPoints: row.proofPoints
         }));
+      }
+
+      function capabilityCardDisplayModel(capability, idx){
+        const item = (capability && typeof capability === 'object') ? capability : {};
+        const rank = Number.isFinite(Number(idx)) ? (Number(idx) + 1) : 1;
+        const pillar = String(item.pillar || 'Capability').trim() || 'Capability';
+        const pibrTrack = String(item.pibrTrack || capabilityPibrTrackForPillar(pillar)).trim() || 'Cross-PIBR';
+        const title = String(item.title || `Priority feature ${rank}`).trim() || `Priority feature ${rank}`;
+        const description = String(item.description || item.summary || '').trim()
+          || 'Capability selected for this profile.';
+        const whyBullets = Array.isArray(item.whyBullets)
+          ? item.whyBullets.map((line)=> String(line || '').trim()).filter(Boolean).slice(0, 3)
+          : [];
+        return {
+          eyebrow: `Feature ${rank} · PIBR: ${pibrTrack}`,
+          title,
+          pillarLabel: `Immersive One capability: ${pillar}`,
+          description,
+          whyTitle: 'Why this matters to you',
+          whyBullets
+        };
+      }
+
+      function capabilityCardImageUrl(capability, idx){
+        const item = (capability && typeof capability === 'object') ? capability : {};
+        const rank = Number.isFinite(Number(idx)) ? (Number(idx) + 1) : 1;
+        const seed = String(item.id || item.title || `priority-feature-${rank}`)
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        return `https://picsum.photos/seed/${encodeURIComponent(seed || `priority-feature-${rank}`)}/360/640`;
       }
 
       function customerTemplateModelFromCandidate(candidate){
@@ -11909,7 +12125,7 @@ const evidenceOpts = [
           }
         ];
         const generatedOn = new Date().toISOString().slice(0, 10);
-        const heroPrimaryCtaLabel = priorityCapabilities.length ? 'Priority capabilities' : 'Recommended resources';
+        const heroPrimaryCtaLabel = priorityCapabilities.length ? 'Priority features' : 'Recommended resources';
         const heroPrimaryCtaHref = priorityCapabilities.length ? '#priority-capabilities' : '#recommended-for-you';
         return {
           sourceThreadId: String(record.id || 'current'),
@@ -12195,20 +12411,16 @@ const evidenceOpts = [
         };
 
         const renderCapabilityCard = (capability, idx)=>{
-          const item = (capability && typeof capability === 'object') ? capability : {};
-          const title = String(item.title || `Priority capability ${idx + 1}`).trim() || `Priority capability ${idx + 1}`;
-          const pillar = String(item.pillar || 'Capability').trim() || 'Capability';
-          const summary = String(item.summary || '').trim() || 'Capability selected from your profile.';
-          const why = String(item.why || '').trim();
-          const proofPoints = Array.isArray(item.proofPoints)
-            ? item.proofPoints.map((value)=> String(value || '').trim()).filter(Boolean).slice(0, 3)
-            : [];
-          return `<article class="capabilityCard"><p class="capabilityEyebrow">Priority capability ${idx + 1} · ${esc(pillar)}</p><h3>${esc(title)}</h3><p class="capabilitySummary">${esc(summary)}</p>${why ? `<p class="capabilityWhy"><strong>Why now:</strong> ${esc(why)}</p>` : ''}${proofPoints.length ? `<ul class="capabilityProofList">${proofPoints.map((point)=> `<li>${esc(point)}</li>`).join('')}</ul>` : ''}</article>`;
+          const display = capabilityCardDisplayModel(capability, idx);
+          const imageUrl = capabilityCardImageUrl(capability, idx);
+          return `<article class="capabilityCard"><div class="capabilityCardMedia"><img src="${esc(imageUrl)}" alt="" loading="lazy" /></div><div class="capabilityCardBody"><p class="capabilityEyebrow">${esc(display.eyebrow)}</p><h3>${esc(display.title)}</h3><p class="capabilityPill">${esc(display.pillarLabel)}</p><p class="capabilitySummary">${esc(display.description)}</p>${display.whyBullets.length ? `<p class="capabilityWhy"><strong>${esc(display.whyTitle)}</strong></p><ul class="capabilityProofList">${display.whyBullets.map((point)=> `<li>${esc(point)}</li>`).join('')}</ul>` : ''}</div></article>`;
         };
 
         const logoSrc = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg';
         const companyLabel = String(model.company || 'your organisation').trim() || 'your organisation';
         const readinessParagraph = `For ${companyLabel}, this means defensible evidence you can use with leadership and external stakeholders: clear baselines, visible movement over time, and proof aligned to board and regulatory expectations.`;
+        // Keep narrative/overlapping-card block available in code, but hide it for user-facing mode.
+        const showNarrativeStoryboard = false;
 
         return `<!doctype html>
 <html lang="en">
@@ -12363,12 +12575,16 @@ const evidenceOpts = [
     .detailCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 12%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(rgb(255, 255, 255), rgb(248, 250, 255)); padding: 16px; box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; }
     .detailCard h3 { margin: 0px 0px 10px; font-size: 24px; line-height: 1.1; color: rgb(36, 60, 104); }
     .capabilityGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0px, 1fr)); }
-    .capabilityCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 16%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%); padding: 16px; box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; }
+    .capabilityCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 16%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%); box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; display: grid; grid-template-columns: minmax(110px, 24%) minmax(0px, 1fr); gap: 0px; overflow: hidden; }
+    .capabilityCardMedia { border-right: 1px solid color-mix(in srgb,var(--primary-colours--azure) 14%, var(--line)); background: rgb(220, 231, 255); min-height: 230px; }
+    .capabilityCardMedia img { width: 100%; height: 100%; display: block; object-fit: cover; }
+    .capabilityCardBody { padding: 16px; display: grid; gap: 8px; align-content: start; }
     .capabilityEyebrow { margin: 0px; color: rgb(66, 91, 140); font-size: 12px; line-height: 1; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; }
-    .capabilityCard h3 { margin: 10px 0px 0px; font-size: 26px; line-height: 1.1; color: rgb(24, 45, 86); }
-    .capabilitySummary { margin: 10px 0px 0px; color: rgb(48, 66, 98); font-size: 17px; line-height: 1.35; }
-    .capabilityWhy { margin: 10px 0px 0px; color: rgb(55, 72, 103); font-size: 15px; line-height: 1.35; }
-    .capabilityProofList { margin: 10px 0px 0px; padding-left: 1.15rem; color: rgb(37, 55, 88); display: grid; gap: 6px; font-size: 14px; line-height: 1.35; }
+    .capabilityCard h3 { margin: 0px; font-size: 26px; line-height: 1.1; color: rgb(24, 45, 86); }
+    .capabilityPill { margin: 0px; color: rgb(72, 90, 123); font-size: 15px; line-height: 1.35; font-weight: 500; }
+    .capabilitySummary { margin: 0px; color: rgb(48, 66, 98); font-size: 17px; line-height: 1.35; }
+    .capabilityWhy { margin: 0px; color: rgb(55, 72, 103); font-size: 15px; line-height: 1.35; }
+    .capabilityProofList { margin: 0px; padding-left: 1.15rem; color: rgb(37, 55, 88); display: grid; gap: 6px; font-size: 14px; line-height: 1.35; }
     .kvRow { display: grid; grid-template-columns: 140px minmax(0px, 1fr); gap: 8px; font-size: 14px; line-height: 18px; padding: 6px 0px; border-bottom: 1px dashed rgba(15, 23, 42, 0.08); }
     .kvRow:last-child { border-bottom: none; }
     .kvLabel { color: rgb(96, 113, 143); }
@@ -12406,6 +12622,8 @@ const evidenceOpts = [
     }
     @media (max-width: 760px) {
       .outcomeGrid, .contentGrid, .detailsGrid, .capabilityGrid { grid-template-columns: 1fr; }
+      .capabilityCard { grid-template-columns: 1fr; }
+      .capabilityCardMedia { border-right: none; border-bottom: 1px solid color-mix(in srgb,var(--primary-colours--azure) 14%, var(--line)); min-height: 170px; }
       .header90_card-content { padding: 26px 20px; }
       .panel { padding: 16px; }
       .panel h2 { font-size: 28px; }
@@ -12477,8 +12695,8 @@ const evidenceOpts = [
     <section class="layout">
       ${outcomeBlocks.length ? `<article class="panel panel--outcomes"><h2>Your top outcomes</h2><p class="panelSub">The three priorities we recommend focusing on first.</p><div class="outcomeGrid">${outcomeBlocks.map((outcome, idx)=> `<article class="outcomeCard"><div class="outcomeHead"><div class="outcomeRing" style="--pct:${metricPercent(outcome.metric, idx)}"><span>${metricPercent(outcome.metric, idx)}%</span></div><h3>${esc(outcome.title || `Priority outcome ${idx + 1}`)}</h3></div><p>${esc(outcome.detail || '')}</p></article>`).join('')}</div></article>` : ''}
       ${details.length ? `<article class="panel"><h2>What you told us in the meeting</h2><p class="panelSub">Your context, constraints, and operating priorities as we captured them.</p><div class="detailsGrid">${details.map((section)=> `<article class="detailCard"><h3>${esc(section.title || 'Section')}</h3>${(Array.isArray(section.rows) ? section.rows : []).map((row)=> `<div class="kvRow"><span class="kvLabel">${esc((row && row.label) || 'Field')}</span><span class="kvValue">${esc((row && row.value) || '—')}</span></div>`).join('')}</article>`).join('')}</div></article>` : ''}
-      ${priorityCapabilities.length ? `<article class="panel" id="priority-capabilities"><h2>Priority capabilities your selections demand</h2><p class="panelSub">Based on your selected outcomes and operating stack, these are the highest-leverage capabilities to prioritize first.</p><div class="capabilityGrid">${priorityCapabilities.map((capability, idx)=> renderCapabilityCard(capability, idx)).join('')}</div></article>` : ''}
-      <div class="sectionHead sectionHead--center"><div><h2>Our understanding of your needs</h2><p class="sectionHeadSub">Measuring cyber readiness with Immersive</p><p class="sectionHeadLead">${esc(readinessParagraph)}</p></div></div>
+      ${priorityCapabilities.length ? `<article class="panel" id="priority-capabilities"><h2>Your priority Immersive One features mapped to PIBR</h2><p class="panelSub">Mapped to your discovery outcomes and selected operating stack, these are the most relevant Immersive One features to prioritize first.</p><div class="capabilityGrid">${priorityCapabilities.map((capability, idx)=> renderCapabilityCard(capability, idx)).join('')}</div></article>` : ''}
+      ${showNarrativeStoryboard ? `<div class="sectionHead sectionHead--center"><div><h2>Our understanding of your needs</h2><p class="sectionHeadSub">Measuring cyber readiness with Immersive</p><p class="sectionHeadLead">${esc(readinessParagraph)}</p></div></div>
       <article class="panel panel--support">
         <div class="storyStack">
           <article class="storyCard reverse">
@@ -12535,7 +12753,7 @@ const evidenceOpts = [
             </div>
           </article>
         </div>
-      </article>
+      </article>` : ''}
       <article class="storyCard storyCard--tour">
         <div class="storyInner">
           <div class="storyMedia storyMedia--tour" aria-hidden="true">
@@ -12849,17 +13067,11 @@ const evidenceOpts = [
         const play = !!options.play;
         const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
         clearCustomerPreviewBuildTheatre(host);
-        const overlay = ensureCustomerPreviewBuildOverlay(host);
         const blocks = stageCustomerPreviewBuildBlocks(host);
-        if(!overlay || !blocks.length){
+        if(!blocks.length){
           return;
         }
         if(!play || reduceMotion){
-          host.classList.remove('is-build-loading');
-          overlay.classList.remove('is-active');
-          overlay.hidden = true;
-          overlay.style.opacity = '';
-          overlay.style.pointerEvents = '';
           blocks.forEach((block)=>{
             block.classList.remove('is-pending');
             block.classList.add('is-visible');
@@ -12867,43 +13079,21 @@ const evidenceOpts = [
           return;
         }
         const session = customerPreviewBuildSession;
-        const totalMs = 5600;
-        const loaderMs = 2200;
-        const revealWindowMs = Math.max(2600, totalMs - loaderMs);
-        const stepMs = Math.max(150, Math.floor(revealWindowMs / Math.max(1, blocks.length)));
-
-        host.classList.add('is-build-loading');
-        overlay.hidden = false;
-        overlay.classList.add('is-active');
-        overlay.style.opacity = '1';
-        overlay.style.pointerEvents = 'auto';
+        const leadInMs = 80;
+        const stepMs = 130;
         blocks.forEach((block)=>{
           block.classList.remove('is-visible');
           block.classList.add('is-pending');
         });
 
-        customerPreviewBuildTimers.push(window.setTimeout(()=>{
-          if(session !== customerPreviewBuildSession) return;
-          host.classList.remove('is-build-loading');
-        }, loaderMs));
-
         blocks.forEach((block, idx)=>{
-          const delayMs = loaderMs + (idx * stepMs);
+          const delayMs = leadInMs + (idx * stepMs);
           customerPreviewBuildTimers.push(window.setTimeout(()=>{
             if(session !== customerPreviewBuildSession) return;
             block.classList.remove('is-pending');
             block.classList.add('is-visible');
           }, delayMs));
         });
-
-        customerPreviewBuildTimers.push(window.setTimeout(()=>{
-          if(session !== customerPreviewBuildSession) return;
-          overlay.classList.remove('is-active');
-          overlay.hidden = true;
-          overlay.style.opacity = '';
-          overlay.style.pointerEvents = '';
-          host.classList.remove('is-build-loading');
-        }, loaderMs + (stepMs * blocks.length) + 280));
       }
 
       function clampPreviewNumber(value, min, max){
@@ -13061,8 +13251,11 @@ const evidenceOpts = [
       function renderCustomerTemplatePreview(opts){
         const options = (opts && typeof opts === 'object') ? opts : {};
         const wrap = $('#customerTemplatePreviewWrap');
+        const heading = $('#customerTemplatePreviewTitle');
         const meta = $('#customerTemplatePreviewMeta');
         const canvas = $('#customerTemplatePreviewCanvas');
+        const publishInlineBtn = $('#publishCustomerPageTemplateInlineBtn');
+        const openPublishedBtn = $('#openPublishedCustomerPageBtn');
         if(!wrap || !meta || !canvas) return;
         const draft = (state.customerTemplateDraft && typeof state.customerTemplateDraft === 'object')
           ? state.customerTemplateDraft
@@ -13071,17 +13264,51 @@ const evidenceOpts = [
           clearCustomerPreviewBuildTheatre(canvas);
           teardownCustomerPreviewStoryLayout();
           wrap.hidden = true;
-          meta.textContent = 'Preview not generated yet.';
+          if(heading) heading.textContent = 'Customer page preview';
+          meta.textContent = '';
+          meta.hidden = true;
+          if(publishInlineBtn){
+            publishInlineBtn.disabled = !!state.customerTemplatePublishPending;
+            publishInlineBtn.textContent = state.customerTemplatePublishPending ? 'Publishing...' : 'Publish customer page';
+          }
+          if(openPublishedBtn){
+            openPublishedBtn.hidden = true;
+            openPublishedBtn.disabled = true;
+            openPublishedBtn.removeAttribute('data-live-url');
+          }
           canvas.innerHTML = '';
           return;
         }
         wrap.hidden = false;
+        const draftThreadId = String(draft.sourceThreadId || 'current').trim() || 'current';
+        const publishedMap = (state.customerTemplatePublishedByThread && typeof state.customerTemplatePublishedByThread === 'object')
+          ? state.customerTemplatePublishedByThread
+          : {};
+        const publishedMeta = (publishedMap[draftThreadId] && typeof publishedMap[draftThreadId] === 'object')
+          ? publishedMap[draftThreadId]
+          : null;
+        const publishedUrl = safeLinkHref(publishedMeta && publishedMeta.url);
+        if(publishInlineBtn){
+          publishInlineBtn.disabled = !!state.customerTemplatePublishPending;
+          publishInlineBtn.textContent = state.customerTemplatePublishPending ? 'Publishing...' : 'Publish customer page';
+        }
+        if(openPublishedBtn){
+          const hasLiveUrl = !!publishedUrl;
+          openPublishedBtn.hidden = !hasLiveUrl;
+          openPublishedBtn.disabled = !hasLiveUrl;
+          if(hasLiveUrl){
+            openPublishedBtn.setAttribute('data-live-url', publishedUrl);
+          }else{
+            openPublishedBtn.removeAttribute('data-live-url');
+          }
+        }
         const hero = (draft.hero && typeof draft.hero === 'object') ? draft.hero : {};
         const heroStats = Array.isArray(hero.stats) ? hero.stats.filter(Boolean).slice(0, 4) : [];
         const packageRecommendation = (draft.packageRecommendation && typeof draft.packageRecommendation === 'object')
           ? draft.packageRecommendation
           : { title: `${String(draft.tier || 'Core')} package`, rationale:'' };
         const outcomeBlocks = Array.isArray(draft.outcomeBlocks) ? draft.outcomeBlocks.filter(Boolean).slice(0, 3) : [];
+        const priorityCapabilities = Array.isArray(draft.priorityCapabilities) ? draft.priorityCapabilities.filter(Boolean).slice(0, 6) : [];
         const valueCards = Array.isArray(draft.valueCards) ? draft.valueCards.filter(Boolean).slice(0, 3) : [];
         const commercialSignals = Array.isArray(draft.commercialSignals) ? draft.commercialSignals.filter((row)=> row && (row.label || row.value)).slice(0, 3) : [];
         const cards = Array.isArray(draft.contentCards) ? draft.contentCards.filter(Boolean).slice(0, 8) : [];
@@ -13092,6 +13319,8 @@ const evidenceOpts = [
         state.customerTemplateBuildTheatrePending = false;
         const pitch = (draft.elevatorPitch && typeof draft.elevatorPitch === 'object') ? draft.elevatorPitch : null;
         const understandingLead = `For ${String(draft.company || 'your organisation').trim() || 'your organisation'}, this means defensible evidence you can use with leadership and external stakeholders: clear baselines, visible movement over time, and proof aligned to board and regulatory expectations.`;
+        // Keep narrative/overlapping-card block available in code, but hide it for user-facing mode.
+        const showNarrativeStoryboard = false;
         const esc = (value)=> escapeHtml(String(value == null ? '' : value));
         const demoCard = (draft.demoCard && typeof draft.demoCard === 'object') ? draft.demoCard : null;
         const demoCardCtaHref = safeLinkHref(demoCard && demoCard.ctaUrl);
@@ -13117,8 +13346,35 @@ const evidenceOpts = [
             : (mediaImageHref ? `<img src="${esc(mediaImageHref)}" alt="${esc(entry.mediaAlt || entry.title || 'Story visual')}" loading="lazy" />` : '');
           return `<article class="customerPreviewStoryCard${reverseClass}"><div class="customerPreviewStoryInner"><div class="customerPreviewStoryMedia customerPreviewStoryMedia--${esc(token)}" aria-hidden="true">${media}</div><div class="customerPreviewStoryContent"><div class="customerPreviewStoryKicker">${esc(entry.kicker || 'FOCUS')}</div><h6>${esc(entry.title || 'Focus area')}</h6><p>${esc(entry.text || '')}</p>${bullets.length ? `<ul class="customerPreviewStoryBullets">${bullets.map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}</div></div></article>`;
         };
+        const renderPreviewCapabilityCard = (capability, idx)=>{
+          const display = capabilityCardDisplayModel(capability, idx);
+          const imageUrl = capabilityCardImageUrl(capability, idx);
+          return `<article class="customerPreviewCapabilityCard"><div class="customerPreviewCapabilityMedia"><img src="${esc(imageUrl)}" alt="" loading="lazy" /></div><div class="customerPreviewCapabilityBody"><p class="customerPreviewCapabilityEyebrow">${esc(display.eyebrow)}</p><h6>${esc(display.title)}</h6><p class="customerPreviewCapabilityPill">${esc(display.pillarLabel)}</p><p class="customerPreviewCapabilitySummary">${esc(display.description)}</p>${display.whyBullets.length ? `<p class="customerPreviewCapabilityWhyTitle">${esc(display.whyTitle)}</p><ul class="customerPreviewCapabilityWhyList">${display.whyBullets.map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}</div></article>`;
+        };
         const logoSrc = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg';
-        meta.textContent = `Source: ${draft.company} · ${draft.tier} package`;
+        if(heading){
+          heading.textContent = `Customer page preview for ${draft.company || 'this account'}`;
+        }
+        if(publishedUrl){
+          const publishedAtRaw = String(publishedMeta && publishedMeta.publishedAt || '').trim();
+          const publishedAtTs = Date.parse(publishedAtRaw);
+          if(Number.isFinite(publishedAtTs)){
+            const publishedAtLabel = new Intl.DateTimeFormat(undefined, {
+              year:'numeric',
+              month:'short',
+              day:'numeric',
+              hour:'2-digit',
+              minute:'2-digit'
+            }).format(new Date(publishedAtTs));
+            meta.textContent = `Published live: ${publishedAtLabel}`;
+          }else{
+            meta.textContent = 'Published live.';
+          }
+          meta.hidden = false;
+        }else{
+          meta.textContent = '';
+          meta.hidden = true;
+        }
         canvas.innerHTML = `
           <article class="customerPreviewTopbar">
             <a class="customerPreviewBrand" href="https://www.immersivelabs.com/" target="_blank" rel="noopener noreferrer" aria-label="Immersive">
@@ -13174,7 +13430,16 @@ const evidenceOpts = [
               </div>
             </article>
           ` : ''}
-          <article class="customerPreviewSection">
+          ${priorityCapabilities.length ? `
+            <article class="customerPreviewSection">
+              <h5>Your priority Immersive One features mapped to PIBR</h5>
+              <p>Mapped to your discovery outcomes and selected operating stack, these are the most relevant Immersive One features to prioritize first.</p>
+              <div class="customerPreviewCapabilityGrid">
+                ${priorityCapabilities.map((capability, idx)=> renderPreviewCapabilityCard(capability, idx)).join('')}
+              </div>
+            </article>
+          ` : ''}
+          ${showNarrativeStoryboard ? `<article class="customerPreviewSection">
             <h5>Our understanding of your needs</h5>
             <p>Measuring cyber readiness with Immersive.</p>
             <p>${esc(understandingLead)}</p>
@@ -13185,7 +13450,7 @@ const evidenceOpts = [
                 ${valueCards.map((card, idx)=> renderPreviewStoryCard(card, idx)).join('')}
               </div>
             </article>
-          ` : ''}
+          ` : ''}` : ''}
           ${demoCard ? `
             <article class="customerPreviewSection">
               <article class="customerPreviewStoryCard customerPreviewStoryCard--tour">
@@ -13443,7 +13708,45 @@ const evidenceOpts = [
         toggleCustomerTemplateEditor(true, { target:{ type:'hero' } });
       }
 
-      function downloadCustomerPageTemplate(preferredThreadId){
+      function preferredCustomerTemplateThreadIdForCurrentView(){
+        const preferredThreadId = (state.currentView === 'recommendations')
+          ? (state.recommendationsThreadId || state.activeThread || 'current')
+          : (state.activeThread || 'current');
+        return String(preferredThreadId || 'current').trim() || 'current';
+      }
+
+      function syncCustomerTemplatePublishButtons(preferredThreadId){
+        const requestedThreadId = String(
+          preferredThreadId
+          || state.recommendationsThreadId
+          || state.activeThread
+          || 'current'
+        ).trim() || 'current';
+        const topPublishBtn = $('#publishCustomerPageTemplateBtn');
+        const inlinePublishBtn = $('#publishCustomerPageTemplateInlineBtn');
+        const activeDraft = (
+          state.customerTemplateDraft
+          && typeof state.customerTemplateDraft === 'object'
+        ) ? state.customerTemplateDraft : null;
+        const hasDraft = !!(activeDraft && (
+          state.currentView !== 'recommendations'
+          || String(activeDraft.sourceThreadId || 'current').trim() === String(state.recommendationsThreadId || state.activeThread || requestedThreadId || 'current').trim()
+        ));
+        const candidate = completeCustomerCandidateForThreadId(requestedThreadId) || bestCompleteCustomerTemplateCandidate(requestedThreadId);
+        const canPublish = !!(hasDraft || candidate);
+        const busy = !!state.customerTemplatePublishPending;
+        const label = busy ? 'Publishing...' : 'Publish customer page';
+        if(topPublishBtn){
+          topPublishBtn.textContent = label;
+          topPublishBtn.disabled = busy || !canPublish;
+        }
+        if(inlinePublishBtn){
+          inlinePublishBtn.textContent = label;
+          inlinePublishBtn.disabled = busy || !canPublish;
+        }
+      }
+
+      function resolveCustomerTemplateModelForOutput(preferredThreadId){
         const requestedThreadId = String(
           preferredThreadId
           || state.recommendationsThreadId
@@ -13463,7 +13766,7 @@ const evidenceOpts = [
           const candidate = bestCompleteCustomerTemplateCandidate(requestedThreadId);
           if(!candidate){
             toast('No complete (100%) profile with mapped content is available yet.');
-            return;
+            return null;
           }
           model = customerTemplateModelFromCandidate(candidate);
           if(model){
@@ -13471,6 +13774,13 @@ const evidenceOpts = [
             renderCustomerTemplatePreview();
           }
         }
+        return model ? { requestedThreadId, model } : null;
+      }
+
+      function downloadCustomerPageTemplate(preferredThreadId){
+        const resolved = resolveCustomerTemplateModelForOutput(preferredThreadId);
+        if(!resolved || !resolved.model) return;
+        const model = resolved.model;
         const html = customerTemplateHtmlFromModel(model);
         if(!html){
           toast('Could not generate customer page template.');
@@ -13480,6 +13790,103 @@ const evidenceOpts = [
         const filename = `customer-dashboard-template-${safeFilePart((model && model.company) || 'customer')}-${day}.html`;
         downloadText(html, filename, 'text/html;charset=utf-8;');
         toast(`Downloaded customer page template for ${(model && model.company) || 'customer'}.`);
+      }
+
+      async function publishCustomerPageTemplate(preferredThreadId){
+        const resolved = resolveCustomerTemplateModelForOutput(preferredThreadId);
+        if(!resolved || !resolved.model) return false;
+        if(state.customerTemplatePublishPending) return false;
+        const model = resolved.model;
+        const html = customerTemplateHtmlFromModel(model);
+        if(!html){
+          toast('Could not generate customer page template.');
+          return false;
+        }
+
+        state.customerTemplatePublishPending = true;
+        syncCustomerTemplatePublishButtons(resolved.requestedThreadId);
+        renderCustomerTemplatePreview();
+
+        try{
+          const response = await window.fetch('/api/publish-customer-page', {
+            method: 'POST',
+            headers: { 'Content-Type':'application/json' },
+            body: JSON.stringify({
+              company: String(model.company || '').trim(),
+              slug: safeFilePart((model && model.company) || 'customer').toLowerCase(),
+              tier: String(model.tier || '').trim(),
+              completion: String(model.completion || '').trim(),
+              sourceThreadId: String(model.sourceThreadId || resolved.requestedThreadId || 'current').trim() || 'current',
+              generatedOn: String(model.generatedOn || '').trim(),
+              html
+            })
+          });
+          let payload = null;
+          try{
+            payload = await response.json();
+          }catch(parseErr){
+            payload = null;
+          }
+          const publishedUrl = safeLinkHref(payload && (payload.liveUrl || payload.url));
+          if(!response.ok || !payload || payload.ok !== true || !publishedUrl){
+            const detail = String((payload && (payload.error || payload.message)) || '').trim();
+            toast(detail || 'Publish failed. Verify the Vercel API endpoint and blob token.');
+            return false;
+          }
+          const threadId = String(model.sourceThreadId || resolved.requestedThreadId || 'current').trim() || 'current';
+          if(!(state.customerTemplatePublishedByThread && typeof state.customerTemplatePublishedByThread === 'object')){
+            state.customerTemplatePublishedByThread = Object.create(null);
+          }
+          state.customerTemplatePublishedByThread[threadId] = {
+            url: publishedUrl,
+            slug: String(payload.slug || '').trim(),
+            publishedAt: String(payload.publishedAt || new Date().toISOString()).trim()
+          };
+          renderCustomerTemplatePreview();
+          toast(`Published customer page for ${(model && model.company) || 'customer'}.`);
+          return true;
+        }catch(err){
+          const msg = String(err && err.message || '').trim();
+          if(/Failed to fetch/i.test(msg)){
+            toast('Publish failed. Open this app from your Vercel URL so /api routes are available.');
+          }else{
+            toast('Publish failed. Check Vercel function logs and blob configuration.');
+          }
+          return false;
+        }finally{
+          state.customerTemplatePublishPending = false;
+          syncCustomerTemplatePublishButtons(resolved.requestedThreadId);
+          renderCustomerTemplatePreview();
+        }
+      }
+
+      function openPublishedCustomerPage(preferredThreadId){
+        const requestedThreadId = String(
+          preferredThreadId
+          || state.recommendationsThreadId
+          || state.activeThread
+          || 'current'
+        ).trim() || 'current';
+        const lookupThreadId = (()=> {
+          const draftThreadId = String(
+            state.customerTemplateDraft && state.customerTemplateDraft.sourceThreadId
+            || ''
+          ).trim();
+          if(draftThreadId) return draftThreadId;
+          return requestedThreadId;
+        })();
+        const publishedMap = (state.customerTemplatePublishedByThread && typeof state.customerTemplatePublishedByThread === 'object')
+          ? state.customerTemplatePublishedByThread
+          : {};
+        const published = publishedMap[lookupThreadId] && typeof publishedMap[lookupThreadId] === 'object'
+          ? publishedMap[lookupThreadId]
+          : null;
+        const liveUrl = safeLinkHref(published && published.url);
+        if(!liveUrl){
+          toast('No live page published yet for this profile.');
+          return;
+        }
+        window.open(liveUrl, '_blank', 'noopener,noreferrer');
       }
 
       function resolveRecommendationThread(threadId){
@@ -13586,38 +13993,67 @@ const evidenceOpts = [
           el.textContent = String(value || '');
         };
 
+        const preferredThreadId = String((state.recommendationsThreadId || state.activeThread || gate.threadId || 'current') || 'current');
+        const candidateForView = completeCustomerCandidateForThreadId(gate.threadId) || bestCompleteCustomerTemplateCandidate(preferredThreadId);
+        const activeDraft = (
+          state.customerTemplateDraft
+          && typeof state.customerTemplateDraft === 'object'
+          && String(state.customerTemplateDraft.sourceThreadId || '') === String(gate.threadId || '')
+        ) ? state.customerTemplateDraft : null;
+        const hasDraft = !!activeDraft;
+        const canGenerateCustomerPage = !!(candidateForView || hasDraft);
         const customerPageBtn = $('#generateCustomerPageTemplateBtn');
-        const previewPageBtn = $('#previewCustomerPageTemplateBtn');
         if(customerPageBtn){
-          const preferredThreadId = String((state.recommendationsThreadId || state.activeThread || 'current') || 'current');
-          const candidate = bestCompleteCustomerTemplateCandidate(preferredThreadId);
-          const hasDraft = !!(state.customerTemplateDraft && typeof state.customerTemplateDraft === 'object');
-          customerPageBtn.disabled = !(candidate || hasDraft);
+          customerPageBtn.disabled = !canGenerateCustomerPage;
           customerPageBtn.title = hasDraft
-            ? `Download current preview for ${state.customerTemplateDraft.company || 'customer'}`
-            : (candidate
-                ? `Generate page from ${candidate.thread.company} (${candidate.gate.completion})`
+            ? `Download current preview for ${activeDraft.company || 'customer'}`
+            : (candidateForView
+                ? `Generate page from ${candidateForView.thread.company} (${candidateForView.gate.completion})`
                 : 'No complete (100%) profile is available yet.');
-          if(previewPageBtn){
-            previewPageBtn.disabled = !candidate;
-            previewPageBtn.title = candidate
-              ? `Preview page from ${candidate.thread.company} (${candidate.gate.completion})`
-              : 'No complete (100%) profile is available yet.';
-          }
+        }
+        const publishCustomerPageBtn = $('#publishCustomerPageTemplateBtn');
+        if(publishCustomerPageBtn){
+          publishCustomerPageBtn.disabled = !canGenerateCustomerPage || !!state.customerTemplatePublishPending;
+          publishCustomerPageBtn.textContent = state.customerTemplatePublishPending ? 'Publishing...' : 'Publish customer page';
+          publishCustomerPageBtn.title = hasDraft
+            ? `Publish current preview for ${activeDraft.company || 'customer'}`
+            : (candidateForView
+                ? `Publish page from ${candidateForView.thread.company} (${candidateForView.gate.completion})`
+                : 'No complete (100%) profile is available yet.');
         }
 
         const companyName = gate.company || 'Untitled company';
-        setText('#contentRecommendationsTitle', `Content for ${companyName}`);
+        setText('#contentRecommendationsTitle', `Customer page for ${companyName}`);
         setText(
           '#contentRecommendationsSub',
           gate.eligible
-            ? `A curated content plan tailored for ${companyName}.`
+            ? `Auto-generated customer page preview tailored for ${companyName}.`
             : 'Content unlocks once profile completion reaches at least 90%.'
         );
+        const recommendationsIntro = $('#contentRecommendationsIntro');
+        if(recommendationsIntro){
+          recommendationsIntro.hidden = true;
+        }
 
         const gateEl = $('#contentRecommendationsGate');
         const gridEl = $('#contentRecommendationsGrid');
-        if(!gridEl || !gateEl) return;
+        const priorityWrapEl = $('#contentPriorityFeaturesWrap');
+        const priorityGridEl = $('#contentPriorityFeaturesGrid');
+        const prioritySubEl = $('#contentPriorityFeaturesSub');
+        const resetPriorityFeatures = ()=>{
+          if(priorityWrapEl) priorityWrapEl.hidden = true;
+          if(priorityGridEl) priorityGridEl.innerHTML = '';
+          if(prioritySubEl){
+            prioritySubEl.textContent = 'Mapped to your discovery outcomes and selected operating stack, these are the most relevant Immersive One features to prioritize first.';
+          }
+        };
+        if(!gridEl || !gateEl){
+          resetPriorityFeatures();
+          return;
+        }
+        gridEl.hidden = true;
+        gridEl.innerHTML = '';
+        resetPriorityFeatures();
 
         if(!gate.eligible){
           gateEl.hidden = false;
@@ -13625,49 +14061,26 @@ const evidenceOpts = [
             <strong>Content is locked.</strong>
             <p>Current completion is ${escapeHtml(gate.completion)}. Reach at least 90% to unlock content.</p>
           `;
-          gridEl.innerHTML = '';
+          state.customerTemplateDraft = null;
+          state.customerTemplateEditorTarget = null;
           renderCustomerTemplatePreview();
+          syncCustomerTemplatePublishButtons(preferredThreadId);
           return;
         }
 
         gateEl.hidden = true;
         gateEl.innerHTML = '';
-
-        const cards = recommendationCardsForGate(gate);
-
-        if(!cards.length){
-          gridEl.innerHTML = `
-            <article class="contentRecCard">
-              <p class="contentRecEyebrow">No mapped content found</p>
-              <h3>No existing assets matched this profile yet</h3>
-              <p class="contentRecSummary">No strong content matches are available for this profile yet. Add or refresh source content and try again.</p>
-            </article>
-          `;
-          renderCustomerTemplatePreview();
-          return;
+        if(candidateForView){
+          const model = customerTemplateModelFromCandidate(candidateForView);
+          if(model){
+            state.customerTemplateDraft = model;
+          }
+        }else if(state.customerTemplateDraft && typeof state.customerTemplateDraft === 'object'){
+          state.customerTemplateDraft = null;
+          state.customerTemplateEditorTarget = null;
         }
-
-        gridEl.innerHTML = cards.map((card, idx)=>{
-          const sourceLabel = recommendationSourceLabel(card);
-          const publishedLabel = formatPublishedDate(card.publishedOn);
-          const cardHref = safeLinkHref(card && card.url);
-          return `
-            <article class="contentRecCard">
-              <p class="contentRecEyebrow">Content ${idx + 1} · ${escapeHtml(card.format)}</p>
-              <h3>${escapeHtml(card.title)}</h3>
-              <p class="contentRecOutcome"><strong>Outcome:</strong> ${escapeHtml(card.outcomeLabel)}</p>
-              <p class="contentRecSummary">${escapeHtml(card.summary)}</p>
-              <p class="contentRecWhy"><strong>Why this match:</strong> ${escapeHtml(card.why)}</p>
-              ${cardHref
-                ? `<a class="contentRecLink" href="${escapeHtml(cardHref)}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.linkLabel || 'Read more')}</a>`
-                : ''
-              }
-              ${publishedLabel ? `<p class="contentRecMeta"><strong>Published:</strong> ${escapeHtml(publishedLabel)}</p>` : ''}
-              <p class="contentRecSource"><strong>Source:</strong> ${escapeHtml(sourceLabel)}</p>
-            </article>
-          `;
-        }).join('');
         renderCustomerTemplatePreview();
+        syncCustomerTemplatePublishButtons(preferredThreadId);
       }
 
       function moduleValueByLabel(rows, label){
@@ -17791,16 +18204,16 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
           openRecommendationEmailBuilder((targetThread && targetThread.id) ? targetThread.id : 'current');
         }
         if(action === 'generateCustomerPageTemplate'){
-          const preferredThreadId = (state.currentView === 'recommendations')
-            ? (state.recommendationsThreadId || state.activeThread || 'current')
-            : (state.activeThread || 'current');
+          const preferredThreadId = preferredCustomerTemplateThreadIdForCurrentView();
           downloadCustomerPageTemplate(preferredThreadId);
         }
-        if(action === 'previewCustomerPageTemplate'){
-          const preferredThreadId = (state.currentView === 'recommendations')
-            ? (state.recommendationsThreadId || state.activeThread || 'current')
-            : (state.activeThread || 'current');
-          openCustomerTemplatePreview(preferredThreadId);
+        if(action === 'publishCustomerPageTemplate'){
+          const preferredThreadId = preferredCustomerTemplateThreadIdForCurrentView();
+          publishCustomerPageTemplate(preferredThreadId);
+        }
+        if(action === 'openPublishedCustomerPage'){
+          const preferredThreadId = preferredCustomerTemplateThreadIdForCurrentView();
+          openPublishedCustomerPage(preferredThreadId);
         }
         if(action === 'clearCustomerPagePreview'){
           clearCustomerTemplatePreview();

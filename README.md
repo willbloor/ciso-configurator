@@ -1026,6 +1026,28 @@ Design and workflow updates deployed for self-service intake and dashboard follo
    - Residual risk / follow-up:
      - endpoint authorization is currently environment/perimeter-based; if this surface is exposed to broad/public traffic, add explicit authenticated actor controls and rate limiting before external rollout.
 
+48. Preview-link behavior update for published customer pages (2026-02-27)
+   - Updated preview/live link behavior in Content preview:
+     - renamed action copy from `Open live page` to `View preview link`.
+     - preview action now resolves deterministic customer-page route (`/customer-pages/<slug>`) from profile/company slug when available.
+     - if a publish response URL exists, it still takes priority; otherwise the deterministic route is used.
+   - Updated generated customer page top-bar action:
+     - injected `View preview link` button that opens `/customer-pages/<slug>` when hosted over HTTP(S).
+     - in non-hosted contexts, falls back to copying/opening the current URL.
+   - Updated resolver endpoint behavior for `/api/customer-page`:
+     - switched from redirecting to blob URL (`307 Location`) to fetching blob HTML server-side and returning `200 text/html`.
+     - avoids exposing raw blob URL and keeps stable app-route URL semantics.
+   - Principle:
+     - keep customer-page links stable and user-readable while improving preview-link usability across hosted and local contexts.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/api/customer-page.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/api/customer-page.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
 ## State Sync Guardrails (Critical, 2026-02-26)
 
 These are hard rules to prevent recurrence of the Tina Corp save-loss regression.

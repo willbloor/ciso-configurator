@@ -1,6 +1,6 @@
 # Workstream Coordination Board
 
-Last updated (UTC): 2026-02-27 12:22
+Last updated (UTC): 2026-02-27 12:54
 
 This file is the live coordination source for parallel chats.  
 `README.md` remains the canonical shipped-change log; this board is the active ownership and handoff tracker.
@@ -28,7 +28,7 @@ This file is the live coordination source for parallel chats.
 | `bug-fixes` | `codex/bug-fixes` | Runtime regressions and correctness in `/assets/js/app.js`, `/assets/css/app.css`, `/index.html` | `planned` | 2026-02-26 11:18 | Claim exact bug list + update status |
 | `wss` | `codex/wss` | Widget/self-service flow in `/landing-pages/customer-self-service-widget-prototype.html`, `/assets/js/customer-self-service-widget-prototype.js`, `/vercel.json` route behavior | `planned` | 2026-02-26 11:18 | Confirm widget scope lock + update status |
 | `content` | `codex/content` | Content catalogs/data sync in `/assets/data/immersive-content-master.csv`, `/assets/data/official-blog-rss-curated.csv`, `/assets/js/content-catalog.js`, `/assets/js/official-blog-rss-fallback.js` | `planned` | 2026-02-26 11:18 | Confirm feed/catalog scope + update status |
-| `release-gate` | `codex/release-gate` | README/code reconciliation, security/logic checks, deploy checklist, final push gate | `in-progress` | 2026-02-27 12:22 | Finalize main push after publish-endpoint hardening checks |
+| `release-gate` | `codex/release-gate` | README/code reconciliation, security/logic checks, deploy checklist, final push gate | `in-progress` | 2026-02-27 12:54 | Finalize main push after preview-link behavior checks |
 | `copy-rules` | `codex/copy-rules` | Structured copy-rules layer and on-brand generation wiring across landing page, email builder, and follow-up email flows | `merged` | 2026-02-26 17:58 | Track post-merge feedback only |
 | `default-contact` | `codex/default-contact-fallbacks` | Ensure all records have fallback name + business email defaults in snapshot normalization and storage hydration paths | `merged` | 2026-02-26 21:13 | Track synthetic-contact fallback usage and post-merge feedback |
 | `capability-priority-landing` | `codex/capability-priority-landing` | Add structured capability-priority model from research taxonomy and surface record-priority capabilities in generated customer landing output | `ready-for-merge` | 2026-02-27 08:41 | Merge after landing-preview spot-check on real records |
@@ -49,11 +49,13 @@ Use one line per claim/update so overlaps are explicit.
 | 2026-02-26 21:13 | `release-gate` | `/README.md`, `/docs/workstreams.md` | Merge `codex/default-contact-fallbacks` into `main`, rerun release checks on merged state, and record push readiness | Chat: main promotion |
 | 2026-02-27 08:37 | `capability-priority-landing` | `/assets/js/app.js`, `/README.md`, `/docs/workstreams.md` | Convert IO research taxonomy into structured capability-priority layer and wire it into generated landing-page output | Chat: capability-priority surfacing |
 | 2026-02-27 12:22 | `release-gate` | `/assets/js/app.js`, `/assets/css/app.css`, `/index.html`, `/api/publish-customer-page.js`, `/api/customer-page.js`, `/vercel.json`, `/package.json`, `/README.md`, `/docs/workstreams.md` | Reconcile latest local publish + PIBR changes against README, harden API endpoints, and run pre-push release checks | Chat: push/release gate |
+| 2026-02-27 12:54 | `release-gate` | `/api/customer-page.js`, `/assets/js/app.js`, `/index.html`, `/README.md`, `/docs/workstreams.md` | Apply preview-link UX/routing tweak, reconcile docs, and rerun quick pre-push checks | Chat: push/release gate |
 
 ## Handoff Notes
 
 - Add newest note at top.
 - Include: what changed, what is left, known risks, and links to related commits/PRs.
+- 2026-02-27 12:54 UTC (`release-gate`): Applied small preview-link update across `/api/customer-page.js`, `/assets/js/app.js`, and `/index.html` (button label now `View preview link`; deterministic `/customer-pages/<slug>` route fallback; server-side HTML proxy response in resolver endpoint), appended README entry 48, and reran syntax/security checks before push.
 - 2026-02-27 12:22 UTC (`release-gate`): Reconciled local dirty state with README entries 44-46 plus added entry 47 for the live publish API surface, hardened `/api/publish-customer-page` (JSON-only + same-origin + host/proto sanitization) and `/api/customer-page` (exact-path slug match only, no prefix fallback), and queued final syntax/security/release checks before main push.
 - 2026-02-27 08:41 UTC (`capability-priority-landing`): Added structured capability-priority taxonomy/scoring in `/assets/js/app.js` (`capabilityPriorityCatalog`, `capabilityPriorityCardsForGate`) and wired generated customer landing output to render a new `#priority-capabilities` section with ranked module cards, rationale, and proof points. Hero primary CTA now targets this section when available. Validation: `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`. Remaining risk: heuristic ranking weights should be tuned against live record combinations.
 - 2026-02-26 21:13 UTC (`release-gate`): Merged `codex/default-contact-fallbacks` into local `main`, reran merged-state release checks (syntax, path audit, security patterns, config/header checks all PASS), and marked `default-contact` as merged pending `origin/main` push.

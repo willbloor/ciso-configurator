@@ -64,17 +64,26 @@ module.exports = async function handler(req, res){
         slug
       });
     }
-    const redirectUrl = String(match.url || '').trim();
-    if(!/^https:\/\/.+/i.test(redirectUrl)){
+    const blobUrl = String(match.url || '').trim();
+    if(!/^https:\/\/.+/i.test(blobUrl)){
       return sendJson(res, 502, {
         ok: false,
         error: 'invalid_blob_url'
       });
     }
-    res.statusCode = 307;
-    res.setHeader('Location', redirectUrl);
-    res.setHeader('Cache-Control', 'public, max-age=60');
-    res.end();
+    const upstream = await fetch(blobUrl, { method: 'GET' });
+    if(!upstream.ok){
+      return sendJson(res, 502, {
+        ok: false,
+        error: 'upstream_fetch_failed',
+        status: Number(upstream.status) || 502
+      });
+    }
+    const htmlBuffer = Buffer.from(await upstream.arrayBuffer());
+    res.statusCode = 200;
+    res.setHeader('Content-Type', String(match.contentType || 'text/html; charset=utf-8'));
+    res.setHeader('Cache-Control', 'public, max-age=120');
+    res.end(htmlBuffer);
   }catch(err){
     return sendJson(res, 500, {
       ok: false,

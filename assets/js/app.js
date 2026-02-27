@@ -12236,6 +12236,8 @@ const evidenceOpts = [
         const heroPrimaryCtaHref = safeLinkHref(hero.primaryCtaHref, { allowHash:true }) || '#recommended-for-you';
         const heroSecondaryCtaLabel = String(hero.secondaryCtaLabel || '').trim() || 'Contact your team';
         const heroSecondaryCtaHref = safeLinkHref(hero.secondaryCtaHref, { allowHash:true }) || '#contact-your-team';
+        const previewSlug = customerPagePreviewSlug(model.previewSlug || model.company || '');
+        const previewPath = previewSlug ? `/customer-pages/${encodeURIComponent(previewSlug)}` : '';
         const demoCardCtaHref = safeLinkHref(demoCard && demoCard.ctaUrl);
         const demoCardPosterHref = safeLinkHref(demoCard && demoCard.videoPoster);
         const demoCardVideoMp4Href = safeLinkHref(demoCard && demoCard.videoMp4);
@@ -12441,6 +12443,9 @@ const evidenceOpts = [
     .topbarInner { max-width: var(--container); width: 100%; margin: 0px auto; padding: 0px 64px; height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 0.9rem; }
     .brand { display: inline-flex; align-items: center; }
     .brand img { display: block; height: 28px; width: auto; }
+    .topbarActions { display: inline-flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+    .topPreviewBtn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 10px 16px; border-radius: var(--radius-btn); border: 1px solid rgba(23, 24, 28, 0.18); background: rgb(255, 255, 255); color: rgb(31, 47, 82); font-size: 16px; line-height: 20px; font-weight: 400; text-decoration: none; cursor: pointer; }
+    .topPreviewBtn:hover { background: rgb(245, 247, 252); border-color: rgba(23, 24, 28, 0.24); }
     .topContactBtn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 10px 16px; border-radius: var(--radius-btn); border: 1px solid var(--primary-colours--azure); background: var(--primary-colours--azure); color: rgb(255, 255, 255); font-size: 16px; line-height: 20px; font-weight: 400; text-decoration: none; }
     .topContactBtn:hover { background: rgb(86, 119, 248); border-color: rgb(86, 119, 248); color: rgb(255, 255, 255); }
     .hero { margin-top: 20px; }
@@ -12630,7 +12635,7 @@ const evidenceOpts = [
       .sectionHead h2 { font-size: 28px; }
       .storyContent h3 { font-size: 30px; }
       .storyContent p, .storyBullets li, .storyList li, .actionsList { font-size: 16px; }
-      .topContactBtn { font-size: 14px; line-height: 18px; padding: 8px 12px; min-height: 40px; }
+      .topPreviewBtn, .topContactBtn { font-size: 14px; line-height: 18px; padding: 8px 12px; min-height: 40px; }
       .contactFormGrid { grid-template-columns: 1fr; }
     }
     @media (max-width: 479px) {
@@ -12654,7 +12659,10 @@ const evidenceOpts = [
       <a class="brand" href="https://www.immersivelabs.com/" target="_blank" rel="noopener noreferrer" aria-label="Immersive">
         <img src="${esc(logoSrc)}" alt="Immersive" />
       </a>
-      <a class="topContactBtn" href="#contact-your-team">Contact us</a>
+      <div class="topbarActions">
+        ${previewPath ? `<button class="topPreviewBtn" type="button" data-generated-preview-link="${esc(previewPath)}">View preview link</button>` : ''}
+        <a class="topContactBtn" href="#contact-your-team">Contact us</a>
+      </div>
     </div>
   </header>
   <main class="wrap">
@@ -12947,6 +12955,37 @@ const evidenceOpts = [
       document.addEventListener('DOMContentLoaded', function(){
         markCardsInView();
         refreshStoryLayout();
+        var generatedPreviewButton = document.querySelector('[data-generated-preview-link]');
+        if(generatedPreviewButton){
+          generatedPreviewButton.addEventListener('click', function(){
+            var path = String(generatedPreviewButton.getAttribute('data-generated-preview-link') || '').trim();
+            if(!path) return;
+            var protocol = String(window.location && window.location.protocol || '').toLowerCase();
+            if(protocol === 'http:' || protocol === 'https:'){
+              var base = String(window.location && window.location.origin || '').trim();
+              if(base){
+                var liveUrl = base + path;
+                window.open(liveUrl, '_blank', 'noopener,noreferrer');
+                return;
+              }
+            }
+            var currentUrl = String(window.location && window.location.href || '').trim();
+            if(!currentUrl) return;
+            if(navigator.clipboard && typeof navigator.clipboard.writeText === 'function'){
+              navigator.clipboard.writeText(currentUrl).then(function(){
+                var originalLabel = generatedPreviewButton.textContent;
+                generatedPreviewButton.textContent = 'Preview link copied';
+                window.setTimeout(function(){
+                  generatedPreviewButton.textContent = originalLabel;
+                }, 1600);
+              }).catch(function(){
+                window.open(currentUrl, '_blank', 'noopener,noreferrer');
+              });
+            }else{
+              window.open(currentUrl, '_blank', 'noopener,noreferrer');
+            }
+          });
+        }
         if('ResizeObserver' in window){
           contentObserver = new ResizeObserver(refreshStoryLayout);
           document.querySelectorAll('.storyCard .storyContent').forEach(function(el){
@@ -13288,16 +13327,17 @@ const evidenceOpts = [
           ? publishedMap[draftThreadId]
           : null;
         const publishedUrl = safeLinkHref(publishedMeta && publishedMeta.url);
+        const previewUrl = publishedUrl || customerPagePreviewUrlForSlug((publishedMeta && publishedMeta.slug) || draft.company || '');
         if(publishInlineBtn){
           publishInlineBtn.disabled = !!state.customerTemplatePublishPending;
           publishInlineBtn.textContent = state.customerTemplatePublishPending ? 'Publishing...' : 'Publish customer page';
         }
         if(openPublishedBtn){
-          const hasLiveUrl = !!publishedUrl;
+          const hasLiveUrl = !!previewUrl;
           openPublishedBtn.hidden = !hasLiveUrl;
           openPublishedBtn.disabled = !hasLiveUrl;
           if(hasLiveUrl){
-            openPublishedBtn.setAttribute('data-live-url', publishedUrl);
+            openPublishedBtn.setAttribute('data-live-url', previewUrl);
           }else{
             openPublishedBtn.removeAttribute('data-live-url');
           }
@@ -13715,6 +13755,29 @@ const evidenceOpts = [
         return String(preferredThreadId || 'current').trim() || 'current';
       }
 
+      function customerPagePreviewSlug(value){
+        const normalized = String(value || '')
+          .normalize('NFKD')
+          .replace(/[\u0300-\u036f]/g, '');
+        return normalized
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 80);
+      }
+
+      function customerPagePreviewUrlForSlug(slugInput){
+        const slug = customerPagePreviewSlug(slugInput);
+        if(!slug) return '';
+        const path = `/customer-pages/${encodeURIComponent(slug)}`;
+        const protocol = String((window.location && window.location.protocol) || '').trim().toLowerCase();
+        const origin = String((window.location && window.location.origin) || '').trim();
+        if((protocol === 'http:' || protocol === 'https:') && origin){
+          return `${origin}${path}`;
+        }
+        return '';
+      }
+
       function syncCustomerTemplatePublishButtons(preferredThreadId){
         const requestedThreadId = String(
           preferredThreadId
@@ -13813,7 +13876,7 @@ const evidenceOpts = [
             headers: { 'Content-Type':'application/json' },
             body: JSON.stringify({
               company: String(model.company || '').trim(),
-              slug: safeFilePart((model && model.company) || 'customer').toLowerCase(),
+              slug: customerPagePreviewSlug((model && model.company) || 'customer'),
               tier: String(model.tier || '').trim(),
               completion: String(model.completion || '').trim(),
               sourceThreadId: String(model.sourceThreadId || resolved.requestedThreadId || 'current').trim() || 'current',
@@ -13881,9 +13944,15 @@ const evidenceOpts = [
         const published = publishedMap[lookupThreadId] && typeof publishedMap[lookupThreadId] === 'object'
           ? publishedMap[lookupThreadId]
           : null;
-        const liveUrl = safeLinkHref(published && published.url);
+        const explicitButton = $('#openPublishedCustomerPageBtn');
+        const explicitUrl = explicitButton ? normalizedHttpUrl(explicitButton.getAttribute('data-live-url')) : '';
+        const draft = (state.customerTemplateDraft && typeof state.customerTemplateDraft === 'object')
+          ? state.customerTemplateDraft
+          : null;
+        const draftUrl = customerPagePreviewUrlForSlug((published && published.slug) || (draft && draft.company) || '');
+        const liveUrl = explicitUrl || safeLinkHref(published && published.url) || draftUrl;
         if(!liveUrl){
-          toast('No live page published yet for this profile.');
+          toast('No preview link available yet. Open this app from your deployed URL.');
           return;
         }
         window.open(liveUrl, '_blank', 'noopener,noreferrer');

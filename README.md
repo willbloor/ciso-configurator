@@ -86,11 +86,59 @@ Added a natural-language story generator directly in Story Mapping:
     `Why this helps you be ready`
   - explicitly names Prove / Improve / Benchmark / Report as the recommended operating constellation in Immersive One.
 - Removed narrative metadata pills from the drawer header and switched generated narrative sections to full-text output (no ellipsis truncation).
+- Extended customer-page language flow to reuse the same narrative structure:
+  - hero subtitle now inherits the mapped executive story direction
+  - added `Your readiness story` section to both preview and exported landing page, rendering:
+    - challenges
+    - opportunities
+    - outcomes mapping
+    - PIBR constellation rationale
+    - be-ready framing
 - Gated to the same completion threshold as Story Flow mode (90%+).
 
 Files:
 
 - `/Users/will.bloor/Documents/Configurator/index.html`
+- `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+- `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+## Customer Readiness Story De-Densification (2026-02-28)
+
+Reduced cognitive load in the `Your readiness story` panel in both preview and exported customer pages:
+
+- Applied compact story formatting before render:
+  - summary reduced to a concise lead sentence
+  - long multi-sentence bullets reduced to concise first-sentence bullets
+  - per-card bullet count reduced for the primary view
+- Updated layout rhythm:
+  - primary story cards now render in a calmer 2-column grid
+  - secondary sections moved behind `Show full mapping rationale` disclosure
+- Kept logic deterministic:
+  - source remains story-mapping narrative outputs
+  - no change to scoring or section selection logic, only presentation density
+
+Files:
+
+- `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+- `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+## Customer Readiness Story Externalization + Fourth Block (2026-02-28)
+
+Refined `Your readiness story` for external, CISO-facing communication:
+
+- Reframed story language away from internal model terms:
+  - removed/rewrote internal phrasing in section copy (for example `% influence`, `fit`, `mapped signals`, `for this account`)
+  - story summaries and section intros now use executive-ready, stakeholder-facing wording
+- Preserved content structure while improving readability:
+  - each section card includes a natural-language intro paragraph plus bullets
+  - cards retain a content-first layout (no marketing framing)
+- Added a fourth primary story card:
+  - `Executive and stakeholder assurance`
+  - focuses on board/regulator/customer confidence outcomes
+- Primary story display now supports four cards (2x2), with remaining detail in expandable rationale.
+
+Files:
+
 - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
 - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
 
@@ -1315,6 +1363,46 @@ Design and workflow updates deployed for self-service intake and dashboard follo
      - matched README updates against current runtime references in:
        - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
      - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
+55. Tuned package scoring to make Ultimate less over-gated and added $50bn+ revenue weighting (2026-02-28)
+   - Updated `score()` tier logic to reduce aggressive Ultimate suppression:
+     - relaxed non-obvious Ultimate penalties (smaller deductions when gate criteria are partially missing)
+     - reduced low-pressure Ultimate penalty in borderline cases
+     - replaced fixed Ultimate lead requirement (`1.2`) with a lower adaptive threshold (`0.6` when Ultimate is likely, `0.9` otherwise)
+   - Added explicit high-revenue weighting using numeric `state.revenueB` (USD billions):
+     - `>= 50` now adds a strong Ultimate/pressure boost and scale contribution
+     - `>= 25` adds a smaller step-up boost
+   - Expanded scale gating input:
+     - `scaleSignal` now includes revenue-derived enterprise signal (`$25bn+`, `$50bn+`)
+   - Added `ultLikely` runtime signal:
+     - true when `ultObvious` is met, or when external accountability + large scale are present with `$50bn+` revenue
+     - used for softer penalty/demotion behavior so large, externally-accountable accounts are not pushed back to Advanced too easily
+   - Principle:
+     - keep Ultimate selective, but avoid over-penalizing enterprise profiles where strategic scale and accountability are already clear.
+   - Cross-surface impact:
+     - configurator recommendation tier now promotes Ultimate more often for large-enterprise records, which flows through overview, exports, and generated summary/report outputs.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+   - Residual risk / follow-up:
+     - run quick manual scoring checks for small/medium records to confirm Core/Advanced recommendations remain sensible after the Ultimate uplift.
+
+56. Removed `picsum.photos` capability-card image fallback to keep runtime output first-party only (2026-02-28)
+   - Replaced `capabilityCardImageUrl(...)` placeholder image fallback:
+     - removed seeded `https://picsum.photos/...` URL generation
+     - now uses direct capability image URL when provided, otherwise falls back to `IMMERSIVE_DEFAULT_IMAGE_URL`
+   - Principle:
+     - generated customer-facing outputs should avoid placeholder-image services and use controlled first-party/default imagery.
+   - Cross-surface impact:
+     - priority capability cards in Content preview and generated customer-page output now never render `picsum.photos` images.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `rg -n "picsum\\.photos" /Users/will.bloor/Documents/Configurator/assets/js/app.js /Users/will.bloor/Documents/Configurator/landing-pages/customer-dashboard-template-Pioneer-Cloud-2026-02-22.html` (PASS)
 
 ## State Sync Guardrails (Critical, 2026-02-26)
 

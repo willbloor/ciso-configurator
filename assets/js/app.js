@@ -10285,11 +10285,21 @@ const evidenceOpts = [
           if(state.regs.has(r)){ adv += 0.25; ult += 0.35; pressure += 0.25; }
         });
 
-        // Scale by revenue (secondary only)
-        const revScale = Math.max(0.02, state.revenueB / 10);
+        // Scale by revenue (secondary only, with explicit enterprise lift at $50bn+)
+        const revenueB = Number(state.revenueB) || 0;
+        const revScale = Math.max(0.02, revenueB / 10);
         if(revScale < 0.5) core += 0.6;
         else if(revScale >= 2.5){ adv += 0.7; ult += 0.5; }
         else core += 0.2;
+        if(revenueB >= 50){
+          adv += 1.0;
+          ult += 2.4;
+          pressure += 1.2;
+        }else if(revenueB >= 25){
+          adv += 0.6;
+          ult += 1.0;
+          pressure += 0.5;
+        }
 
         // Package fit contribution
         const fit = fitCompute();
@@ -10325,11 +10335,13 @@ const evidenceOpts = [
           (largeBands.has(state.companySize) ? 2 : (scaleBands.has(state.companySize) ? 1 : 0)) +
           (state.fitScope === 'enterprise' ? 1 : 0) +
           (state.groups.size >= 4 ? 1 : 0) +
-          (state.region === 'Other' ? 1 : 0);
+          (state.region === 'Other' ? 1 : 0) +
+          (revenueB >= 50 ? 2 : (revenueB >= 25 ? 1 : 0));
 
         const scaleLarge = scaleSignal >= 2;
         const strategicOrService = strategicFraming || state.fitServices === 'whiteglove';
         const ultObvious = externalAccountability && strategicOrService && scaleLarge;
+        const ultLikely = ultObvious || (externalAccountability && scaleLarge && revenueB >= 50);
 
         if(ultObvious){
           ult += 2.3;
@@ -10337,17 +10349,17 @@ const evidenceOpts = [
           if(state.fitServices === 'whiteglove') ult += 1.2; // accelerator, not requirement
           else ult += 0.4;
         }else{
-          ult -= 1.0;
-          if(!externalAccountability) ult -= 0.8;
-          if(!strategicOrService) ult -= 0.6;
-          if(!scaleLarge) ult -= 0.6;
+          ult -= 0.6;
+          if(!externalAccountability) ult -= 0.5;
+          if(!strategicOrService) ult -= 0.4;
+          if(!scaleLarge) ult -= 0.4;
         }
 
         if(state.fitServices === 'whiteglove') adv += 0.6;
         if(state.fitServices === 'guided') adv += 0.4;
         if(state.fitServices === 'diy') core += 0.4;
 
-        if(pressure < 5 && !ultObvious) ult -= 0.8;
+        if(pressure < 5 && !ultLikely) ult -= 0.4;
 
         core = Math.max(0, core);
         adv = Math.max(0, adv);
@@ -10364,16 +10376,14 @@ const evidenceOpts = [
         let best = arr[0].k;
         let gap = arr[0].v - arr[1].v;
 
-        if(best === 'ult' && (!ultObvious && gap < 1.2)){
-          best = 'adv';
-          gap = 0;
-        }else if(best === 'ult' && gap < 1.2){
+        const minUltLead = ultLikely ? 0.6 : 0.9;
+        if(best === 'ult' && gap < minUltLead){
           best = 'adv';
           gap = 0;
         }
 
         const conf = gap >= 3 ? 'strong' : gap >= 1.5 ? 'moderate' : 'directional';
-        return { best, conf, scores: { core, adv, ult, pressure, scaleLarge: scaleLarge ? 1 : 0, ultObvious: ultObvious ? 1 : 0 } };
+        return { best, conf, scores: { core, adv, ult, pressure, scaleLarge: scaleLarge ? 1 : 0, ultObvious: ultObvious ? 1 : 0, ultLikely: ultLikely ? 1 : 0 } };
       }
 
       function driverTitle(id){
@@ -12022,15 +12032,167 @@ const evidenceOpts = [
         };
       }
 
-      function capabilityCardImageUrl(capability, idx){
+      function capabilityCardImageUrl(capability){
         const item = (capability && typeof capability === 'object') ? capability : {};
-        const rank = Number.isFinite(Number(idx)) ? (Number(idx) + 1) : 1;
-        const seed = String(item.id || item.title || `priority-feature-${rank}`)
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '');
-        return `https://picsum.photos/seed/${encodeURIComponent(seed || `priority-feature-${rank}`)}/360/640`;
+        const direct = normalizedHttpUrl(
+          item.imageUrl || item.image || item.thumbnail || item.thumbnailUrl || item.heroImage || item.coverImage || ''
+        );
+        if(direct) return direct;
+        return IMMERSIVE_DEFAULT_IMAGE_URL;
+      }
+
+      function normalizeStoryText(value){
+        return String(value || '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+
+      function firstStorySentence(value){
+        const text = normalizeStoryText(value);
+        if(!text) return '';
+        const match = text.match(/^.*?[.!?](?=\s|$)/);
+        if(match && String(match[0] || '').trim().length >= 24){
+          return String(match[0] || '').trim();
+        }
+        const delimiterIdx = text.search(/\.\s|!\s|\?\s/);
+        if(delimiterIdx > 24){
+          return `${text.slice(0, delimiterIdx + 1).trim()}`;
+        }
+        return text;
+      }
+
+      function trimStoryCopy(value, maxCharsInput){
+        const text = normalizeStoryText(value);
+        if(!text) return '';
+        const maxChars = Math.max(60, Number(maxCharsInput) || 180);
+        if(text.length <= maxChars) return text;
+        const clipped = text.slice(0, maxChars + 1);
+        const boundary = Math.max(
+          clipped.lastIndexOf('. '),
+          clipped.lastIndexOf('; '),
+          clipped.lastIndexOf(', '),
+          clipped.lastIndexOf(' ')
+        );
+        const cutoff = boundary > Math.floor(maxChars * 0.58) ? boundary : maxChars;
+        return `${clipped.slice(0, cutoff).replace(/[,:;\-]+$/g, '').trim()}...`;
+      }
+
+      function cisoExternalStoryText(value){
+        let text = normalizeStoryText(value);
+        if(!text) return '';
+        text = text
+          .replace(/\s*\([^)]*?\d+%\s*[^)]*?\)/gi, '')
+          .replace(/\b\d+%\s*(?:priority|fit|influence|weighting)\b/gi, '')
+          .replace(/\bpriority challenge for this account\b/gi, 'material challenge for your organization')
+          .replace(/\bfor this account\b/gi, 'for your organization')
+          .replace(/\bthis account\b/gi, 'your organization')
+          .replace(/\bOpportunity:\s*/gi, '')
+          .replace(/\bBusiness impact:\s*/gi, 'Business impact: ')
+          .replace(/\bDelivery path:\s*/gi, 'Recommended delivery: ')
+          .replace(/\bMapped to\b/gi, 'Supports')
+          .replace(/\bmapped story\b/gi, 'readiness story')
+          .replace(/\bmapped feature set\b/gi, 'recommended plan')
+          .replace(/\bmapped discovery signals\b/gi, 'discovery context')
+          .replace(/\bchallenge profile\b/gi, 'operating context')
+          .replace(/\bweighted readiness links?\b/gi, 'delivery priorities')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+        text = text
+          .replace(/\s+([,.;:!?])/g, '$1')
+          .replace(/([,.;:!?])([A-Za-z])/g, '$1 $2')
+          .replace(/\.\.+/g, '.')
+          .trim();
+        return text;
+      }
+
+      function cisoStorySummary(summaryInput, companyInput, outcomesInput){
+        const company = normalizeStoryText(companyInput) || 'your organization';
+        const outcomes = Array.isArray(outcomesInput)
+          ? outcomesInput.map((row)=> normalizeStoryText(row)).filter(Boolean).slice(0, 3)
+          : [];
+        const summary = cisoExternalStoryText(summaryInput);
+        const concise = trimStoryCopy(firstStorySentence(summary), 240);
+        if(concise){
+          return concise;
+        }
+        if(outcomes.length){
+          return `For ${company}, this means focused delivery against ${naturalList(outcomes, { conjunction:'and' })}, with defensible evidence for leadership and regulatory stakeholders.`;
+        }
+        return `For ${company}, this means focused delivery against your top readiness priorities, with defensible evidence for leadership and regulatory stakeholders.`;
+      }
+
+      function storySectionIntroForTitle(titleInput, bodyInput, bulletsInput){
+        const title = normalizeStoryText(titleInput);
+        const body = cisoExternalStoryText(bodyInput);
+        if(body) return body;
+        const key = normalizeContentToken(title);
+        const introMap = Object.freeze({
+          'challenges-we-identified': 'These are the readiness issues currently constraining execution and board confidence.',
+          'opportunities-this-creates': 'These issues can be converted into measurable operational improvements over the next planning cycle.',
+          'outcomes-we-recommend-based-on-your-challenges': 'We recommend prioritizing these outcomes first to improve resilience and decision quality.',
+          'outcomes-we-recommend-based-on-those-challenges': 'We recommend prioritizing these outcomes first to improve resilience and decision quality.',
+          'why-this-pibr-constellation': 'This plan combines Prove, Improve, Benchmark, and Report into one coordinated delivery model.',
+          'why-this-helps-your-organization-be-ready': 'This gives leadership clearer evidence of progress and better control over operational cyber risk.'
+        });
+        if(introMap[key]) return introMap[key];
+        const firstBullet = Array.isArray(bulletsInput) ? cisoExternalStoryText(firstStorySentence(bulletsInput[0])) : '';
+        if(firstBullet){
+          return `The clearest immediate priority in this area is ${trimStoryCopy(firstBullet, 150)}`;
+        }
+        return 'This section outlines what matters most for executive cyber readiness decisions.';
+      }
+
+      function compactLandingStorySections(sectionsInput, optsInput){
+        const sections = Array.isArray(sectionsInput) ? sectionsInput : [];
+        const opts = (optsInput && typeof optsInput === 'object') ? optsInput : {};
+        const maxSections = Math.max(1, Number(opts.maxSections) || 5);
+        const maxBullets = Math.max(1, Number(opts.maxBullets) || 3);
+        const bodyChars = Math.max(90, Number(opts.bodyChars) || 210);
+        const bulletChars = Math.max(90, Number(opts.bulletChars) || 190);
+        return sections
+          .map((section)=> {
+            const title = normalizeStoryText(section && section.title);
+            const bulletsRaw = Array.isArray(section && section.bullets)
+              ? section.bullets.map((line)=> normalizeStoryText(line)).filter(Boolean)
+              : [];
+            const introText = storySectionIntroForTitle(title, section && section.body, bulletsRaw);
+            const body = trimStoryCopy(cisoExternalStoryText(firstStorySentence(introText)), bodyChars);
+            const bullets = bulletsRaw
+              .map((line)=> trimStoryCopy(cisoExternalStoryText(firstStorySentence(line)), bulletChars))
+              .filter(Boolean)
+              .slice(0, maxBullets);
+            return { title, body, bullets };
+          })
+          .filter((section)=> section.title && (section.body || section.bullets.length))
+          .slice(0, maxSections);
+      }
+
+      function splitLandingStorySections(sectionsInput, primaryCountInput){
+        const sections = Array.isArray(sectionsInput) ? sectionsInput : [];
+        const primaryCount = Math.max(1, Number(primaryCountInput) || 3);
+        return {
+          primary: sections.slice(0, primaryCount),
+          secondary: sections.slice(primaryCount)
+        };
+      }
+
+      function brandConfidenceStorySection(companyInput, outcomesInput){
+        const company = normalizeStoryText(companyInput) || 'your organization';
+        const outcomes = Array.isArray(outcomesInput)
+          ? outcomesInput.map((row)=> normalizeStoryText(row)).filter(Boolean).slice(0, 2)
+          : [];
+        const outcomeLine = outcomes.length
+          ? `This positions ${company} to show consistent leadership across ${naturalList(outcomes, { conjunction:'and' })}.`
+          : `This positions ${company} to show consistent leadership across its cyber readiness priorities.`;
+        return {
+          title: 'Executive and stakeholder assurance',
+          body: outcomeLine,
+          bullets: [
+            'Give board and executive stakeholders a clearer narrative of readiness progress.',
+            'Support external conversations with evidence that is practical, current, and defensible.',
+            'Reinforce trust with customers and regulators through consistent readiness reporting.'
+          ]
+        };
       }
 
       function recommendationOptionLabel(id){
@@ -13099,6 +13261,46 @@ const evidenceOpts = [
           pressureSignals: pressureFocus
         });
         const priorityCapabilities = capabilityPriorityCardsForGate(gate).slice(0, 4);
+        const storyNarrative = storyNarrativeModelForThread(record.id || 'current');
+        const storySectionsRaw = Array.isArray(storyNarrative && storyNarrative.sections) ? storyNarrative.sections : [];
+        const storySectionIndex = new Map(
+          storySectionsRaw
+            .map((section)=> [normalizeContentToken(section && section.title), section])
+            .filter((entry)=> entry[0])
+        );
+        const storySectionOrder = [
+          { key:'challenges we identified', title:'Challenges we identified' },
+          { key:'opportunities this creates', title:'Opportunities this creates' },
+          { key:'outcomes we recommend based on those challenges', title:'Outcomes we recommend based on your challenges' },
+          { key:'why this pibr constellation', title:'Why this PIBR constellation' },
+          { key:'why this helps you be ready', title:'Why this helps your organization be ready' }
+        ];
+        const landingStorySectionsRaw = storySectionOrder
+          .map((row)=>{
+            const source = storySectionIndex.get(normalizeContentToken(row.key));
+            if(!source || typeof source !== 'object') return null;
+            return {
+              title: row.title,
+              body: String(source.body || '').trim(),
+              bullets: Array.isArray(source.bullets) ? source.bullets.map((item)=> String(item || '').trim()).filter(Boolean).slice(0, 4) : []
+            };
+          })
+          .filter((row)=> !!row && (row.body || row.bullets.length));
+        const landingStorySections = compactLandingStorySections(landingStorySectionsRaw, {
+          maxSections: 5,
+          maxBullets: 3,
+          bodyChars: 210,
+          bulletChars: 180
+        });
+        const brandSection = brandConfidenceStorySection(companyLabel, outcomeTitles);
+        const hasBrandSection = landingStorySections.some((section)=> normalizeContentToken(section && section.title) === 'executive-and-stakeholder-assurance');
+        if(!hasBrandSection){
+          landingStorySections.splice(Math.min(3, landingStorySections.length), 0, brandSection);
+        }
+        const executiveSection = storySectionsRaw.find((section)=> normalizeContentToken(section && section.title) === 'executive story');
+        const landingStorySummaryRaw = String((executiveSection && executiveSection.body) || (storyNarrative && storyNarrative.summary) || '').trim();
+        const landingStorySummary = cisoStorySummary(landingStorySummaryRaw, companyLabel, outcomeTitles)
+          || `For ${companyLabel}, this plan focuses execution on priority readiness outcomes, with defensible evidence for leadership and regulatory stakeholders.`;
 
         const valueCardsRaw = [
           {
@@ -13238,7 +13440,7 @@ const evidenceOpts = [
           hero: {
             eyebrow: (landingCopy && String(landingCopy.heroEyebrow || '').trim()) || 'Customer dashboard',
             title: (landingCopy && String(landingCopy.heroTitle || '').trim()) || `${String(record.company || 'Customer')} readiness dashboard`,
-            subtitle: (landingCopy && String(landingCopy.heroSubtitle || '').trim()) || `Built from what ${profileName} shared, with recommendations focused on your top priorities and delivery outcomes.`,
+            subtitle: (landingCopy && String(landingCopy.heroSubtitle || '').trim()) || `Built from what ${profileName} shared. ${landingStorySummary}`,
             imageUrl: 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/678646ce52898299cc1134be_HERO%20IMAGE%20LABS.webp',
             primaryCtaLabel: heroPrimaryCtaLabel,
             primaryCtaHref: heroPrimaryCtaHref,
@@ -13256,7 +13458,11 @@ const evidenceOpts = [
             title: readinessPlanLabel,
             rationale: packageInfo.body || ''
           },
-          needsSummary: (landingCopy && String(landingCopy.needsSummary || '').trim()) || needsSummary,
+          needsSummary: (landingCopy && String(landingCopy.needsSummary || '').trim()) || landingStorySummary || needsSummary,
+          landingStory: {
+            summary: landingStorySummary,
+            sections: landingStorySections
+          },
           valueCards,
           demoCard,
           outcomeBlocks,
@@ -13315,6 +13521,19 @@ const evidenceOpts = [
         const cards = Array.isArray(model.contentCards) ? model.contentCards.filter(Boolean).slice(0, 9) : [];
         const whatsNewCardsInput = Array.isArray(model.whatsNewCards) ? model.whatsNewCards.filter(Boolean).slice(0, 3) : [];
         const details = Array.isArray(model.detailSections) ? model.detailSections.filter(Boolean).slice(0, 6) : [];
+        const landingStory = (model.landingStory && typeof model.landingStory === 'object') ? model.landingStory : {};
+        const landingStorySummary = cisoStorySummary(
+          String(landingStory.summary || '').trim(),
+          String(model.company || '').trim() || 'your organization',
+          outcomeBlocks.map((row)=> String(row && row.title || '').trim()).filter(Boolean).slice(0, 3)
+        );
+        const landingStorySections = compactLandingStorySections(
+          Array.isArray(landingStory.sections) ? landingStory.sections : [],
+          { maxSections: 6, maxBullets: 3, bodyChars: 210, bulletChars: 180 }
+        );
+        const landingStorySectionLayout = splitLandingStorySections(landingStorySections, 4);
+        const landingStoryPrimarySections = landingStorySectionLayout.primary;
+        const landingStorySecondarySections = landingStorySectionLayout.secondary;
         const packageRecommendation = (model.packageRecommendation && typeof model.packageRecommendation === 'object')
           ? model.packageRecommendation
           : { tier: String(model.tier || 'Core'), title: interTierModeShort(model.tier || 'Core'), rationale: '' };
@@ -13576,6 +13795,8 @@ const evidenceOpts = [
     .panel { border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-soft); padding: 24px; }
     .panel h2 { font-size: 34px; line-height: 1.05; }
     .panelSub { margin: 10px 0px 0px; color: var(--muted); font-size: 18px; line-height: 1.25; }
+    .panel--story { background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%); }
+    .panelSub--story { max-width: 86ch; font-size: 17px; line-height: 1.35; color: rgb(74, 92, 125); }
     .sectionHead { display: flex; justify-content: space-between; gap: 22px; align-items: flex-end; margin-bottom: 32px; }
     .sectionHead h2 { margin: 0px; font-size: clamp(1.7rem, 2.3vw, 2.2rem); line-height: 1.18; letter-spacing: -0.01em; }
     .sectionHead p { margin: 0px; color: var(--muted); font-size: 18px; line-height: 1.5; }
@@ -13677,8 +13898,20 @@ const evidenceOpts = [
     .contactFormFoot { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
     .contactFormHint { margin: 0px; font-size: 13px; line-height: 1.35; color: rgb(82, 99, 130); }
     .detailsGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
+    .detailsGrid--story { grid-template-columns: repeat(2, minmax(0px, 1fr)); gap: 14px; }
     .detailCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 12%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(rgb(255, 255, 255), rgb(248, 250, 255)); padding: 16px; box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; }
-    .detailCard h3 { margin: 0px 0px 10px; font-size: 24px; line-height: 1.1; color: rgb(36, 60, 104); }
+    .detailCard--story { padding: 18px 18px 16px; display: grid; gap: 8px; align-content: start; min-height: 206px; }
+    .detailCard h3 { margin: 0px 0px 2px; font-size: 24px; line-height: 1.1; color: rgb(36, 60, 104); }
+    .detailCard p { margin: 0px; color: rgb(76, 95, 126); font-size: 16px; line-height: 1.35; }
+    .storyIntro { margin: 0px; color: rgb(74, 93, 126); font-size: 16px; line-height: 1.4; min-height: 3.1em; }
+    .storyList--dense { margin: 4px 0px 0px; gap: 8px; }
+    .storyList--dense li { font-size: 16px; line-height: 1.3; padding-left: 16px; color: rgb(52, 71, 103); }
+    .storyMore { margin-top: 14px; border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 16%, var(--line)); border-radius: var(--radius-card); background: rgb(255, 255, 255); overflow: hidden; }
+    .storyMore > summary { list-style: none; cursor: pointer; padding: 13px 16px; font-size: 15px; line-height: 1.25; color: rgb(33, 55, 97); font-weight: 500; border-bottom: 1px solid rgba(60, 100, 255, 0.16); user-select: none; }
+    .storyMore > summary::-webkit-details-marker { display: none; }
+    .storyMore > summary::after { content: "+"; float: right; color: rgb(60, 100, 255); font-weight: 600; }
+    .storyMore[open] > summary::after { content: "-"; }
+    .storyMore .detailsGrid { margin-top: 0; padding: 14px; background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%); }
     .capabilityGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0px, 1fr)); }
     .capabilityCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 16%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%); box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; display: grid; grid-template-columns: minmax(110px, 24%) minmax(0px, 1fr); gap: 0px; overflow: hidden; }
     .capabilityCardMedia { border-right: 1px solid color-mix(in srgb,var(--primary-colours--azure) 14%, var(--line)); background: rgb(220, 231, 255); min-height: 230px; }
@@ -13737,6 +13970,8 @@ const evidenceOpts = [
       .storyContent p, .storyBullets li, .storyList li, .actionsList { font-size: 16px; }
       .topPreviewBtn, .topContactBtn { font-size: 14px; line-height: 18px; padding: 8px 12px; min-height: 40px; }
       .contactFormGrid { grid-template-columns: 1fr; }
+      .detailCard--story { min-height: 0; }
+      .storyIntro { min-height: 0; }
     }
     @media (max-width: 479px) {
       .wrap { padding: 0px 16px; }
@@ -13802,6 +14037,7 @@ const evidenceOpts = [
     </section>
     <section class="layout">
       ${outcomeBlocks.length ? `<article class="panel panel--outcomes"><h2>Your top outcomes</h2><p class="panelSub">The three priorities we recommend focusing on first.</p><div class="outcomeGrid">${outcomeBlocks.map((outcome, idx)=> `<article class="outcomeCard"><div class="outcomeHead"><div class="outcomeRing" style="--pct:${metricPercent(outcome.metric, idx)}"><span>${metricPercent(outcome.metric, idx)}%</span></div><h3>${esc(outcome.title || `Priority outcome ${idx + 1}`)}</h3></div><p>${esc(outcome.detail || '')}</p></article>`).join('')}</div></article>` : ''}
+      ${landingStorySections.length ? `<article class="panel panel--story"><h2>Your readiness story</h2><p class="panelSub panelSub--story">${esc(landingStorySummary || 'A concise view of the priorities, outcomes, and delivery approach for your organization.')}</p><div class="detailsGrid detailsGrid--story">${landingStoryPrimarySections.map((section)=> `<article class="detailCard detailCard--story"><h3>${esc(section.title)}</h3>${section.body ? `<p class="storyIntro">${esc(section.body)}</p>` : ''}${section.bullets.length ? `<ul class="storyList storyList--dense">${section.bullets.slice(0, 3).map((bullet)=> `<li>${esc(bullet)}</li>`).join('')}</ul>` : ''}</article>`).join('')}</div>${landingStorySecondarySections.length ? `<details class="storyMore"><summary>Show full rationale</summary><div class="detailsGrid detailsGrid--story detailsGrid--story-expanded">${landingStorySecondarySections.map((section)=> `<article class="detailCard detailCard--story"><h3>${esc(section.title)}</h3>${section.body ? `<p class="storyIntro">${esc(section.body)}</p>` : ''}${section.bullets.length ? `<ul class="storyList storyList--dense">${section.bullets.map((bullet)=> `<li>${esc(bullet)}</li>`).join('')}</ul>` : ''}</article>`).join('')}</div></details>` : ''}</article>` : ''}
       ${details.length ? `<article class="panel"><h2>What you told us in the meeting</h2><p class="panelSub">Your context, constraints, and operating priorities as we captured them.</p><div class="detailsGrid">${details.map((section)=> `<article class="detailCard"><h3>${esc(section.title || 'Section')}</h3>${(Array.isArray(section.rows) ? section.rows : []).map((row)=> `<div class="kvRow"><span class="kvLabel">${esc((row && row.label) || 'Field')}</span><span class="kvValue">${esc((row && row.value) || '—')}</span></div>`).join('')}</article>`).join('')}</div></article>` : ''}
       ${priorityCapabilities.length ? `<article class="panel" id="priority-capabilities"><h2>Your priority Immersive One features mapped to PIBR</h2><p class="panelSub">Mapped to your discovery outcomes and selected operating stack, these are the most relevant Immersive One features to prioritize first.</p><div class="capabilityGrid">${priorityCapabilities.map((capability, idx)=> renderCapabilityCard(capability, idx)).join('')}</div></article>` : ''}
       ${showNarrativeStoryboard ? `<div class="sectionHead sectionHead--center"><div><h2>Our understanding of your needs</h2><p class="sectionHeadSub">Measuring cyber readiness with Immersive</p><p class="sectionHeadLead">${esc(readinessParagraph)}</p></div></div>
@@ -14432,6 +14668,19 @@ const evidenceOpts = [
         const whatsNewCards = Array.isArray(draft.whatsNewCards) ? draft.whatsNewCards.filter(Boolean).slice(0, 3) : [];
         const actions = Array.isArray(draft.actions) ? draft.actions.filter(Boolean).slice(0, 5) : [];
         const details = Array.isArray(draft.detailSections) ? draft.detailSections.filter(Boolean).slice(0, 6) : [];
+        const landingStory = (draft.landingStory && typeof draft.landingStory === 'object') ? draft.landingStory : {};
+        const landingStorySummary = cisoStorySummary(
+          String(landingStory.summary || '').trim(),
+          String(draft.company || '').trim() || 'your organization',
+          outcomeBlocks.map((row)=> String(row && row.title || '').trim()).filter(Boolean).slice(0, 3)
+        );
+        const landingStorySections = compactLandingStorySections(
+          Array.isArray(landingStory.sections) ? landingStory.sections : [],
+          { maxSections: 6, maxBullets: 3, bodyChars: 210, bulletChars: 180 }
+        );
+        const landingStorySectionLayout = splitLandingStorySections(landingStorySections, 4);
+        const landingStoryPrimarySections = landingStorySectionLayout.primary;
+        const landingStorySecondarySections = landingStorySectionLayout.secondary;
         const playBuildTheatre = !!(options.playBuildTheatre || state.customerTemplateBuildTheatrePending);
         state.customerTemplateBuildTheatrePending = false;
         const pitch = (draft.elevatorPitch && typeof draft.elevatorPitch === 'object') ? draft.elevatorPitch : null;
@@ -14531,6 +14780,35 @@ const evidenceOpts = [
                 `).join('')}
               </div>
               ${commercialSignals.length ? `<div class="customerPreviewCommercial">${commercialSignals.map((signal)=> `<span>${esc(signal.label || 'Signal')}: ${esc(signal.value || '—')}</span>`).join('')}</div>` : ''}
+            </article>
+          ` : ''}
+          ${landingStorySections.length ? `
+            <article class="customerPreviewSection customerPreviewSection--story">
+              <h5>Your readiness story</h5>
+              <p>${esc(landingStorySummary || 'A concise view of the priorities, outcomes, and delivery approach for your organization.')}</p>
+              <div class="customerPreviewDetailsGrid customerPreviewDetailsGrid--story">
+                ${landingStoryPrimarySections.map((section)=> `
+                  <article class="customerPreviewDetailCard">
+                    <h6>${esc(section.title)}</h6>
+                    ${section.body ? `<p class="customerPreviewStoryIntro">${esc(section.body)}</p>` : ''}
+                    ${section.bullets.length ? `<ul class="customerPreviewStoryBullets">${section.bullets.slice(0, 3).map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}
+                  </article>
+                `).join('')}
+              </div>
+              ${landingStorySecondarySections.length ? `
+                <details class="customerPreviewStoryMore">
+                  <summary>Show full rationale</summary>
+                  <div class="customerPreviewDetailsGrid customerPreviewDetailsGrid--story customerPreviewDetailsGrid--storyExpanded">
+                    ${landingStorySecondarySections.map((section)=> `
+                      <article class="customerPreviewDetailCard">
+                        <h6>${esc(section.title)}</h6>
+                        ${section.body ? `<p class="customerPreviewStoryIntro">${esc(section.body)}</p>` : ''}
+                        ${section.bullets.length ? `<ul class="customerPreviewStoryBullets">${section.bullets.map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}
+                      </article>
+                    `).join('')}
+                  </div>
+                </details>
+              ` : ''}
             </article>
           ` : ''}
           ${details.length ? `

@@ -463,9 +463,9 @@
               <div class="settingsLabel">Font size scale</div>
               <div class="settingsOptions" id="fontScaleOptions">
                 <button class="settingsOption" type="button" data-font-scale="0.9" aria-pressed="false">90%</button>
-                <button class="settingsOption" type="button" data-font-scale="1" aria-pressed="true">100%</button>
+                <button class="settingsOption" type="button" data-font-scale="1" aria-pressed="false">100%</button>
                 <button class="settingsOption" type="button" data-font-scale="1.1" aria-pressed="false">110%</button>
-                <button class="settingsOption" type="button" data-font-scale="1.2" aria-pressed="false">120%</button>
+                <button class="settingsOption" type="button" data-font-scale="1.2" aria-pressed="true">120%</button>
                 <button class="settingsOption" type="button" data-font-scale="1.3" aria-pressed="false">130%</button>
                 <button class="settingsOption" type="button" data-font-scale="1.4" aria-pressed="false">140%</button>
                 <button class="settingsOption" type="button" data-font-scale="1.5" aria-pressed="false">150%</button>
@@ -574,14 +574,6 @@
           </div>
         </header>
         <div class="recommendationsGate" id="contentRecommendationsGate" hidden></div>
-        <section class="priorityFeaturesWrap" id="contentPriorityFeaturesWrap" hidden aria-label="Priority Immersive One features mapped to PIBR">
-          <header class="priorityFeaturesHead">
-            <h3>Your priority Immersive One features mapped to PIBR</h3>
-            <p class="recommendationsSub" id="contentPriorityFeaturesSub">Mapped to your discovery outcomes and selected operating stack, these are the most relevant Immersive One features to prioritize first.</p>
-          </header>
-          <div class="priorityFeaturesGrid" id="contentPriorityFeaturesGrid"></div>
-        </section>
-        <div class="recommendationsGrid" id="contentRecommendationsGrid" hidden></div>
         <section class="customerTemplatePreviewWrap" id="customerTemplatePreviewWrap" hidden aria-label="Customer page template preview">
           <header class="customerTemplatePreviewHead">
             <div>
@@ -605,17 +597,15 @@
         <header class="recommendationsHead" id="storyMappingHead" hidden>
           <div>
             <h2 id="storyMappingTitle">Story mapping</h2>
-            <p class="recommendationsSub" id="storyMappingSub">Map discovery pain points through outcomes and PIBR capabilities.</p>
+            <p class="recommendationsSub" id="storyMappingSub">Mapped from answered discovery signals, from pain themes through outcomes and PIBR capabilities.</p>
+          </div>
+          <div class="recommendationsHeadActions">
+            <button class="btn secondaryBlue small" type="button" data-action="openStoryNarrative" id="openStoryNarrativeBtn">Generate story</button>
+            <button class="btn secondaryBlue small" type="button" data-action="openStoryFlow" id="openStoryFlowBtn">Open Story Flow Mode</button>
           </div>
         </header>
         <div class="recommendationsGate" id="storyMappingGate" hidden></div>
-        <section class="pyramidMapWrap" id="storyMappingPyramidWrap" hidden aria-label="Readiness pyramid mapping">
-          <header class="pyramidMapHead">
-            <h3>Your readiness pyramid mapping</h3>
-            <p class="recommendationsSub" id="storyMappingPyramidSub">Track how your answers map from pain points to outcomes, PIBR features, and platform narrative.</p>
-          </header>
-          <div class="pyramidMapGrid" id="storyMappingPyramidGrid"></div>
-        </section>
+        <div class="pyramidMapGrid" id="storyMappingPyramidGrid" hidden></div>
       </article>
     </section>
 
@@ -1362,7 +1352,7 @@
                     <div class="sumBody" id="sumTier">—</div>
                     <div class="reviewRecommendationAccess">
                       <button class="btn secondaryBlue small" type="button" id="viewContentRecommendationsBtn" data-action="openRecommendations" data-locked="true" disabled>View content</button>
-                      <p class="reviewRecommendationHint" id="viewContentRecommendationsHint">Complete at least 90% of this profile to unlock content.</p>
+                      <p class="reviewRecommendationHint" id="viewContentRecommendationsHint">Complete 100% of this profile to unlock content.</p>
                     </div>
                   </div>
 
@@ -1849,6 +1839,79 @@
           </div>
         </section>
       </div>
+    </aside>
+  </div>
+
+  <div class="consultation storyFlowOverlay" id="storyFlowPanel" aria-hidden="true">
+    <aside class="consultationSheet storyFlowSheet" role="dialog" aria-modal="true" aria-label="Story flow map">
+      <div class="storyFlowHead">
+        <div>
+          <h3 class="storyFlowTitle" id="storyFlowTitle">Story flow</h3>
+          <p class="storyFlowSub" id="storyFlowSub">Questions to brand narrative, with weighted contribution at each step.</p>
+        </div>
+        <div class="storyFlowHeadActions">
+          <button class="btn small" id="closeStoryFlow" type="button" data-action="closeStoryFlow">Close</button>
+        </div>
+      </div>
+      <div class="storyFlowMeta" id="storyFlowMeta"></div>
+      <div class="storyFlowBody">
+        <section class="storyFlowCanvasWrap" aria-label="Story flow visualization">
+          <div class="storyFlowCanvas" id="storyFlowCanvas">
+            <aside class="storyFlowSummary" id="storyFlowSummary" aria-live="polite"></aside>
+            <aside class="storyFlowHoverCard" id="storyFlowHoverCard" hidden></aside>
+            <div class="storyFlowZoomControls" id="storyFlowZoomControls" role="group" aria-label="Story flow map controls">
+              <button class="btn small" type="button" data-action="storyFlowZoomIn" id="storyFlowZoomInBtn" aria-label="Zoom in">+</button>
+              <button class="btn small" type="button" data-action="storyFlowZoomOut" id="storyFlowZoomOutBtn" aria-label="Zoom out">-</button>
+              <button class="btn small" type="button" data-action="storyFlowFit" id="storyFlowFitBtn">Fit</button>
+              <button class="btn small" type="button" data-action="storyFlowResetView" id="storyFlowResetViewBtn">Reset</button>
+            </div>
+            <div class="storyFlowGraphViewport" id="storyFlowGraphViewport">
+              <div class="storyFlowGraphStage" id="storyFlowGraphStage">
+                <svg class="storyFlowLinks" id="storyFlowLinksSvg" viewBox="0 0 1000 640" preserveAspectRatio="none" aria-hidden="true"></svg>
+                <div class="storyFlowNodes" id="storyFlowNodesLayer"></div>
+              </div>
+            </div>
+          </div>
+          <p class="storyFlowHint">Node size and link width represent contribution strength. Drag to pan the map. Use controls to zoom and fit.</p>
+        </section>
+        <div class="storyFlowModesDock" id="storyFlowModesDock">
+          <button class="btn small storyFlowModesToggle" type="button" id="storyFlowModesToggle" aria-expanded="false" aria-controls="storyFlowModesFlyout">Modes</button>
+          <div class="storyFlowModesFlyout" id="storyFlowModesFlyout" hidden>
+            <button class="btn secondaryBlue small" type="button" data-action="toggleStoryFlowViewMode" id="storyFlowViewModeBtn" aria-pressed="false">Mode: Sankey map</button>
+            <button class="btn secondaryBlue small" type="button" data-action="toggleStoryFlowTopPaths" id="storyFlowTopPathsBtn" aria-pressed="false">View: all paths</button>
+            <button class="btn secondaryBlue small" type="button" data-action="toggleStoryFlowQuestionMode" id="storyFlowQuestionModeBtn">Signals: grouped domains</button>
+            <button class="btn small" type="button" data-action="clearStoryFlowFocus" id="storyFlowClearFocusBtn" disabled>Clear focus</button>
+          </div>
+        </div>
+        <aside class="storyFlowInspector" id="storyFlowInspector">
+          <p class="storyFlowInspectorEyebrow">Insights</p>
+          <h4 id="storyFlowInspectorTitle">All flows</h4>
+          <p class="storyFlowInspectorBody" id="storyFlowInspectorBody">Choose a node to isolate connected questions, pain themes, outcomes, capabilities, and narrative layers.</p>
+          <div class="storyFlowPathList" id="storyFlowPathList"></div>
+          <div class="storyFlowInspectorSignals" id="storyFlowInspectorSignals"></div>
+        </aside>
+        <section class="storyFlowNarrative" id="storyFlowNarrative" hidden>
+          <div class="storyFlowNarrativeInner" id="storyFlowNarrativeInner"></div>
+        </section>
+      </div>
+    </aside>
+  </div>
+
+  <div class="consultation storyNarrativeOverlay" id="storyNarrativePanel" aria-hidden="true">
+    <aside class="consultationSheet storyNarrativeSheet" role="dialog" aria-modal="true" aria-label="Generated story">
+      <div class="consultationHead storyNarrativeHead">
+        <div>
+          <div class="settingsLabel" style="margin:0 0 8px;">Generated story</div>
+          <h3 class="consultationTitle" id="storyNarrativeTitle">Story for this record</h3>
+          <p class="consultationSub" id="storyNarrativeSub">Natural-language narrative generated from your mapped discovery signals and priority capabilities.</p>
+        </div>
+        <div class="storyNarrativeHeadActions">
+          <button class="btn secondaryBlue small" type="button" data-action="copyStoryNarrative">Copy story</button>
+          <button class="btn small" id="closeStoryNarrative" type="button" data-action="closeStoryNarrative">Close</button>
+        </div>
+      </div>
+      <div class="consultationMeta storyNarrativeMeta" id="storyNarrativeMeta"></div>
+      <div class="consultationBody storyNarrativeBody" id="storyNarrativeBody"></div>
     </aside>
   </div>
 

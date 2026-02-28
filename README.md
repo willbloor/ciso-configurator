@@ -1,6 +1,6 @@
 # CISO Configurator
 
-Last updated: 2026-02-27
+Last updated: 2026-02-28
 
 This repository contains the static configurator app used to generate customer dashboard pages.
 
@@ -31,6 +31,62 @@ Implemented usability clean-up based on walkthrough feedback:
   - `Clear preview`
   - duplicate top content action strip
 - Reduced left-nav `Dashboard` row height by ~30% and rebalanced icon/text spacing for desktop density.
+
+Files:
+
+- `/Users/will.bloor/Documents/Configurator/index.html`
+- `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+- `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+## Story Mapping + Readability Tweaks (2026-02-28)
+
+Implemented additional UI simplifications and readability defaults:
+
+- Removed the `Meetings page` card from `Overview status` (the card no longer renders there).
+- Updated default workspace font scale to `120%` (instead of `100%`) for first-run readability.
+- Simplified interstitial `Content` section to landing-page preview only:
+  - removed in-page content-overview blocks from the Content section surface
+  - Content now renders only the customer landing-page preview area in this section
+  - if landing-page preview cannot render for the active record, `Content is locked` dialog is shown
+  - Content unlock threshold increased from `90%` to `100%` completion
+- Simplified Story Mapping page framing:
+  - removed subtitle copy: `Map discovery pain points through outcomes and PIBR capabilities.`
+  - subtitle now uses mapped-signal language:
+    - `Mapped from X/Y answered discovery signals, from pain themes through outcomes and PIBR capabilities.`
+  - removed the extra `Your readiness pyramid mapping` wrapper/header container
+  - story-mapping layers now render directly in the page body without the extra outlined parent card
+
+Files:
+
+- `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+- `/Users/will.bloor/Documents/Configurator/index.html`
+- `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+
+## Story Mapping Narrative Drawer (2026-02-28)
+
+Added a natural-language story generator directly in Story Mapping:
+
+- New `Generate story` button in the Story Mapping header.
+- Button opens a dedicated right-hand drawer that generates account narrative copy from the same weighted story-mapping chain:
+  - discovery signals -> pain themes -> outcomes -> PIBR capabilities -> platform/brand layers
+- Drawer output includes:
+  - executive story summary
+  - why-now rationale bullets
+  - prioritized outcomes/capabilities with percentages
+  - draft customer-facing narrative paragraph
+- Added `Copy story` action to copy the generated narrative text for reuse in landing page/email flows.
+- Updated `Why this is prioritized now` narrative generation to be more human/tangible:
+  - explains current pressure context in plain language
+  - states what that pressure is elevating (pain themes)
+  - states which outcomes those pressures are driving
+  - avoids percentage-only or abstract phrasing
+- Reframed generated-story structure to align with brand narrative flow:
+  - `Challenges we identified` -> `Opportunities this creates` ->
+    `Outcomes we recommend` -> `Why this PIBR constellation` ->
+    `Why this helps you be ready`
+  - explicitly names Prove / Improve / Benchmark / Report as the recommended operating constellation in Immersive One.
+- Removed narrative metadata pills from the drawer header and switched generated narrative sections to full-text output (no ellipsis truncation).
+- Gated to the same completion threshold as Story Flow mode (90%+).
 
 Files:
 
@@ -1200,6 +1256,66 @@ Design and workflow updates deployed for self-service intake and dashboard follo
    - Validation performed:
      - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
 
+53. Story Flow UX overhaul: mode system, focus clarity, and full-bleed card-map (2026-02-28)
+   - Added explicit Story Flow mode cycle in overlay controls:
+     - `Sankey map` -> `Card map` -> `Narrative cards`
+     - mode toggles now route through a single resolver/next-mode flow
+   - Standardized viewport reset behavior:
+     - switching Story Flow modes now always returns to reset viewport state
+       (`zoom=1`, `panX=0`, `panY=0`, no fit carry-over)
+     - manual `Reset` action now reuses the same shared reset helper
+   - Improved path/card focus behavior for clarity:
+     - selecting a node or path keeps related journey visible
+     - non-related content is dimmed to low emphasis (`15%` for cards)
+     - related cards are explicitly styled in blue to show membership in the selected story
+   - Added card-map-specific vertical storytelling mode:
+     - vertical layer rows using narrative card content (`What it is`, `Why it matters`, `Driven by`)
+     - card-map now runs without connector lines by design (removed to reduce visual noise)
+     - card-map switched to full-bleed presentation with no top inset gap
+   - Simplified Story Flow visual noise:
+     - removed bottom hint pill (`Node size and link width ...`) from display
+     - moved verbose lower inspector context into a collapsible details block (`More context`)
+   - Updated overlay layout and depth hierarchy:
+     - Insights panel made materially thinner
+     - stronger floating elevation/shadow on inspector
+     - raised card and path surfaces with material-style shadows
+   - Prevented panel overlap on first-stage cards:
+     - Sankey layout now reserves a left inset based on inspector width
+     - stage-1 cards default to start to the right of Insights panel
+   - Principle:
+     - prioritize immediate readability of story relationships over decorative density;
+       selected journey should be obvious at first glance, non-selected context should recede.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/assets/css/app.css`
+     - `/Users/will.bloor/Documents/Configurator/index.html`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+   - Residual risk / follow-up:
+     - run manual UX smoke on Story Flow across at least two records and all three modes:
+       - verify mode cycle + reset behavior
+       - verify card-map full-bleed in desktop + mobile breakpoints
+       - verify selected journey highlight + 15% dimming behavior remains consistent after repeated mode switches.
+
+54. README alignment pass for current generator + routing state (2026-02-28)
+   - Corrected `Current Dashboard Behavior` hero CTA description:
+     - primary CTA now documents conditional target behavior:
+       - `#priority-capabilities` when priority capability cards exist
+       - fallback to `#recommended-for-you` otherwise
+   - Updated generated output section order to include:
+     - `Priority capabilities (when present)` before narrative storyboard sections
+   - Added missing route in `Routing support`:
+     - `#/records/:recordId/record-story-mapping`
+   - Principle:
+     - README must reflect current runtime behavior and active route surface so deploy/handoff decisions are based on accurate docs.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - matched README updates against current runtime references in:
+       - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+
 ## State Sync Guardrails (Critical, 2026-02-26)
 
 These are hard rules to prevent recurrence of the Tina Corp save-loss regression.
@@ -1599,7 +1715,7 @@ These are review snapshots only. The generator in `assets/js/app.js` is canonica
 
 - Full-bleed image fills the entire hero card.
 - Hero text is white for readability.
-- Hero primary CTA points to `#recommended-for-you`.
+- Hero primary CTA points to `#priority-capabilities` when priority capabilities are present; otherwise falls back to `#recommended-for-you`.
 - Hero secondary CTA points to `#contact-your-team`.
 
 ### Structure
@@ -1609,13 +1725,14 @@ Current section order in generated output:
 1. Hero
 2. Top outcomes
 3. Meeting context details
-4. Centered "Our understanding of your needs"
-5. Overlapping Prove / Improve / Report cards
-6. Product tour card
-7. Recommended next actions
-8. Recommended for you
-9. What's new
-10. Contact your team
+4. Priority capabilities (when present)
+5. Centered "Our understanding of your needs"
+6. Overlapping Prove / Improve / Report cards
+7. Product tour card
+8. Recommended next actions
+9. Recommended for you
+10. What's new
+11. Contact your team
 
 ### Removed / Changed
 
@@ -1871,6 +1988,7 @@ Hash routes supported for major states:
 - `#/records/:recordId/configure?step=1..6`
 - `#/records/:recordId/content` (legacy alias: `#/records/:recordId/recommendations`)
 - `#/records/:recordId/record-content` (interstitial section route)
+- `#/records/:recordId/record-story-mapping` (interstitial section route)
 - `#/records/:recordId/gaps`
 - `#/records/:recordId/meetings`
 - `#/records/:recordId/integrations`

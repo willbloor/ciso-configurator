@@ -534,6 +534,22 @@
         consultationThreadId: 'current',
         emailBuilderOpen: false,
         emailBuilderThreadId: 'current',
+        storyNarrativeOpen: false,
+        storyNarrativeThreadId: 'current',
+        storyNarrativeText: '',
+        storyFlowOpen: false,
+        storyFlowThreadId: 'current',
+        storyFlowViewMode: 'sankey',
+        storyFlowQuestionMode: 'grouped',
+        storyFlowFocusNodeId: '',
+        storyFlowHoverLinkId: '',
+        storyFlowZoom: 1,
+        storyFlowPanX: 0,
+        storyFlowPanY: 0,
+        storyFlowNeedsFit: false,
+        storyFlowEmphasis: 'all',
+        storyFlowActivePathId: '',
+        storyFlowModesOpen: false,
         customerTemplateDraft: null,
         customerTemplateEditorOpen: false,
         customerTemplateEditorTarget: null,
@@ -602,12 +618,22 @@
         meetings: 'meetings',
         integrations: 'integrations'
       });
+      const STORY_FLOW_STAGE_ORDER = Object.freeze(['question', 'pain', 'outcome', 'capability', 'platform', 'brand']);
+      const STORY_FLOW_STAGE_LABEL = Object.freeze({
+        question: 'Discovery signal',
+        pain: 'Pain theme',
+        outcome: 'Target outcome',
+        capability: 'PIBR capability',
+        platform: 'Platform layer',
+        brand: 'Brand narrative'
+      });
       const contentRecommendationsViewEl = $('#contentRecommendationsView');
       const contentRecommendationsOriginalParent = contentRecommendationsViewEl ? contentRecommendationsViewEl.parentElement : null;
       const contentRecommendationsOriginalNextSibling = contentRecommendationsViewEl ? contentRecommendationsViewEl.nextElementSibling : null;
       const storyMappingViewEl = $('#storyMappingView');
       const storyMappingOriginalParent = storyMappingViewEl ? storyMappingViewEl.parentElement : null;
       const storyMappingOriginalNextSibling = storyMappingViewEl ? storyMappingViewEl.nextElementSibling : null;
+      let storyFlowDragReset = null;
       const AUTO_SAVE_FAST_MS = 30000;
       const AUTO_SAVE_BASE_MS = 60000;
       const MAX_IMPORT_CSV_BYTES = 5 * 1024 * 1024;
@@ -3601,6 +3627,9 @@ const evidenceOpts = [
         }
         if(prev !== next && state.emailBuilderOpen){
           toggleEmailBuilder(false);
+        }
+        if(prev !== next && state.storyNarrativeOpen){
+          toggleStoryNarrative(false);
         }
         document.body.classList.toggle('is-configurator-view', next === 'configurator');
         document.body.classList.toggle('is-dashboard-view', next === 'dashboard');
@@ -8505,7 +8534,7 @@ const evidenceOpts = [
       }
 
       function syncOverlayBodyLock(){
-        document.body.classList.toggle('is-consultation-open', !!(state.consultationOpen || state.emailBuilderOpen || state.customerTemplateEditorOpen));
+        document.body.classList.toggle('is-consultation-open', !!(state.consultationOpen || state.emailBuilderOpen || state.customerTemplateEditorOpen || state.storyFlowOpen || state.storyNarrativeOpen));
       }
 
       function toggleConsultation(open, opts){
@@ -15068,19 +15097,33 @@ const evidenceOpts = [
         return recommendationsGateFromThread(currentThreadModel());
       }
 
+      const CONTENT_UNLOCK_MIN_COMPLETION_PCT = 100;
+      function contentUnlockedForGate(gate){
+        const completionPct = clamp(
+          Number((gate && gate.completionPct) || completionPctFromSummary(gate && gate.completion)),
+          0,
+          100
+        );
+        return completionPct >= CONTENT_UNLOCK_MIN_COMPLETION_PCT;
+      }
+      function contentLockedToastMessage(gate){
+        return `Content is locked until ${CONTENT_UNLOCK_MIN_COMPLETION_PCT}% completion (current: ${gate && gate.completion ? gate.completion : 'below threshold'}).`;
+      }
+
       function syncRecommendationAccessCta(gateInput){
         const btn = $('#viewContentRecommendationsBtn');
         const hint = $('#viewContentRecommendationsHint');
         const gate = (gateInput && typeof gateInput === 'object') ? gateInput : recommendationsGateFromState();
+        const contentUnlocked = contentUnlockedForGate(gate);
         if(btn){
           btn.disabled = false;
-          btn.setAttribute('aria-disabled', gate.eligible ? 'false' : 'true');
-          btn.dataset.locked = gate.eligible ? 'false' : 'true';
+          btn.setAttribute('aria-disabled', contentUnlocked ? 'false' : 'true');
+          btn.dataset.locked = contentUnlocked ? 'false' : 'true';
         }
         if(hint){
-          hint.textContent = gate.eligible
+          hint.textContent = contentUnlocked
             ? `Unlocked at ${gate.completion}. Open content for this package and profile.`
-            : `Complete at least 90% to unlock content (current: ${gate.completion}).`;
+            : `Complete ${CONTENT_UNLOCK_MIN_COMPLETION_PCT}% to unlock content (current: ${gate.completion}).`;
         }
       }
 
@@ -15099,38 +15142,44 @@ const evidenceOpts = [
         };
 
         const preferredThreadId = String((state.recommendationsThreadId || state.activeThread || gate.threadId || 'current') || 'current');
-        const candidateForView = completeCustomerCandidateForThreadId(gate.threadId) || bestCompleteCustomerTemplateCandidate(preferredThreadId);
+        const candidateForView = completeCustomerCandidateForThreadId(gate.threadId);
         const activeDraft = (
           state.customerTemplateDraft
           && typeof state.customerTemplateDraft === 'object'
           && String(state.customerTemplateDraft.sourceThreadId || '') === String(gate.threadId || '')
         ) ? state.customerTemplateDraft : null;
+        const contentUnlocked = contentUnlockedForGate(gate);
         const hasDraft = !!activeDraft;
-        const canGenerateCustomerPage = !!(candidateForView || hasDraft);
+        const canRenderLandingPage = !!(candidateForView || hasDraft);
+        const canGenerateCustomerPage = contentUnlocked && canRenderLandingPage;
         const customerPageBtn = $('#generateCustomerPageTemplateBtn');
         if(customerPageBtn){
           customerPageBtn.disabled = !canGenerateCustomerPage;
-          customerPageBtn.title = hasDraft
-            ? `Download current preview for ${activeDraft.company || 'customer'}`
-            : (candidateForView
-                ? `Generate page from ${candidateForView.thread.company} (${candidateForView.gate.completion})`
-                : 'No complete (100%) profile is available yet.');
+          customerPageBtn.title = !contentUnlocked
+            ? `Content unlocks at ${CONTENT_UNLOCK_MIN_COMPLETION_PCT}% completion (current: ${gate.completion}).`
+            : (hasDraft
+                ? `Download current preview for ${activeDraft.company || 'customer'}`
+                : (candidateForView
+                    ? `Generate page from ${candidateForView.thread.company} (${candidateForView.gate.completion})`
+                    : 'Landing page preview is unavailable for this record yet.'));
         }
         const publishCustomerPageBtn = $('#publishCustomerPageTemplateInlineBtn');
         if(publishCustomerPageBtn){
           publishCustomerPageBtn.disabled = !canGenerateCustomerPage || !!state.customerTemplatePublishPending;
           publishCustomerPageBtn.textContent = state.customerTemplatePublishPending ? 'Publishing...' : 'Publish customer page';
-          publishCustomerPageBtn.title = hasDraft
-            ? `Publish current preview for ${activeDraft.company || 'customer'}`
-            : (candidateForView
-                ? `Publish page from ${candidateForView.thread.company} (${candidateForView.gate.completion})`
-                : 'No complete (100%) profile is available yet.');
+          publishCustomerPageBtn.title = !contentUnlocked
+            ? `Content unlocks at ${CONTENT_UNLOCK_MIN_COMPLETION_PCT}% completion (current: ${gate.completion}).`
+            : (hasDraft
+                ? `Publish current preview for ${activeDraft.company || 'customer'}`
+                : (candidateForView
+                    ? `Publish page from ${candidateForView.thread.company} (${candidateForView.gate.completion})`
+                    : 'Landing page preview is unavailable for this record yet.'));
         }
         const sendCustomerBtn = $('#openRecommendationEmailBtn');
-        const canSendContent = !!gate.eligible && !(thread && thread.id && thread.id !== 'current' && thread.archived);
-        const sendLockedTitle = gate.eligible
-          ? 'Unarchive this record to send content.'
-          : `Content is locked until 90% completion (current: ${gate.completion}).`;
+        const canSendContent = canGenerateCustomerPage && !(thread && thread.id && thread.id !== 'current' && thread.archived);
+        const sendLockedTitle = !contentUnlocked
+          ? contentLockedToastMessage(gate)
+          : (canRenderLandingPage ? 'Unarchive this record to send content.' : 'Content is locked. Landing page preview is unavailable for this record right now.');
         [sendCustomerBtn].forEach((btn)=> {
           if(!btn) return;
           btn.disabled = !canSendContent;
@@ -15142,9 +15191,9 @@ const evidenceOpts = [
         setText('#contentRecommendationsTitle', `Customer page for ${companyName}`);
         setText(
           '#contentRecommendationsSub',
-          gate.eligible
+          contentUnlocked
             ? `Auto-generated customer page preview tailored for ${companyName}.`
-            : 'Content unlocks once profile completion reaches at least 90%.'
+            : `Content unlocks once profile completion reaches ${CONTENT_UNLOCK_MIN_COMPLETION_PCT}%.`
         );
         const recommendationsIntro = $('#contentRecommendationsIntro');
         if(recommendationsIntro){
@@ -15167,19 +15216,23 @@ const evidenceOpts = [
             prioritySubEl.textContent = 'Mapped to your discovery outcomes and selected operating stack, these are the most relevant Immersive One features to prioritize first.';
           }
         };
-        if(!gridEl || !gateEl){
-          resetPriorityFeatures();
+        if(gridEl){
+          gridEl.hidden = true;
+          gridEl.innerHTML = '';
+        }
+        resetPriorityFeatures();
+        if(!gateEl){
           return;
         }
-        gridEl.hidden = true;
-        gridEl.innerHTML = '';
-        resetPriorityFeatures();
 
-        if(!gate.eligible){
+        if(!contentUnlocked || !canRenderLandingPage){
+          const lockLine = !contentUnlocked
+            ? `Current completion is ${escapeHtml(gate.completion)}. Reach ${CONTENT_UNLOCK_MIN_COMPLETION_PCT}% to unlock content.`
+            : 'Landing page preview is unavailable for this record right now.';
           gateEl.hidden = false;
           gateEl.innerHTML = `
             <strong>Content is locked.</strong>
-            <p>Current completion is ${escapeHtml(gate.completion)}. Reach at least 90% to unlock content.</p>
+            <p>${lockLine}</p>
           `;
           state.customerTemplateDraft = null;
           state.customerTemplateEditorTarget = null;
@@ -15190,21 +15243,6 @@ const evidenceOpts = [
 
         gateEl.hidden = true;
         gateEl.innerHTML = '';
-        const cards = recommendationCardsForGate(gate);
-        if(cards.length){
-          gridEl.hidden = false;
-          gridEl.innerHTML = cards.map((card, idx)=> renderContentRecommendationCardMarkup(card, idx)).join('');
-        }else{
-          gridEl.hidden = false;
-          gridEl.innerHTML = '<article class="contentRecCard"><h3>No mapped content found</h3><p class="contentRecSummary">No curated recommendations are available yet for this profile and current catalog.</p></article>';
-        }
-        const priorityCapabilities = capabilityPriorityCardsForGate(gate).slice(0, 4);
-        if(priorityCapabilities.length && priorityWrapEl && priorityGridEl){
-          priorityWrapEl.hidden = false;
-          priorityGridEl.innerHTML = priorityCapabilities
-            .map((capability, idx)=> renderPriorityFeatureCardMarkup(capability, idx))
-            .join('');
-        }
         if(candidateForView){
           const model = customerTemplateModelFromCandidate(candidateForView);
           if(model){
@@ -15240,25 +15278,46 @@ const evidenceOpts = [
         if(titleEl){
           titleEl.textContent = `Story mapping for ${gate.company || 'this record'}`;
         }
-        if(subEl){
-          subEl.textContent = 'Map discovery pain points through outcomes and PIBR capabilities.';
+        const storyFlowBtn = $('#openStoryFlowBtn');
+        const storyNarrativeBtn = $('#openStoryNarrativeBtn');
+        if(storyFlowBtn){
+          storyFlowBtn.disabled = !gate.eligible;
+          storyFlowBtn.setAttribute('aria-disabled', gate.eligible ? 'false' : 'true');
+          storyFlowBtn.title = gate.eligible
+            ? 'Open weighted chain view'
+            : 'Reach at least 90% completion to unlock story flow mode.';
+        }
+        if(storyNarrativeBtn){
+          storyNarrativeBtn.disabled = !gate.eligible;
+          storyNarrativeBtn.setAttribute('aria-disabled', gate.eligible ? 'false' : 'true');
+          storyNarrativeBtn.title = gate.eligible
+            ? 'Generate a natural-language story from this mapped chain'
+            : 'Reach at least 90% completion to unlock story generation.';
         }
 
         const gateEl = $('#storyMappingGate');
-        const pyramidWrapEl = $('#storyMappingPyramidWrap');
         const pyramidGridEl = $('#storyMappingPyramidGrid');
-        const pyramidSubEl = $('#storyMappingPyramidSub');
+        const priorityCapabilities = capabilityPriorityCardsForGate(gate).slice(0, 4);
+        const pyramid = readinessPyramidViewModel(thread, gate, priorityCapabilities);
         const resetPyramid = ()=>{
-          if(pyramidWrapEl) pyramidWrapEl.hidden = true;
-          if(pyramidGridEl) pyramidGridEl.innerHTML = '';
-          setText('#storyMappingPyramidSub', 'Track how your answers map from pain points to outcomes, PIBR features, and platform narrative.');
+          if(pyramidGridEl){
+            pyramidGridEl.hidden = true;
+            pyramidGridEl.innerHTML = '';
+          }
         };
-        if(!gateEl || !pyramidWrapEl || !pyramidGridEl){
+        if(!gateEl || !pyramidGridEl){
           return;
         }
         resetPyramid();
         gateEl.hidden = true;
         gateEl.innerHTML = '';
+        if(subEl){
+          const answered = Math.max(0, Number(pyramid.answeredQuestionCount) || 0);
+          const total = Math.max(answered, Number(pyramid.mappedQuestionCount) || 0);
+          subEl.textContent = total
+            ? `Mapped from ${answered}/${total} answered discovery signals, from pain themes through outcomes and PIBR capabilities.`
+            : 'Mapped from discovery signals, from pain themes through outcomes and PIBR capabilities.';
+        }
 
         if(!gate.eligible){
           gateEl.hidden = false;
@@ -15269,8 +15328,6 @@ const evidenceOpts = [
           return;
         }
 
-        const priorityCapabilities = capabilityPriorityCardsForGate(gate).slice(0, 4);
-        const pyramid = readinessPyramidViewModel(thread, gate, priorityCapabilities);
         const layers = Array.isArray(pyramid && pyramid.layers) ? pyramid.layers : [];
         const hasMappedLayer = layers.some((layer)=> Array.isArray(layer.items) && layer.items.length > 0);
         if(!hasMappedLayer){
@@ -15279,17 +15336,2434 @@ const evidenceOpts = [
           return;
         }
 
-        pyramidWrapEl.hidden = false;
+        pyramidGridEl.hidden = false;
         pyramidGridEl.innerHTML = layers
           .map((layer)=> renderPyramidLayerCardMarkup(layer))
           .join('');
-        if(pyramidSubEl){
-          const answered = Math.max(0, Number(pyramid.answeredQuestionCount) || 0);
-          const total = Math.max(answered, Number(pyramid.mappedQuestionCount) || 0);
-          pyramidSubEl.textContent = total
-            ? `Mapped from ${answered}/${total} answered discovery signals, from pain themes through outcomes and PIBR capabilities.`
-            : 'Track how your answers map from pain points to outcomes, PIBR features, and platform narrative.';
+        state.storyFlowThreadId = gate.threadId || state.storyFlowThreadId || 'current';
+        state.storyNarrativeThreadId = gate.threadId || state.storyNarrativeThreadId || state.storyFlowThreadId || 'current';
+        if(state.storyNarrativeOpen){
+          renderStoryNarrativeDrawer(state.storyNarrativeThreadId);
         }
+        if(state.storyFlowOpen){
+          renderStoryFlowOverlay();
+        }
+      }
+
+      function storyFlowResolvedViewMode(mode){
+        const token = String(mode || '').trim().toLowerCase();
+        if(token === 'narrative') return 'narrative';
+        if(token === 'card-map' || token === 'cardmap' || token === 'card') return 'card-map';
+        return 'sankey';
+      }
+
+      function storyFlowViewModeLabel(mode){
+        const resolved = storyFlowResolvedViewMode(mode);
+        if(resolved === 'narrative') return 'Mode: narrative cards';
+        if(resolved === 'card-map') return 'Mode: card map';
+        return 'Mode: Sankey map';
+      }
+
+      function storyFlowNextViewMode(mode){
+        const resolved = storyFlowResolvedViewMode(mode);
+        if(resolved === 'sankey') return 'card-map';
+        if(resolved === 'card-map') return 'narrative';
+        return 'sankey';
+      }
+
+      function storyFlowQuestionModeLabel(mode){
+        return String(mode || '').trim().toLowerCase() === 'expanded'
+          ? 'Signals: expanded details'
+          : 'Signals: grouped domains';
+      }
+
+      function setStoryFlowModesOpen(open){
+        const toggleBtn = $('#storyFlowModesToggle');
+        const flyoutEl = $('#storyFlowModesFlyout');
+        const on = !!open && !!state.storyFlowOpen;
+        state.storyFlowModesOpen = on;
+        if(flyoutEl){
+          flyoutEl.hidden = !on;
+        }
+        if(toggleBtn){
+          toggleBtn.setAttribute('aria-expanded', on ? 'true' : 'false');
+          toggleBtn.classList.toggle('is-active', on);
+        }
+      }
+
+      function storyFlowRouteTintPercent(rank, total){
+        const idx = Math.max(0, Number(rank) || 0);
+        const count = Math.max(1, Number(total) || 1);
+        const progress = count <= 1 ? 0 : clamp(idx / (count - 1), 0, 1);
+        const darkestTint = 15;
+        const lightestTint = 35;
+        return Math.round(darkestTint + ((lightestTint - darkestTint) * progress));
+      }
+
+      function storyFlowRouteStrokeColor(rank, total){
+        const tint = storyFlowRouteTintPercent(rank, total);
+        return `color-mix(in srgb, var(--azure) ${100 - tint}%, white ${tint}%)`;
+      }
+
+      function storyFlowZoomClamp(value){
+        const zoom = Number(value);
+        if(!Number.isFinite(zoom)) return 1;
+        return clamp(zoom, 0.55, 2.2);
+      }
+
+      function storyFlowFitZoom(layoutWidth, layoutHeight, canvasWidth, canvasHeight){
+        const safeLayoutWidth = Math.max(1, Number(layoutWidth) || 1);
+        const safeLayoutHeight = Math.max(1, Number(layoutHeight) || 1);
+        const safeCanvasWidth = Math.max(1, Number(canvasWidth) || 1);
+        const safeCanvasHeight = Math.max(1, Number(canvasHeight) || 1);
+        const padX = 120;
+        const padY = 88;
+        const fitX = (safeCanvasWidth - padX) / safeLayoutWidth;
+        const fitY = (safeCanvasHeight - padY) / safeLayoutHeight;
+        return storyFlowZoomClamp(Math.min(fitX, fitY));
+      }
+
+      function storyFlowPanPoint(){
+        const panX = Number(state.storyFlowPanX);
+        const panY = Number(state.storyFlowPanY);
+        return {
+          x: Number.isFinite(panX) ? panX : 0,
+          y: Number.isFinite(panY) ? panY : 0
+        };
+      }
+
+      function storyFlowApplyStageTransform(stageEl, zoomValue){
+        if(!stageEl) return;
+        const zoom = storyFlowZoomClamp(zoomValue);
+        const pan = storyFlowPanPoint();
+        stageEl.style.transform = `translate(${pan.x.toFixed(2)}px, ${pan.y.toFixed(2)}px) scale(${zoom})`;
+      }
+
+      function storyFlowApplyZoom(nextZoom, opts){
+        const canvasEl = $('#storyFlowCanvas');
+        if(!canvasEl) return;
+        const previousZoom = storyFlowZoomClamp(state.storyFlowZoom || 1);
+        const resolvedZoom = storyFlowZoomClamp(nextZoom);
+        if(Math.abs(resolvedZoom - previousZoom) < 0.001) return;
+        const cfg = (opts && typeof opts === 'object') ? opts : {};
+        const anchorX = Number(cfg.anchorX);
+        const anchorY = Number(cfg.anchorY);
+        const anchor = {
+          x: Number.isFinite(anchorX) ? anchorX : (canvasEl.clientWidth * 0.5),
+          y: Number.isFinite(anchorY) ? anchorY : (canvasEl.clientHeight * 0.5)
+        };
+        const pan = storyFlowPanPoint();
+        const worldX = (anchor.x - pan.x) / previousZoom;
+        const worldY = (anchor.y - pan.y) / previousZoom;
+        state.storyFlowZoom = resolvedZoom;
+        state.storyFlowPanX = anchor.x - (worldX * resolvedZoom);
+        state.storyFlowPanY = anchor.y - (worldY * resolvedZoom);
+        renderStoryFlowOverlay();
+      }
+
+      function storyFlowResetViewport(opts){
+        const cfg = (opts && typeof opts === 'object') ? opts : {};
+        state.storyFlowZoom = 1;
+        state.storyFlowPanX = 0;
+        state.storyFlowPanY = 0;
+        state.storyFlowNeedsFit = false;
+        if(cfg.clearHover !== false){
+          state.storyFlowHoverLinkId = '';
+        }
+        if(cfg.clearFocus){
+          state.storyFlowFocusNodeId = '';
+        }
+      }
+
+      function storyFlowContextForThread(threadId){
+        const resolvedThreadId = String(threadId || state.storyFlowThreadId || state.recommendationsThreadId || state.activeThread || 'current').trim() || 'current';
+        const thread = resolveRecommendationThread(resolvedThreadId);
+        const gate = recommendationsGateFromThread(thread);
+        const priorityCapabilities = capabilityPriorityCardsForGate(gate).slice(0, 4);
+        const pyramid = readinessPyramidViewModel(thread, gate, priorityCapabilities);
+        return { thread, gate, pyramid };
+      }
+
+      function storyFlowLayerItems(pyramidInput, key){
+        const pyramid = (pyramidInput && typeof pyramidInput === 'object') ? pyramidInput : {};
+        const layers = Array.isArray(pyramid.layers) ? pyramid.layers : [];
+        const token = normalizeContentToken(key);
+        const layer = layers.find((row)=> normalizeContentToken(row && row.key) === token);
+        return Array.isArray(layer && layer.items) ? layer.items : [];
+      }
+
+      function storyFlowGraphModelFromPyramid(pyramidInput, opts){
+        const pyramid = (pyramidInput && typeof pyramidInput === 'object') ? pyramidInput : {};
+        const questionMode = String((opts && opts.questionMode) || state.storyFlowQuestionMode || 'grouped').trim().toLowerCase() === 'expanded'
+          ? 'expanded'
+          : 'grouped';
+        const painItems = storyFlowLayerItems(pyramid, 'pain');
+        const outcomeItems = storyFlowLayerItems(pyramid, 'outcome');
+        const capabilityItems = storyFlowLayerItems(pyramid, 'capability');
+        const platformItems = storyFlowLayerItems(pyramid, 'platform');
+        const brandItems = storyFlowLayerItems(pyramid, 'brand');
+        const nodeById = new Map();
+        const linkById = new Map();
+
+        const normalize = (value)=> normalizeContentToken(value);
+        const safeWeight = (value)=> Math.max(1, clamp(Number(value) || 0, 1, 100));
+        const stageLabel = (stage)=> STORY_FLOW_STAGE_LABEL[stage] || String(stage || '').trim() || 'Layer';
+        const signalGroupsForItem = (item)=>{
+          return (Array.isArray(item && item.signalDetails) ? item.signalDetails : [])
+            .map((group)=> ({
+              key: String((group && group.key) || '').trim(),
+              label: String((group && group.label) || '').trim(),
+              values: uniqueList(
+                (Array.isArray(group && group.values) ? group.values : [])
+                  .map((value)=> String(value || '').trim())
+                  .filter(Boolean),
+                5
+              )
+            }))
+            .filter((group)=> group.label && group.values.length > 0);
+        };
+
+        const mergeSignalDetails = (target, incoming)=>{
+          const safeTarget = Array.isArray(target) ? target : [];
+          const merged = new Map(
+            safeTarget.map((group)=> [normalize(group && group.label), {
+              key: String((group && group.key) || '').trim(),
+              label: String((group && group.label) || '').trim(),
+              values: uniqueList((Array.isArray(group && group.values) ? group.values : []).map((value)=> String(value || '').trim()).filter(Boolean), 6)
+            }]).filter((entry)=> entry[0])
+          );
+          (Array.isArray(incoming) ? incoming : []).forEach((group)=>{
+            const key = normalize(group && group.label);
+            if(!key) return;
+            const existing = merged.get(key) || {
+              key: String((group && group.key) || '').trim(),
+              label: String((group && group.label) || '').trim(),
+              values: []
+            };
+            (Array.isArray(group && group.values) ? group.values : []).forEach((value)=>{
+              if(existing.values.length >= 6) return;
+              const next = String(value || '').trim();
+              if(!next) return;
+              if(!existing.values.includes(next)){
+                existing.values.push(next);
+              }
+            });
+            merged.set(key, existing);
+          });
+          return Array.from(merged.values()).filter((group)=> group.label && group.values.length > 0);
+        };
+
+        const addNode = (input)=>{
+          const id = String((input && input.id) || '').trim();
+          if(!id) return null;
+          const weight = safeWeight(input && input.weight);
+          if(nodeById.has(id)){
+            const existing = nodeById.get(id);
+            existing.weight = Math.max(1, Number(existing.weight || 0) + weight);
+            existing.signalDetails = mergeSignalDetails(existing.signalDetails, input && input.signalDetails);
+            existing.hints = uniqueList(
+              [
+                ...(Array.isArray(existing.hints) ? existing.hints : []),
+                ...(Array.isArray(input && input.hints) ? input.hints : [])
+              ].map((value)=> String(value || '').trim()).filter(Boolean),
+              4
+            );
+            return existing;
+          }
+          const node = {
+            id,
+            stage: String((input && input.stage) || '').trim(),
+            label: String((input && input.label) || '').trim() || stageLabel(input && input.stage),
+            weight,
+            description: String((input && input.description) || '').trim(),
+            signalDetails: mergeSignalDetails([], input && input.signalDetails),
+            hints: uniqueList((Array.isArray(input && input.hints) ? input.hints : []).map((value)=> String(value || '').trim()).filter(Boolean), 4)
+          };
+          nodeById.set(id, node);
+          return node;
+        };
+
+        const addLink = (sourceId, targetId, value, reason)=>{
+          const src = String(sourceId || '').trim();
+          const tgt = String(targetId || '').trim();
+          const weight = Math.max(0, Number(value) || 0);
+          if(!src || !tgt || !nodeById.has(src) || !nodeById.has(tgt) || weight <= 0) return;
+          const key = `${src}=>${tgt}`;
+          const detail = String(reason || '').trim();
+          if(linkById.has(key)){
+            const existing = linkById.get(key);
+            existing.value += weight;
+            if(detail && !existing.reasons.includes(detail) && existing.reasons.length < 4){
+              existing.reasons.push(detail);
+            }
+            return;
+          }
+          linkById.set(key, {
+            id: key,
+            sourceId: src,
+            targetId: tgt,
+            value: weight,
+            reasons: detail ? [detail] : []
+          });
+        };
+
+        const distributeByWeight = (targetIds, totalValue)=>{
+          const ids = uniqueList((Array.isArray(targetIds) ? targetIds : []).map((value)=> String(value || '').trim()).filter((id)=> nodeById.has(id)), 12);
+          if(!ids.length || totalValue <= 0){
+            return [];
+          }
+          const rows = ids.map((id)=> ({
+            id,
+            weight: Math.max(1, Number(nodeById.get(id) && nodeById.get(id).weight) || 0)
+          }));
+          const total = rows.reduce((sum, row)=> sum + row.weight, 0);
+          if(total <= 0){
+            const equal = totalValue / rows.length;
+            return rows.map((row)=> ({ id: row.id, value: equal }));
+          }
+          return rows.map((row)=> ({
+            id: row.id,
+            value: totalValue * (row.weight / total)
+          }));
+        };
+
+        const painByTitle = new Map();
+        const painBySourceId = new Map();
+        painItems.forEach((item, idx)=>{
+          const title = String((item && item.title) || `Pain theme ${idx + 1}`).trim() || `Pain theme ${idx + 1}`;
+          const sourceId = normalize(item && item.id);
+          const idToken = sourceId || normalize(title) || `pain-${idx + 1}`;
+          const id = `pain:${idToken}`;
+          addNode({
+            id,
+            stage: 'pain',
+            label: title,
+            weight: item && item.weightPct,
+            description: item && item.description,
+            signalDetails: signalGroupsForItem(item),
+            hints: Array.isArray(item && item.hints) ? item.hints : []
+          });
+          painByTitle.set(normalize(title), id);
+          if(sourceId) painBySourceId.set(sourceId, id);
+        });
+
+        const outcomeByTitle = new Map();
+        const outcomeBySourceId = new Map();
+        outcomeItems.forEach((item, idx)=>{
+          const title = String((item && item.title) || `Outcome ${idx + 1}`).trim() || `Outcome ${idx + 1}`;
+          const sourceId = normalize(item && item.id);
+          const idToken = sourceId || normalize(title) || `outcome-${idx + 1}`;
+          const id = `outcome:${idToken}`;
+          addNode({
+            id,
+            stage: 'outcome',
+            label: title,
+            weight: item && item.weightPct,
+            description: item && item.description,
+            signalDetails: signalGroupsForItem(item),
+            hints: Array.isArray(item && item.hints) ? item.hints : []
+          });
+          outcomeByTitle.set(normalize(title), id);
+          if(sourceId) outcomeBySourceId.set(sourceId, id);
+        });
+
+        const capabilityByTitle = new Map();
+        const capabilityBySourceId = new Map();
+        capabilityItems.forEach((item, idx)=>{
+          const title = String((item && item.title) || `PIBR capability ${idx + 1}`).trim() || `PIBR capability ${idx + 1}`;
+          const sourceId = normalize(item && item.id);
+          const idToken = sourceId || normalize(title) || `capability-${idx + 1}`;
+          const id = `capability:${idToken}`;
+          addNode({
+            id,
+            stage: 'capability',
+            label: title,
+            weight: item && item.weightPct,
+            description: item && item.description,
+            signalDetails: signalGroupsForItem(item),
+            hints: Array.isArray(item && item.hints) ? item.hints : []
+          });
+          capabilityByTitle.set(normalize(title), id);
+          if(sourceId) capabilityBySourceId.set(sourceId, id);
+        });
+
+        const platformItem = platformItems[0];
+        const platformId = platformItem
+          ? `platform:${normalize(platformItem.id || platformItem.title || 'immersive-one') || 'immersive-one'}`
+          : '';
+        if(platformItem){
+          addNode({
+            id: platformId,
+            stage: 'platform',
+            label: String(platformItem.title || 'Immersive One').trim() || 'Immersive One',
+            weight: platformItem.weightPct || 100,
+            description: platformItem.description,
+            signalDetails: signalGroupsForItem(platformItem),
+            hints: Array.isArray(platformItem.hints) ? platformItem.hints : []
+          });
+        }
+
+        const brandItem = brandItems[0];
+        const brandId = brandItem
+          ? `brand:${normalize(brandItem.id || brandItem.title || 'immersive-brand') || 'immersive-brand'}`
+          : '';
+        if(brandItem){
+          addNode({
+            id: brandId,
+            stage: 'brand',
+            label: String(brandItem.title || 'Immersive').trim() || 'Immersive',
+            weight: brandItem.weightPct || 100,
+            description: brandItem.description,
+            signalDetails: signalGroupsForItem(brandItem),
+            hints: Array.isArray(brandItem.hints) ? brandItem.hints : []
+          });
+        }
+
+        painItems.forEach((item, idx)=>{
+          const painId = painBySourceId.get(normalize(item && item.id))
+            || painByTitle.get(normalize(item && item.title))
+            || `pain:${normalize(item && item.id) || normalize(item && item.title) || `pain-${idx + 1}`}`;
+          if(!nodeById.has(painId)) return;
+          const painWeight = Math.max(1, Number((item && item.weightPct) || (nodeById.get(painId) && nodeById.get(painId).weight) || 0));
+          const signalGroups = signalGroupsForItem(item)
+            .filter((group)=> normalize(group.key) !== 'contenttags' && normalize(group.label) !== 'contributing tags');
+          if(questionMode === 'expanded'){
+            const parts = signalGroups.flatMap((group)=> {
+              const values = Array.isArray(group.values) && group.values.length ? group.values : ['Answered'];
+              return values.map((value)=> ({
+                label: group.label,
+                value: String(value || '').trim() || 'Answered'
+              }));
+            });
+            const activeParts = parts.length ? parts : [{ label:'Discovery signal', value:'Answered' }];
+            const weightPerPart = painWeight / activeParts.length;
+            activeParts.forEach((part)=>{
+              const partValue = String(part.value || '').trim() || 'Answered';
+              const nodeId = `question:${normalize(part.label)}:${normalize(part.value) || 'answered'}`;
+              addNode({
+                id: nodeId,
+                stage: 'question',
+                label: `${part.label}: ${part.value}`,
+                weight: weightPerPart,
+                description: `Selected: ${partValue}.`,
+                signalDetails: [{ key:'signal', label: part.label, values:[partValue] }],
+                hints: [`Primary discovery input for ${String((item && item.title) || 'pain-theme').trim()}.`]
+              });
+              addLink(nodeId, painId, weightPerPart, `${part.label} -> ${String((item && item.title) || '').trim() || 'Pain theme'}`);
+            });
+            return;
+          }
+          const grouped = signalGroups.length
+            ? signalGroups
+            : [{ key:'signal', label:'Discovery signals', values:['Answered'] }];
+          const weightPerGroup = painWeight / grouped.length;
+          grouped.forEach((group)=>{
+            const nodeId = `question:${normalize(group.label) || 'discovery-signals'}`;
+            const sampleValues = (Array.isArray(group.values) ? group.values : []).slice(0, 2);
+            addNode({
+              id: nodeId,
+              stage: 'question',
+              label: group.label,
+              weight: weightPerGroup,
+              description: sampleValues.length
+                ? `Selected: ${naturalList(sampleValues, { conjunction:'and' })}.`
+                : `Grouped discovery responses from ${group.label}.`,
+              signalDetails: [{ key:group.key || 'signal', label:group.label, values:group.values }],
+              hints: [`Primary signal group for ${String((item && item.title) || 'pain-theme').trim()}.`]
+            });
+            addLink(nodeId, painId, weightPerGroup, `${group.label} -> ${String((item && item.title) || '').trim() || 'Pain theme'}`);
+          });
+        });
+
+        const allPainNodeIds = Array.from(nodeById.values())
+          .filter((node)=> node.stage === 'pain')
+          .map((node)=> node.id);
+        const allOutcomeNodeIds = Array.from(nodeById.values())
+          .filter((node)=> node.stage === 'outcome')
+          .map((node)=> node.id);
+
+        outcomeItems.forEach((item, idx)=>{
+          const outcomeId = outcomeBySourceId.get(normalize(item && item.id))
+            || outcomeByTitle.get(normalize(item && item.title))
+            || `outcome:${normalize(item && item.id) || normalize(item && item.title) || `outcome-${idx + 1}`}`;
+          if(!nodeById.has(outcomeId)) return;
+          const outcomeWeight = Math.max(1, Number((item && item.weightPct) || (nodeById.get(outcomeId) && nodeById.get(outcomeId).weight) || 0));
+          const linkedPainValues = signalGroupsForItem(item)
+            .filter((group)=> normalize(group.key) === 'painthemes' || normalize(group.label).includes('pain'))
+            .flatMap((group)=> group.values)
+            .map((value)=> String(value || '').trim())
+            .filter(Boolean);
+          let linkedPainIds = uniqueList(
+            linkedPainValues
+              .map((value)=> painByTitle.get(normalize(value)))
+              .filter((id)=> !!id && nodeById.has(id)),
+            6
+          );
+          if(!linkedPainIds.length){
+            linkedPainIds = allPainNodeIds.slice(0, 4);
+          }
+          distributeByWeight(linkedPainIds, outcomeWeight).forEach((row)=>{
+            addLink(row.id, outcomeId, row.value, `${String((nodeById.get(row.id) && nodeById.get(row.id).label) || 'Pain theme').trim()} -> ${String((item && item.title) || '').trim() || 'Outcome'}`);
+          });
+        });
+
+        capabilityItems.forEach((item, idx)=>{
+          const capabilityId = capabilityBySourceId.get(normalize(item && item.id))
+            || capabilityByTitle.get(normalize(item && item.title))
+            || `capability:${normalize(item && item.id) || normalize(item && item.title) || `capability-${idx + 1}`}`;
+          if(!nodeById.has(capabilityId)) return;
+          const capabilityWeight = Math.max(1, Number((item && item.weightPct) || (nodeById.get(capabilityId) && nodeById.get(capabilityId).weight) || 0));
+          const linkedOutcomeValues = signalGroupsForItem(item)
+            .filter((group)=> normalize(group.key) === 'outcomes' || normalize(group.label).includes('outcome'))
+            .flatMap((group)=> group.values)
+            .map((value)=> String(value || '').trim())
+            .filter(Boolean);
+          let linkedOutcomeIds = uniqueList(
+            linkedOutcomeValues
+              .map((value)=> outcomeByTitle.get(normalize(value)))
+              .filter((id)=> !!id && nodeById.has(id)),
+            6
+          );
+          if(!linkedOutcomeIds.length){
+            linkedOutcomeIds = allOutcomeNodeIds.slice(0, 4);
+          }
+          distributeByWeight(linkedOutcomeIds, capabilityWeight).forEach((row)=>{
+            addLink(row.id, capabilityId, row.value, `${String((nodeById.get(row.id) && nodeById.get(row.id).label) || 'Outcome').trim()} -> ${String((item && item.title) || '').trim() || 'PIBR capability'}`);
+          });
+          if(platformId && nodeById.has(platformId)){
+            addLink(capabilityId, platformId, capabilityWeight, `${String((item && item.title) || '').trim() || 'PIBR capability'} -> Immersive One`);
+          }
+        });
+
+        if(platformId && brandId && nodeById.has(platformId) && nodeById.has(brandId)){
+          const platformWeight = Math.max(1, Number(nodeById.get(platformId).weight) || 100);
+          addLink(platformId, brandId, platformWeight, 'Immersive One -> Brand promise');
+        }
+
+        const nodes = Array.from(nodeById.values())
+          .filter((node)=> STORY_FLOW_STAGE_ORDER.includes(node.stage))
+          .sort((left, right)=>{
+            const leftIdx = STORY_FLOW_STAGE_ORDER.indexOf(left.stage);
+            const rightIdx = STORY_FLOW_STAGE_ORDER.indexOf(right.stage);
+            return (leftIdx - rightIdx) || (Number(right.weight || 0) - Number(left.weight || 0)) || String(left.label).localeCompare(String(right.label));
+          });
+        const links = Array.from(linkById.values())
+          .filter((link)=> nodeById.has(link.sourceId) && nodeById.has(link.targetId))
+          .map((link)=> Object.assign({}, link, { value: Math.max(0.5, Number(link.value) || 0) }))
+          .sort((left, right)=> (Number(right.value) - Number(left.value)));
+        return { nodes, links, nodeById };
+      }
+
+      function storyFlowConnectedNodeSet(graphInput, focusNodeId){
+        const graph = (graphInput && typeof graphInput === 'object') ? graphInput : {};
+        const focusId = String(focusNodeId || '').trim();
+        if(!focusId || !(graph.nodeById instanceof Map) || !graph.nodeById.has(focusId)){
+          return new Set();
+        }
+        const local = new Set([focusId]);
+        (Array.isArray(graph.links) ? graph.links : []).forEach((link)=>{
+          const sourceId = String(link && link.sourceId || '').trim();
+          const targetId = String(link && link.targetId || '').trim();
+          if(!sourceId || !targetId) return;
+          if(sourceId === focusId || targetId === focusId){
+            local.add(sourceId);
+            local.add(targetId);
+          }
+        });
+        return local;
+      }
+
+      function storyFlowTopPaths(graphInput, opts){
+        const graph = (graphInput && typeof graphInput === 'object') ? graphInput : {};
+        const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+        const links = Array.isArray(graph.links) ? graph.links : [];
+        const nodeById = (graph.nodeById instanceof Map) ? graph.nodeById : new Map();
+        if(!nodes.length || !links.length || !nodeById.size){
+          return [];
+        }
+        const cfg = (opts && typeof opts === 'object') ? opts : {};
+        const maxPaths = Math.max(1, Math.min(8, Number(cfg.maxPaths) || 4));
+        const stageIndex = new Map(STORY_FLOW_STAGE_ORDER.map((stage, idx)=> [stage, idx]));
+        const outgoing = new Map();
+        links.forEach((link)=>{
+          const sourceId = String(link && link.sourceId || '').trim();
+          const targetId = String(link && link.targetId || '').trim();
+          if(!sourceId || !targetId) return;
+          const source = nodeById.get(sourceId);
+          const target = nodeById.get(targetId);
+          if(!source || !target) return;
+          const sourceIdx = stageIndex.get(source.stage);
+          const targetIdx = stageIndex.get(target.stage);
+          if(!Number.isFinite(sourceIdx) || !Number.isFinite(targetIdx)) return;
+          if(targetIdx !== sourceIdx + 1) return;
+          if(!outgoing.has(sourceId)) outgoing.set(sourceId, []);
+          outgoing.get(sourceId).push({
+            id: String(link.id || `${sourceId}=>${targetId}`),
+            sourceId,
+            targetId,
+            value: Math.max(0, Number(link.value) || 0)
+          });
+        });
+        outgoing.forEach((rows)=>{
+          rows.sort((left, right)=> Number(right.value) - Number(left.value));
+        });
+        const startNodes = nodes
+          .filter((node)=> node && node.stage === 'question')
+          .sort((left, right)=> Number(right.weight || 0) - Number(left.weight || 0))
+          .slice(0, 8);
+        const rawPaths = [];
+        const maxBranchPerNode = 4;
+        const walk = (nodeId, nodeIds, linkIds, values, depth)=>{
+          const current = nodeById.get(nodeId);
+          if(!current) return;
+          const idx = stageIndex.get(current.stage);
+          if(!Number.isFinite(idx)) return;
+          if(idx >= STORY_FLOW_STAGE_ORDER.length - 1){
+            if(values.length){
+              const score = Math.max(0.1, Math.min(...values));
+              rawPaths.push({ nodeIds: nodeIds.slice(), linkIds: linkIds.slice(), score });
+            }
+            return;
+          }
+          const nextLinks = (outgoing.get(nodeId) || []).slice(0, maxBranchPerNode);
+          if(!nextLinks.length) return;
+          nextLinks.forEach((nextLink)=>{
+            walk(
+              nextLink.targetId,
+              nodeIds.concat(nextLink.targetId),
+              linkIds.concat(nextLink.id),
+              values.concat(nextLink.value),
+              depth + 1
+            );
+          });
+        };
+        startNodes.forEach((start)=>{
+          walk(start.id, [start.id], [], [], 0);
+        });
+        const deduped = new Map();
+        rawPaths
+          .sort((left, right)=> Number(right.score) - Number(left.score))
+          .forEach((path)=>{
+            const key = path.nodeIds
+              .map((nodeId)=> nodeById.get(nodeId))
+              .filter((node)=> !!node && (node.stage === 'pain' || node.stage === 'outcome' || node.stage === 'capability'))
+              .map((node)=> `${node.stage}:${normalizeContentToken(node.label)}`)
+              .join('|');
+            const useKey = key || path.nodeIds.join('|');
+            if(!deduped.has(useKey)){
+              deduped.set(useKey, path);
+            }
+          });
+        return Array.from(deduped.values())
+          .slice(0, maxPaths)
+          .map((path, idx)=>{
+            const nodeIds = Array.isArray(path.nodeIds) ? path.nodeIds : [];
+            const linkIds = Array.isArray(path.linkIds) ? path.linkIds : [];
+            const questionNode = nodeById.get(nodeIds[0]);
+            const painNode = nodeIds.map((id)=> nodeById.get(id)).find((node)=> node && node.stage === 'pain');
+            const outcomeNode = nodeIds.map((id)=> nodeById.get(id)).find((node)=> node && node.stage === 'outcome');
+            const capabilityNode = nodeIds.map((id)=> nodeById.get(id)).find((node)=> node && node.stage === 'capability');
+            const questionLabel = String((questionNode && questionNode.label) || 'Question driver').trim();
+            const title = [
+              painNode ? painNode.label : '',
+              outcomeNode ? outcomeNode.label : '',
+              capabilityNode ? capabilityNode.label : ''
+            ].filter(Boolean).join(' -> ');
+            return {
+              id: `path-${idx + 1}-${nodeIds.join('-')}`,
+              nodeIds,
+              linkIds,
+              score: Math.max(0.1, Number(path.score) || 0.1),
+              title: title || questionLabel,
+              driver: questionLabel
+            };
+          });
+      }
+
+      function storyFlowNarrativeStageSummary(stage){
+        if(stage === 'question') return 'Discovery signals currently driving prioritization.';
+        if(stage === 'pain') return 'Priority security pain themes emerging from discovery.';
+        if(stage === 'outcome') return 'Business outcomes mapped from those pain themes.';
+        if(stage === 'capability') return 'Immersive One capabilities best suited to deliver those outcomes.';
+        if(stage === 'platform') return 'How selected capabilities combine into one platform motion.';
+        if(stage === 'brand') return 'The resulting external narrative for this account.';
+        return 'Mapped story layer.';
+      }
+
+      function storyFlowShortText(value, limit){
+        const cap = Math.max(48, Number(limit) || 180);
+        const text = String(value || '').trim().replace(/\s+/g, ' ');
+        if(!text) return '';
+        if(text.length <= cap) return text;
+        return `${text.slice(0, cap - 1).trimEnd()}…`;
+      }
+
+      function storyFlowNarrativeMarkup(graphInput, opts){
+        const graph = (graphInput && typeof graphInput === 'object') ? graphInput : {};
+        const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+        const links = Array.isArray(graph.links) ? graph.links : [];
+        const nodeById = (graph.nodeById instanceof Map) ? graph.nodeById : new Map();
+        const cfg = (opts && typeof opts === 'object') ? opts : {};
+        const activeNodeId = String(cfg.focusNodeId || '').trim();
+        if(!nodes.length || !nodeById.size){
+          return '<p class="storyFlowNarrativeEmpty">No mapped story data yet. Complete more discovery responses to generate this view.</p>';
+        }
+        const incomingByNode = new Map();
+        const outgoingByNode = new Map();
+        links.forEach((link)=>{
+          const sourceId = String((link && link.sourceId) || '').trim();
+          const targetId = String((link && link.targetId) || '').trim();
+          if(!sourceId || !targetId) return;
+          if(!incomingByNode.has(targetId)) incomingByNode.set(targetId, []);
+          if(!outgoingByNode.has(sourceId)) outgoingByNode.set(sourceId, []);
+          incomingByNode.get(targetId).push(link);
+          outgoingByNode.get(sourceId).push(link);
+        });
+        incomingByNode.forEach((rows)=> rows.sort((left, right)=> Number(right.value) - Number(left.value)));
+        outgoingByNode.forEach((rows)=> rows.sort((left, right)=> Number(right.value) - Number(left.value)));
+
+        const rows = STORY_FLOW_STAGE_ORDER.map((stage)=>{
+          const stageNodes = nodes
+            .filter((node)=> node && node.stage === stage)
+            .sort((left, right)=> Number(right.weight || 0) - Number(left.weight || 0));
+          if(!stageNodes.length) return '';
+          const cards = stageNodes.slice(0, 3).map((node)=>{
+            const nodeId = String(node.id || '').trim();
+            const isActive = !!activeNodeId && activeNodeId === nodeId;
+            const weight = Math.max(1, Math.round(Number(node.weight) || 0));
+            const weightPct = Math.max(1, Math.min(100, weight));
+            const whatText = storyFlowShortText(
+              String(node.description || (Array.isArray(node.hints) ? node.hints[0] : '') || `${node.label} is part of this mapped chain.`).trim(),
+              170
+            );
+            const signalGroup = (Array.isArray(node.signalDetails) ? node.signalDetails : []).find((group)=> Array.isArray(group && group.values) && group.values.length);
+            const signalValues = Array.isArray(signalGroup && signalGroup.values) ? signalGroup.values.slice(0, 2) : [];
+            const incomingLinks = (incomingByNode.get(node.id) || []).slice(0, 2);
+            const outgoingLinks = (outgoingByNode.get(node.id) || []).slice(0, 2);
+            const whyParts = [];
+            if(Array.isArray(node.hints) && node.hints.length){
+              const hint = String(node.hints[0] || '').trim();
+              if(hint) whyParts.push(hint);
+            }
+            if(signalValues.length){
+              whyParts.push(`${String((signalGroup && signalGroup.label) || 'Signal').trim()}: ${naturalList(signalValues, { conjunction:'and' })}`);
+            }
+            if(outgoingLinks.length){
+              const targets = outgoingLinks
+                .map((link)=> {
+                  const target = nodeById.get(String(link.targetId || '').trim());
+                  const label = String((target && target.label) || 'next layer').trim();
+                  return `${label} (${Math.max(1, Math.round(Number(link.value) || 0))}%)`;
+                });
+              whyParts.push(`Flows into ${naturalList(targets, { conjunction:'and' })}.`);
+            }
+            const whyText = storyFlowShortText(whyParts.filter(Boolean).join(' '), 198) || 'Mapped as a high-priority relationship in this account narrative.';
+            const drivenByText = incomingLinks.length
+              ? storyFlowShortText(
+                  naturalList(
+                    incomingLinks.map((link)=>{
+                      const source = nodeById.get(String(link.sourceId || '').trim());
+                      return `${String((source && source.label) || 'previous layer').trim()} (${Math.max(1, Math.round(Number(link.value) || 0))}%)`;
+                    }),
+                    { conjunction:'and' }
+                  ),
+                  182
+                )
+              : (signalValues.length
+                  ? storyFlowShortText(naturalList(signalValues, { conjunction:'and' }), 182)
+                  : 'Primary mapped node in this layer.');
+            const insightSignals = signalValues.length
+              ? `${String((signalGroup && signalGroup.label) || 'Signal').trim()}: ${naturalList(signalValues, { conjunction:'and' })}`
+              : 'No explicit signal values mapped for this node.';
+            const upstreamText = incomingLinks.length
+              ? naturalList(
+                  incomingLinks.map((link)=>{
+                    const source = nodeById.get(String(link.sourceId || '').trim());
+                    return `${String((source && source.label) || 'previous layer').trim()} (${Math.max(1, Math.round(Number(link.value) || 0))}%)`;
+                  }),
+                  { conjunction:'and' }
+                )
+              : 'This is a primary mapped starting point.';
+            const downstreamText = outgoingLinks.length
+              ? naturalList(
+                  outgoingLinks.map((link)=>{
+                    const target = nodeById.get(String(link.targetId || '').trim());
+                    return `${String((target && target.label) || 'next layer').trim()} (${Math.max(1, Math.round(Number(link.value) || 0))}%)`;
+                  }),
+                  { conjunction:'and' }
+                )
+              : 'No downstream links in the current chain.';
+            return `
+              <button type="button" class="storyFlowNarrativeCard${isActive ? ' is-active' : ''}" data-story-flow-narrative-node-id="${escapeHtml(nodeId)}" aria-pressed="${isActive ? 'true' : 'false'}">
+                <div class="storyFlowNarrativeCardHead">
+                  <div class="storyFlowNarrativeCardHeadText">
+                    <p class="storyFlowNarrativeCardWeight">${escapeHtml(`${weightPct}% influence`)}</p>
+                    <h5 class="storyFlowNarrativeCardTitle">${escapeHtml(node.label)}</h5>
+                  </div>
+                  <span class="storyFlowNarrativePctRing" style="--story-pct:${weightPct};" aria-hidden="true"><span>${escapeHtml(`${weightPct}%`)}</span></span>
+                </div>
+                <p class="storyFlowNarrativeField"><strong>What it is:</strong> ${escapeHtml(whatText)}</p>
+                <p class="storyFlowNarrativeField"><strong>Why it matters:</strong> ${escapeHtml(whyText)}</p>
+                <p class="storyFlowNarrativeField"><strong>Driven by:</strong> ${escapeHtml(drivenByText)}</p>
+                ${isActive ? `
+                  <div class="storyFlowNarrativeInsights">
+                    <p class="storyFlowNarrativeField"><strong>Signals:</strong> ${escapeHtml(storyFlowShortText(insightSignals, 196))}</p>
+                    <p class="storyFlowNarrativeField"><strong>Upstream:</strong> ${escapeHtml(storyFlowShortText(upstreamText, 196))}</p>
+                    <p class="storyFlowNarrativeField"><strong>Downstream:</strong> ${escapeHtml(storyFlowShortText(downstreamText, 196))}</p>
+                  </div>
+                ` : ''}
+              </button>
+            `;
+          }).join('');
+          return `
+            <section class="storyFlowNarrativeRow">
+              <div class="storyFlowNarrativeStage">
+                <p class="storyFlowNarrativeStageEyebrow">Layer</p>
+                <h4 class="storyFlowNarrativeStageTitle">${escapeHtml(STORY_FLOW_STAGE_LABEL[stage] || stage)}</h4>
+                <p class="storyFlowNarrativeStageBody">${escapeHtml(storyFlowNarrativeStageSummary(stage))}</p>
+              </div>
+              <div class="storyFlowNarrativeCards">
+                ${cards}
+              </div>
+            </section>
+          `;
+        }).filter(Boolean).join('');
+
+        return rows || '<p class="storyFlowNarrativeEmpty">No mapped story data yet. Complete more discovery responses to generate this view.</p>';
+      }
+
+      function storyFlowCardMapMarkup(graphInput, opts){
+        const graph = (graphInput && typeof graphInput === 'object') ? graphInput : {};
+        const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+        const links = Array.isArray(graph.links) ? graph.links : [];
+        const nodeById = (graph.nodeById instanceof Map) ? graph.nodeById : new Map();
+        const cfg = (opts && typeof opts === 'object') ? opts : {};
+        const activeNodeId = String(cfg.focusNodeId || '').trim();
+        const visibleSet = (cfg.visibleSet instanceof Set && cfg.visibleSet.size)
+          ? cfg.visibleSet
+          : null;
+        const hasSelection = !!activeNodeId && !!visibleSet && visibleSet.size > 0;
+        if(!nodes.length || !nodeById.size){
+          return '<p class="storyFlowNarrativeEmpty">No mapped story data yet. Complete more discovery responses to generate this view.</p>';
+        }
+        const incomingByNode = new Map();
+        const outgoingByNode = new Map();
+        links.forEach((link)=>{
+          const sourceId = String((link && link.sourceId) || '').trim();
+          const targetId = String((link && link.targetId) || '').trim();
+          if(!sourceId || !targetId) return;
+          if(!incomingByNode.has(targetId)) incomingByNode.set(targetId, []);
+          if(!outgoingByNode.has(sourceId)) outgoingByNode.set(sourceId, []);
+          incomingByNode.get(targetId).push(link);
+          outgoingByNode.get(sourceId).push(link);
+        });
+        incomingByNode.forEach((rows)=> rows.sort((left, right)=> Number(right.value) - Number(left.value)));
+        outgoingByNode.forEach((rows)=> rows.sort((left, right)=> Number(right.value) - Number(left.value)));
+
+        const rows = STORY_FLOW_STAGE_ORDER.map((stage)=>{
+          const stageNodes = nodes
+            .filter((node)=> node && node.stage === stage)
+            .sort((left, right)=> Number(right.weight || 0) - Number(left.weight || 0));
+          if(!stageNodes.length) return '';
+          const cards = stageNodes.slice(0, 3).map((node)=>{
+            const nodeId = String(node.id || '').trim();
+            const isActive = !!activeNodeId && activeNodeId === nodeId;
+            const isRelated = hasSelection && visibleSet.has(nodeId);
+            const isDimmed = hasSelection && !visibleSet.has(nodeId);
+            const weightPct = Math.max(1, Math.min(100, Math.round(Number(node.weight) || 0)));
+            const summaryText = storyFlowShortText(
+              String(node.description || (Array.isArray(node.hints) ? node.hints[0] : '') || `${node.label} is part of this mapped chain.`).trim(),
+              166
+            );
+            const incomingLinks = (incomingByNode.get(node.id) || []).slice(0, 2);
+            const outgoingLinks = (outgoingByNode.get(node.id) || []).slice(0, 2);
+            const incomingText = incomingLinks.length
+              ? naturalList(
+                  incomingLinks.map((link)=>{
+                    const source = nodeById.get(String(link.sourceId || '').trim());
+                    return `${String((source && source.label) || 'Previous layer').trim()} (${Math.max(1, Math.round(Number(link.value) || 0))}%)`;
+                  }),
+                  { conjunction:'and' }
+                )
+              : 'Primary mapped entry point.';
+            const outgoingText = outgoingLinks.length
+              ? naturalList(
+                  outgoingLinks.map((link)=>{
+                    const target = nodeById.get(String(link.targetId || '').trim());
+                    return `${String((target && target.label) || 'Next layer').trim()} (${Math.max(1, Math.round(Number(link.value) || 0))}%)`;
+                  }),
+                  { conjunction:'and' }
+                )
+              : 'No downstream links in this mapped chain.';
+            const whyParts = [];
+            const signalGroup = (Array.isArray(node.signalDetails) ? node.signalDetails : [])
+              .find((group)=> Array.isArray(group && group.values) && group.values.length);
+            const signalValues = Array.isArray(signalGroup && signalGroup.values) ? signalGroup.values.slice(0, 2) : [];
+            if(signalValues.length){
+              whyParts.push(`${String((signalGroup && signalGroup.label) || 'Signal').trim()}: ${naturalList(signalValues, { conjunction:'and' })}.`);
+            }
+            if(Array.isArray(node.hints) && node.hints.length){
+              const hint = String(node.hints[0] || '').trim();
+              if(hint) whyParts.push(hint);
+            }
+            if(!whyParts.length){
+              whyParts.push(`Directly connected to ${outgoingText}`);
+            }
+            const whyText = storyFlowShortText(whyParts.join(' '), 188);
+            return `
+              <button type="button" class="storyFlowCardMapCard${isActive ? ' is-active' : ''}${isRelated ? ' is-related' : ''}${isDimmed ? ' is-dimmed' : ''}" data-story-flow-card-node-id="${escapeHtml(nodeId)}" data-story-flow-narrative-node-id="${escapeHtml(nodeId)}" aria-pressed="${isActive ? 'true' : 'false'}">
+                <div class="storyFlowCardMapHead">
+                  <div class="storyFlowCardMapHeadText">
+                    <p class="storyFlowCardMapWeight">${escapeHtml(`${weightPct}% influence`)}</p>
+                    <h5 class="storyFlowCardMapTitle">${escapeHtml(node.label)}</h5>
+                  </div>
+                  <span class="storyFlowNarrativePctRing" style="--story-pct:${weightPct};" aria-hidden="true"><span>${escapeHtml(`${weightPct}%`)}</span></span>
+                </div>
+                <p class="storyFlowCardMapField"><strong>What it is:</strong> ${escapeHtml(summaryText)}</p>
+                <p class="storyFlowCardMapField"><strong>Why it matters:</strong> ${escapeHtml(whyText)}</p>
+                <p class="storyFlowCardMapField"><strong>Driven by:</strong> ${escapeHtml(storyFlowShortText(incomingText, 182))}</p>
+              </button>
+            `;
+          }).join('');
+          return `
+            <section class="storyFlowCardMapRow" data-story-flow-card-stage="${escapeHtml(stage)}">
+              <div class="storyFlowCardMapStage">
+                <p class="storyFlowNarrativeStageEyebrow">Layer</p>
+                <h4 class="storyFlowNarrativeStageTitle">${escapeHtml(STORY_FLOW_STAGE_LABEL[stage] || stage)}</h4>
+                <p class="storyFlowNarrativeStageBody">${escapeHtml(storyFlowNarrativeStageSummary(stage))}</p>
+              </div>
+              <div class="storyFlowCardMapCards">
+                ${cards}
+              </div>
+            </section>
+          `;
+        }).filter(Boolean).join('');
+
+        if(!rows){
+          return '<p class="storyFlowNarrativeEmpty">No mapped story data yet. Complete more discovery responses to generate this view.</p>';
+        }
+        return `
+          <section class="storyFlowCardMap" id="storyFlowCardMap">
+            <svg class="storyFlowCardMapSvg" id="storyFlowCardMapSvg" aria-hidden="true"></svg>
+            <div class="storyFlowCardMapRows">
+              ${rows}
+            </div>
+          </section>
+        `;
+      }
+
+      function storyFlowRenderCardMapLinks(graphInput, opts){
+        const mapEl = $('#storyFlowCardMap');
+        const svgEl = $('#storyFlowCardMapSvg');
+        if(!mapEl || !svgEl) return;
+        // Card-map mode intentionally runs without connector lines.
+        svgEl.innerHTML = '';
+      }
+
+      function storyFlowLayoutGraph(graphInput, opts){
+        const graph = (graphInput && typeof graphInput === 'object') ? graphInput : {};
+        const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+        const links = Array.isArray(graph.links) ? graph.links : [];
+        const requestedWidth = Math.max(960, Number(opts && opts.width) || 1180);
+        let width = requestedWidth;
+        const baseHeight = Math.max(560, Number(opts && opts.height) || 620);
+        if(!nodes.length){
+          return {
+            width,
+            height: baseHeight,
+            nodes: [],
+            links: [],
+            focusSet: new Set()
+          };
+        }
+        const focusSet = storyFlowConnectedNodeSet(graph, opts && opts.focusNodeId);
+        const focusNodeId = String((opts && opts.focusNodeId) || '').trim();
+        const reservedLeftInset = Math.max(0, Number(opts && opts.leftInset) || 0);
+        const padX = Math.max(86, reservedLeftInset);
+        const padY = 54;
+        const stageMap = new Map(STORY_FLOW_STAGE_ORDER.map((stage)=> [stage, []]));
+        nodes.forEach((node)=>{
+          if(stageMap.has(node.stage)){
+            stageMap.get(node.stage).push(node);
+          }
+        });
+        STORY_FLOW_STAGE_ORDER.forEach((stage)=>{
+          const list = stageMap.get(stage) || [];
+          list.sort((left, right)=> (Number(right.weight) - Number(left.weight)) || String(left.label).localeCompare(String(right.label)));
+        });
+        const nodeWeights = nodes.map((node)=> Math.max(0, Number(node && node.weight) || 0));
+        const minNodeWeight = nodeWeights.length ? Math.min(...nodeWeights) : 0;
+        const maxNodeWeight = nodeWeights.length ? Math.max(...nodeWeights) : 1;
+        const nodeWeightRange = Math.max(0, maxNodeWeight - minNodeWeight);
+        const nodeWeightNorm = (value)=>{
+          const weight = Math.max(0, Number(value) || 0);
+          if(nodeWeightRange <= 0.001) return 0.5;
+          return clamp((weight - minNodeWeight) / nodeWeightRange, 0, 1);
+        };
+        const widthByStage = Object.freeze({
+          question: 208,
+          pain: 220,
+          outcome: 220,
+          capability: 224,
+          platform: 236,
+          brand: 212
+        });
+        const cardWidthForNode = (stage, weightValue)=>{
+          const baseWidth = widthByStage[stage] || 206;
+          const minWidth = Math.max(168, baseWidth - 24);
+          const maxWidth = Math.max(minWidth + 48, baseWidth + 92);
+          const norm = nodeWeightNorm(weightValue);
+          const amplified = Math.pow(norm, 0.78);
+          return clamp(minWidth + (amplified * (maxWidth - minWidth)), minWidth, maxWidth);
+        };
+        const gapForCount = (count)=> count > 10 ? 14 : (count > 6 ? 20 : 26);
+        const estimatedCardHeight = (node, widthPx)=>{
+          const safeWidth = Math.max(150, Number(widthPx) || 200);
+          const nodeId = String((node && node.id) || '').trim();
+          const isFocusedNode = !!focusNodeId && nodeId === focusNodeId;
+          const title = String((node && node.label) || '').trim();
+          const desc = String((node && node.description) || '').trim();
+          const hint = String((Array.isArray(node && node.hints) ? node.hints[0] : '') || '').trim();
+          const firstSignal = Array.isArray(node && node.signalDetails) ? node.signalDetails[0] : null;
+          const signalValues = Array.isArray(firstSignal && firstSignal.values) ? firstSignal.values.slice(0, 2) : [];
+          const signalText = signalValues.length
+            ? `${String((firstSignal && firstSignal.label) || 'Signal').trim()}: ${naturalList(signalValues, { conjunction:'and' })}`
+            : '';
+          const summaryText = desc || hint;
+          const charsPerLine = Math.max(14, Math.floor((safeWidth - 22) / 7.4));
+          const titleLines = Math.max(1, Math.ceil(Math.max(1, title.length) / charsPerLine));
+          const summaryLines = summaryText
+            ? Math.max(1, Math.min(2, Math.ceil(summaryText.length / charsPerLine)))
+            : 0;
+          const signalLines = signalText
+            ? Math.max(1, Math.min(2, Math.ceil(signalText.length / charsPerLine)))
+            : 0;
+          const detailLines = (summaryText || signalText)
+            ? (isFocusedNode ? 5 : 2)
+            : 0;
+          const focusBonus = isFocusedNode ? 46 : 0;
+          return clamp(110 + (titleLines * 17) + (summaryLines * 13) + (signalLines * 12) + (detailLines * 12) + focusBonus, 132, 356);
+        };
+        const stageGapX = 78;
+        const stageMaxWidthByStage = new Map();
+        STORY_FLOW_STAGE_ORDER.forEach((stage)=>{
+          const list = stageMap.get(stage) || [];
+          let maxStageWidth = widthByStage[stage] || 206;
+          list.forEach((node)=>{
+            maxStageWidth = Math.max(maxStageWidth, cardWidthForNode(stage, node && node.weight));
+          });
+          stageMaxWidthByStage.set(stage, maxStageWidth);
+        });
+        const requiredContentWidth = STORY_FLOW_STAGE_ORDER
+          .reduce((sum, stage)=> sum + Math.max(168, Number(stageMaxWidthByStage.get(stage)) || (widthByStage[stage] || 206)), 0)
+          + (stageGapX * Math.max(0, STORY_FLOW_STAGE_ORDER.length - 1));
+        width = Math.max(requestedWidth, Math.round(requiredContentWidth + (padX * 2)));
+        const requiredStageHeight = STORY_FLOW_STAGE_ORDER.map((stage)=>{
+          const list = stageMap.get(stage) || [];
+          if(!list.length) return 0;
+          const gap = gapForCount(list.length);
+          const totalHeight = list.reduce((sum, node)=>{
+            const width = cardWidthForNode(stage, node && node.weight);
+            return sum + estimatedCardHeight(node, width);
+          }, 0);
+          return totalHeight + (gap * Math.max(0, list.length - 1));
+        });
+        const contentHeight = Math.max(baseHeight - (padY * 2), ...requiredStageHeight);
+        const height = Math.max(baseHeight, contentHeight + (padY * 2));
+        const stageCenterByStage = new Map();
+        let cursorX = padX;
+        STORY_FLOW_STAGE_ORDER.forEach((stage)=>{
+          const stageWidth = Math.max(168, Number(stageMaxWidthByStage.get(stage)) || (widthByStage[stage] || 206));
+          stageCenterByStage.set(stage, cursorX + (stageWidth * 0.5));
+          cursorX += stageWidth + stageGapX;
+        });
+        const positionedNodes = [];
+        STORY_FLOW_STAGE_ORDER.forEach((stage, stageIdx)=>{
+          const list = stageMap.get(stage) || [];
+          if(!list.length) return;
+          const gap = gapForCount(list.length);
+          const heights = list.map((node)=> {
+            const width = cardWidthForNode(stage, node && node.weight);
+            return estimatedCardHeight(node, width);
+          });
+          const totalHeight = heights.reduce((sum, value)=> sum + value, 0) + (gap * Math.max(0, list.length - 1));
+          let y = padY + Math.max(0, (contentHeight - totalHeight) * 0.5);
+          const fallbackStepX = STORY_FLOW_STAGE_ORDER.length > 1
+            ? ((width - (padX * 2)) / (STORY_FLOW_STAGE_ORDER.length - 1))
+            : 0;
+          const centerX = Number(stageCenterByStage.get(stage)) || (padX + (stageIdx * fallbackStepX));
+          list.forEach((node, idx)=>{
+            const weight = Math.max(0, Number(node.weight) || 0);
+            const cardWidth = cardWidthForNode(stage, weight);
+            const cardHeight = heights[idx];
+            const x = clamp(centerX - (cardWidth / 2), 8, width - cardWidth - 8);
+            positionedNodes.push({
+              id: node.id,
+              stage: node.stage,
+              label: node.label,
+              weight,
+              description: node.description,
+              signalDetails: Array.isArray(node.signalDetails) ? node.signalDetails : [],
+              hints: Array.isArray(node.hints) ? node.hints : [],
+              x,
+              y,
+              w: cardWidth,
+              h: cardHeight
+            });
+            y += cardHeight + gap;
+          });
+        });
+        const nodeLayoutById = new Map(positionedNodes.map((node)=> [node.id, node]));
+        const positionedLinks = links
+          .map((link)=>{
+            const source = nodeLayoutById.get(link && link.sourceId);
+            const target = nodeLayoutById.get(link && link.targetId);
+            if(!source || !target) return null;
+            return {
+              id: String(link.id || `${source.id}=>${target.id}`),
+              sourceId: source.id,
+              targetId: target.id,
+              source,
+              target,
+              value: Math.max(0.5, Number(link.value) || 0),
+              reasons: Array.isArray(link.reasons) ? link.reasons : []
+            };
+          })
+          .filter(Boolean);
+        const outgoingByNode = new Map();
+        const incomingByNode = new Map();
+        const linkValues = positionedLinks.map((row)=> Math.max(0, Number(row.value) || 0));
+        const minLinkValue = linkValues.length ? Math.min(...linkValues) : 0;
+        const maxLinkValue = linkValues.length ? Math.max(...linkValues) : 1;
+        const linkValueRange = Math.max(0, maxLinkValue - minLinkValue);
+        const avgNodeCardHeight = positionedNodes.length
+          ? (positionedNodes.reduce((sum, node)=> sum + Math.max(0, Number(node && node.h) || 0), 0) / positionedNodes.length)
+          : 136;
+        positionedLinks.forEach((link)=>{
+          if(!outgoingByNode.has(link.sourceId)) outgoingByNode.set(link.sourceId, []);
+          if(!incomingByNode.has(link.targetId)) incomingByNode.set(link.targetId, []);
+          const value = Math.max(0, Number(link.value) || 0);
+          const strength = (linkValueRange <= 0.001)
+            ? 0.55
+            : clamp((value - minLinkValue) / linkValueRange, 0, 1);
+          const amplifiedStrength = Math.pow(strength, 0.72);
+          const sourceHeight = Math.max(92, Number(link.source && link.source.h) || avgNodeCardHeight);
+          const targetHeight = Math.max(92, Number(link.target && link.target.h) || avgNodeCardHeight);
+          const cardHeightRef = clamp(Math.min(sourceHeight, targetHeight), 92, 286);
+          // Visual width: strongest flow defaults to the card-height reference, weaker links taper proportionally.
+          const renderMax = cardHeightRef;
+          const renderMin = Math.max(8, renderMax * 0.14);
+          // Layout lane width stays narrower than the visual stroke so routing remains stable and readable.
+          const laneMax = clamp(renderMax * 0.24, 14, 34);
+          const laneMin = clamp(renderMin * 0.42, 3.2, 12);
+          link.strength = strength;
+          link.thickness = clamp(laneMin + (amplifiedStrength * (laneMax - laneMin)), laneMin, laneMax);
+          link.renderThickness = clamp(renderMin + (amplifiedStrength * (renderMax - renderMin)), renderMin, renderMax);
+          outgoingByNode.get(link.sourceId).push(link);
+          incomingByNode.get(link.targetId).push(link);
+        });
+        outgoingByNode.forEach((rows)=>{
+          rows.sort((left, right)=> (left.target.y - right.target.y) || (left.target.x - right.target.x));
+        });
+        incomingByNode.forEach((rows)=>{
+          rows.sort((left, right)=> (left.source.y - right.source.y) || (left.source.x - right.source.x));
+        });
+        outgoingByNode.forEach((rows, nodeId)=>{
+          const node = nodeLayoutById.get(nodeId);
+          if(!node || !rows.length) return;
+          const total = rows.reduce((sum, row)=> sum + row.thickness, 0);
+          let cursor = node.y + ((node.h - total) * 0.5);
+          rows.forEach((row)=>{
+            row.y0 = cursor + (row.thickness * 0.5);
+            cursor += row.thickness;
+          });
+        });
+        incomingByNode.forEach((rows, nodeId)=>{
+          const node = nodeLayoutById.get(nodeId);
+          if(!node || !rows.length) return;
+          const total = rows.reduce((sum, row)=> sum + row.thickness, 0);
+          let cursor = node.y + ((node.h - total) * 0.5);
+          rows.forEach((row)=>{
+            row.y1 = cursor + (row.thickness * 0.5);
+            cursor += row.thickness;
+          });
+        });
+        positionedLinks.forEach((link)=>{
+          const x0 = link.source.x + link.source.w;
+          const x1 = link.target.x;
+          const y0 = Number.isFinite(link.y0) ? link.y0 : (link.source.y + (link.source.h * 0.5));
+          const y1 = Number.isFinite(link.y1) ? link.y1 : (link.target.y + (link.target.h * 0.5));
+          const control = Math.max(36, Math.abs(x1 - x0) * 0.45);
+          link.path = `M ${x0.toFixed(2)} ${y0.toFixed(2)} C ${(x0 + control).toFixed(2)} ${y0.toFixed(2)}, ${(x1 - control).toFixed(2)} ${y1.toFixed(2)}, ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+        });
+        return {
+          width,
+          height,
+          nodes: positionedNodes,
+          links: positionedLinks,
+          focusSet
+        };
+      }
+
+      function renderStoryFlowOverlay(){
+        if(!state.storyFlowOpen) return;
+        const panel = $('#storyFlowPanel');
+        const sheetEl = panel ? panel.querySelector('.storyFlowSheet') : null;
+        const titleEl = $('#storyFlowTitle');
+        const subEl = $('#storyFlowSub');
+        const metaEl = $('#storyFlowMeta');
+        const viewModeBtn = $('#storyFlowViewModeBtn');
+        const zoomControlsEl = $('#storyFlowZoomControls');
+        const questionModeBtn = $('#storyFlowQuestionModeBtn');
+        const topPathsBtn = $('#storyFlowTopPathsBtn');
+        const clearFocusBtn = $('#storyFlowClearFocusBtn');
+        const zoomInBtn = $('#storyFlowZoomInBtn');
+        const zoomOutBtn = $('#storyFlowZoomOutBtn');
+        const fitBtn = $('#storyFlowFitBtn');
+        const linksSvg = $('#storyFlowLinksSvg');
+        const nodesLayer = $('#storyFlowNodesLayer');
+        const graphViewportEl = $('#storyFlowGraphViewport');
+        const graphStageEl = $('#storyFlowGraphStage');
+        const canvasEl = $('#storyFlowCanvas');
+        const canvasWrapEl = panel ? panel.querySelector('.storyFlowCanvasWrap') : null;
+        const inspectorEl = $('#storyFlowInspector');
+        const narrativeEl = $('#storyFlowNarrative');
+        const narrativeInnerEl = $('#storyFlowNarrativeInner');
+        const summaryEl = $('#storyFlowSummary');
+        const hoverCardEl = $('#storyFlowHoverCard');
+        const inspectorTitleEl = $('#storyFlowInspectorTitle');
+        const inspectorBodyEl = $('#storyFlowInspectorBody');
+        const pathListEl = $('#storyFlowPathList');
+        const inspectorSignalsEl = $('#storyFlowInspectorSignals');
+        if(!panel || !sheetEl || !titleEl || !subEl || !metaEl || !viewModeBtn || !zoomControlsEl || !questionModeBtn || !clearFocusBtn || !linksSvg || !nodesLayer || !graphViewportEl || !graphStageEl || !canvasEl || !canvasWrapEl || !inspectorEl || !narrativeEl || !narrativeInnerEl || !summaryEl || !hoverCardEl || !inspectorTitleEl || !inspectorBodyEl || !pathListEl || !inspectorSignalsEl){
+          return;
+        }
+        const hideHoverCard = ()=>{
+          hoverCardEl.hidden = true;
+          hoverCardEl.innerHTML = '';
+          hoverCardEl.style.left = '';
+          hoverCardEl.style.top = '';
+        };
+        const viewMode = storyFlowResolvedViewMode(state.storyFlowViewMode);
+        const isNarrativeMode = viewMode === 'narrative';
+        const isCardMapMode = viewMode === 'card-map';
+        const isCardBasedMode = isNarrativeMode || isCardMapMode;
+        state.storyFlowViewMode = viewMode;
+        viewModeBtn.textContent = storyFlowViewModeLabel(viewMode);
+        viewModeBtn.setAttribute('aria-pressed', viewMode === 'sankey' ? 'false' : 'true');
+        sheetEl.classList.toggle('is-narrative', isNarrativeMode);
+        sheetEl.classList.toggle('is-card-map', isCardMapMode);
+        canvasWrapEl.hidden = isCardBasedMode;
+        inspectorEl.hidden = isCardBasedMode;
+        narrativeEl.hidden = !isCardBasedMode;
+        zoomControlsEl.hidden = isCardBasedMode;
+        questionModeBtn.hidden = isCardBasedMode;
+        topPathsBtn.hidden = isCardBasedMode;
+        clearFocusBtn.hidden = isNarrativeMode;
+        setStoryFlowModesOpen(state.storyFlowModesOpen && state.storyFlowOpen);
+        questionModeBtn.textContent = storyFlowQuestionModeLabel(state.storyFlowQuestionMode);
+        const isTopMode = String(state.storyFlowEmphasis || 'all') === 'top';
+        if(topPathsBtn){
+          topPathsBtn.textContent = isTopMode ? 'View: top paths' : 'View: all paths';
+          topPathsBtn.setAttribute('aria-pressed', isTopMode ? 'true' : 'false');
+          topPathsBtn.classList.toggle('secondaryBlue', isTopMode);
+        }
+        const context = storyFlowContextForThread(state.storyFlowThreadId || state.recommendationsThreadId || state.activeThread || 'current');
+        const gate = context.gate || {};
+        const pyramid = context.pyramid;
+        titleEl.textContent = `Story flow for ${gate.company || 'this record'}`;
+        subEl.textContent = 'Questions to pain themes, outcomes, PIBR capabilities, Immersive One, and brand narrative.';
+        if(!gate.eligible || !pyramid){
+          const completionLabel = String(gate.completion || 'below threshold').trim();
+          metaEl.innerHTML = `<span class="dashboardPill">Status: Locked</span><span class="dashboardPill">Completion: ${escapeHtml(completionLabel)}</span>`;
+          summaryEl.innerHTML = '';
+          linksSvg.innerHTML = '';
+          nodesLayer.innerHTML = '';
+          narrativeInnerEl.innerHTML = `<p class="storyFlowNarrativeEmpty">Story flow unlocks at 90% completion. Current status: ${escapeHtml(completionLabel)}.</p>`;
+          hideHoverCard();
+          inspectorTitleEl.textContent = 'Story flow unavailable';
+          inspectorBodyEl.textContent = `Reach at least 90% completion to open weighted flow mapping. Current status: ${completionLabel}.`;
+          pathListEl.innerHTML = '';
+          inspectorSignalsEl.innerHTML = '';
+          clearFocusBtn.disabled = true;
+          if(zoomInBtn) zoomInBtn.disabled = true;
+          if(zoomOutBtn) zoomOutBtn.disabled = true;
+          if(fitBtn) fitBtn.disabled = true;
+          return;
+        }
+        const graph = storyFlowGraphModelFromPyramid(pyramid, { questionMode: state.storyFlowQuestionMode });
+        if(!(graph.nodeById instanceof Map) || !graph.nodes.length){
+          metaEl.innerHTML = '<span class="dashboardPill">Status: No mapped nodes</span>';
+          summaryEl.innerHTML = '';
+          linksSvg.innerHTML = '';
+          nodesLayer.innerHTML = '';
+          narrativeInnerEl.innerHTML = '<p class="storyFlowNarrativeEmpty">No mapped story chain yet. Complete more discovery responses to generate this view.</p>';
+          hideHoverCard();
+          inspectorTitleEl.textContent = 'No mapped flow yet';
+          inspectorBodyEl.textContent = 'Complete more discovery inputs to generate a full question-to-brand chain.';
+          pathListEl.innerHTML = '';
+          inspectorSignalsEl.innerHTML = '';
+          clearFocusBtn.disabled = true;
+          if(zoomInBtn) zoomInBtn.disabled = true;
+          if(zoomOutBtn) zoomOutBtn.disabled = true;
+          if(fitBtn) fitBtn.disabled = true;
+          return;
+        }
+        const topPaths = storyFlowTopPaths(graph, { maxPaths:8 });
+        const graphLinkById = new Map(
+          (Array.isArray(graph.links) ? graph.links : [])
+            .map((link)=> [String((link && link.id) || '').trim(), link])
+            .filter((entry)=> entry[0])
+        );
+        const rankedPaths = topPaths.slice(0, 5);
+        const routeLinkStyleById = new Map();
+        rankedPaths.forEach((path, pathIdx)=>{
+          (Array.isArray(path && path.linkIds) ? path.linkIds : []).forEach((linkId)=>{
+            const key = String(linkId || '').trim();
+            if(!key) return;
+            const existing = routeLinkStyleById.get(key);
+            if(existing && existing.rank <= pathIdx) return;
+            routeLinkStyleById.set(key, {
+              rank: pathIdx,
+              tint: storyFlowRouteTintPercent(pathIdx, rankedPaths.length),
+              stroke: storyFlowRouteStrokeColor(pathIdx, rankedPaths.length)
+            });
+          });
+        });
+        if(state.storyFlowActivePathId && !topPaths.some((row)=> row.id === state.storyFlowActivePathId)){
+          state.storyFlowActivePathId = '';
+        }
+        if(!state.storyFlowActivePathId && topPaths.length){
+          state.storyFlowActivePathId = topPaths[0].id;
+        }
+        if(state.storyFlowFocusNodeId && !graph.nodeById.has(state.storyFlowFocusNodeId)){
+          state.storyFlowFocusNodeId = '';
+        }
+        const relatedPaths = state.storyFlowFocusNodeId
+          ? topPaths.filter((row)=> Array.isArray(row && row.nodeIds) && row.nodeIds.includes(state.storyFlowFocusNodeId))
+          : [];
+        if(state.storyFlowFocusNodeId){
+          state.storyFlowEmphasis = 'top';
+          if(relatedPaths.length){
+            if(!relatedPaths.some((row)=> row.id === state.storyFlowActivePathId)){
+              state.storyFlowActivePathId = relatedPaths[0].id;
+            }
+          }else{
+            state.storyFlowActivePathId = '';
+          }
+        }
+        const directFocusSet = storyFlowConnectedNodeSet(graph, state.storyFlowFocusNodeId);
+        let pathVisibleSet = null;
+        let pathVisibleLinkSet = null;
+        if(state.storyFlowFocusNodeId && relatedPaths.length){
+          const activeRelatedPath = relatedPaths.find((row)=> row.id === state.storyFlowActivePathId);
+          if(activeRelatedPath){
+            pathVisibleSet = new Set(activeRelatedPath.nodeIds);
+            pathVisibleLinkSet = new Set(activeRelatedPath.linkIds);
+          }else{
+            pathVisibleSet = new Set(relatedPaths.flatMap((row)=> row.nodeIds));
+            pathVisibleLinkSet = new Set(relatedPaths.flatMap((row)=> row.linkIds));
+          }
+        }else if(!state.storyFlowFocusNodeId && isTopMode && topPaths.length){
+          const activePaths = state.storyFlowActivePathId
+            ? topPaths.filter((row)=> row.id === state.storyFlowActivePathId)
+            : topPaths.slice(0, 3);
+          pathVisibleSet = new Set(activePaths.flatMap((row)=> row.nodeIds));
+          pathVisibleLinkSet = new Set(activePaths.flatMap((row)=> row.linkIds));
+        }
+        if(isCardBasedMode){
+          state.storyFlowHoverLinkId = '';
+          summaryEl.innerHTML = '';
+          hideHoverCard();
+          const answeredCount = Math.max(0, Number(pyramid.answeredQuestionCount) || 0);
+          const mappedQuestionCount = Math.max(answeredCount, Number(pyramid.mappedQuestionCount) || 0);
+          const questionNodeCount = graph.nodes.filter((node)=> node.stage === 'question').length;
+          const stageCount = STORY_FLOW_STAGE_ORDER.filter((stage)=> graph.nodes.some((node)=> node.stage === stage)).length;
+          metaEl.innerHTML = [
+            `<span class="dashboardPill">Signals mapped: ${answeredCount}/${mappedQuestionCount || answeredCount || 0}</span>`,
+            `<span class="dashboardPill">Question nodes: ${questionNodeCount}</span>`,
+            `<span class="dashboardPill">Layers mapped: ${stageCount}/${STORY_FLOW_STAGE_ORDER.length}</span>`,
+            `<span class="dashboardPill">${escapeHtml(isCardMapMode ? 'Mode: Card map (linked)' : 'Mode: Narrative cards')}</span>`
+          ].join('');
+          linksSvg.innerHTML = '';
+          nodesLayer.innerHTML = '';
+          pathListEl.innerHTML = '';
+          inspectorSignalsEl.innerHTML = '';
+          narrativeInnerEl.innerHTML = isCardMapMode
+            ? storyFlowCardMapMarkup(graph, {
+                focusNodeId: state.storyFlowFocusNodeId,
+                visibleSet: (pathVisibleSet && pathVisibleSet.size) ? pathVisibleSet : ((directFocusSet && directFocusSet.size) ? directFocusSet : null)
+              })
+            : storyFlowNarrativeMarkup(graph, { focusNodeId: state.storyFlowFocusNodeId });
+          if(isCardMapMode){
+            storyFlowRenderCardMapLinks(graph, {
+              focusNodeId: state.storyFlowFocusNodeId,
+              visibleSet: (pathVisibleSet && pathVisibleSet.size) ? pathVisibleSet : ((directFocusSet && directFocusSet.size) ? directFocusSet : null),
+              visibleLinkSet: (pathVisibleLinkSet && pathVisibleLinkSet.size) ? pathVisibleLinkSet : null,
+              routeLinkStyleById,
+              activePathId: state.storyFlowActivePathId
+            });
+          }
+          clearFocusBtn.disabled = !state.storyFlowFocusNodeId;
+          if(zoomInBtn) zoomInBtn.disabled = true;
+          if(zoomOutBtn) zoomOutBtn.disabled = true;
+          if(fitBtn) fitBtn.disabled = true;
+          return;
+        }
+        narrativeInnerEl.innerHTML = '';
+        const canvasWidth = Math.max(1040, Number(canvasEl.clientWidth) || 1120);
+        const canvasHeight = Math.max(560, Number(canvasEl.clientHeight) || 620);
+        const targetLayoutWidth = Math.max(1120, Math.round(canvasWidth * 1.02));
+        const targetLayoutHeight = Math.max(740, Math.round(canvasHeight * 1.12));
+        const inspectorWidthForLayout = inspectorEl && !inspectorEl.hidden
+          ? Math.max(0, Number(inspectorEl.offsetWidth) || 0)
+          : 0;
+        const layout = storyFlowLayoutGraph(graph, {
+          width: targetLayoutWidth,
+          height: targetLayoutHeight,
+          focusNodeId: state.storyFlowFocusNodeId,
+          leftInset: inspectorWidthForLayout + 36
+        });
+        let zoom = storyFlowZoomClamp(state.storyFlowZoom || 1);
+        const shouldFitView = !!state.storyFlowNeedsFit;
+        if(shouldFitView){
+          zoom = storyFlowFitZoom(layout.width, layout.height, canvasEl.clientWidth || canvasWidth, canvasEl.clientHeight || canvasHeight);
+          state.storyFlowZoom = zoom;
+          state.storyFlowNeedsFit = false;
+        }
+        const liveCanvasWidth = Math.max(1, Number(canvasEl.clientWidth) || canvasWidth);
+        const liveCanvasHeight = Math.max(1, Number(canvasEl.clientHeight) || canvasHeight);
+        const scaledWidth = Math.max(420, Math.round(layout.width * zoom));
+        const scaledHeight = Math.max(320, Math.round(layout.height * zoom));
+        let centeredPanX = (liveCanvasWidth - scaledWidth) * 0.5;
+        const centeredPanY = (liveCanvasHeight - scaledHeight) * 0.5;
+        const questionNodes = layout.nodes.filter((node)=> node.stage === 'question');
+        const questionStartX = questionNodes.length
+          ? Math.min(...questionNodes.map((node)=> Math.max(0, Number(node.x) || 0)))
+          : 0;
+        const inspectorWidth = inspectorEl && !inspectorEl.hidden
+          ? Math.max(0, Number(inspectorEl.offsetWidth) || 0)
+          : 0;
+        if(inspectorWidth > 0){
+          const desiredQuestionLeft = inspectorWidth + 28;
+          const projectedQuestionX = centeredPanX + (questionStartX * zoom);
+          if(projectedQuestionX < desiredQuestionLeft){
+            centeredPanX += (desiredQuestionLeft - projectedQuestionX);
+          }
+        }
+        let panX = Number(state.storyFlowPanX);
+        let panY = Number(state.storyFlowPanY);
+        if(shouldFitView){
+          panX = centeredPanX;
+          panY = centeredPanY;
+        }else{
+          if(!Number.isFinite(panX)) panX = centeredPanX;
+          if(!Number.isFinite(panY)) panY = centeredPanY;
+        }
+        state.storyFlowPanX = panX;
+        state.storyFlowPanY = panY;
+        graphViewportEl.style.width = `${liveCanvasWidth}px`;
+        graphViewportEl.style.height = `${liveCanvasHeight}px`;
+        graphStageEl.style.width = `${Math.round(layout.width)}px`;
+        graphStageEl.style.height = `${Math.round(layout.height)}px`;
+        storyFlowApplyStageTransform(graphStageEl, zoom);
+        linksSvg.setAttribute('viewBox', `0 0 ${Math.round(layout.width)} ${Math.round(layout.height)}`);
+        let visibleSet = (pathVisibleSet && pathVisibleSet.size)
+          ? pathVisibleSet
+          : ((layout.focusSet instanceof Set && layout.focusSet.size)
+              ? layout.focusSet
+              : ((directFocusSet && directFocusSet.size) ? directFocusSet : null));
+        let visibleLinkSet = (pathVisibleLinkSet && pathVisibleLinkSet.size) ? pathVisibleLinkSet : null;
+        const shouldHideNonVisible = false;
+        let hoveredLinkId = String(state.storyFlowHoverLinkId || '').trim();
+        if(hoveredLinkId && !layout.links.some((link)=> String(link.id || '').trim() === hoveredLinkId)){
+          hoveredLinkId = '';
+          state.storyFlowHoverLinkId = '';
+        }
+        const answeredCount = Math.max(0, Number(pyramid.answeredQuestionCount) || 0);
+        const mappedQuestionCount = Math.max(answeredCount, Number(pyramid.mappedQuestionCount) || 0);
+        const questionNodeCount = layout.nodes.filter((node)=> node.stage === 'question').length;
+        metaEl.innerHTML = [
+          `<span class="dashboardPill">Signals mapped: ${answeredCount}/${mappedQuestionCount || answeredCount || 0}</span>`,
+          `<span class="dashboardPill">Question nodes: ${questionNodeCount}</span>`,
+          `<span class="dashboardPill">Flow links: ${layout.links.length}</span>`,
+          `<span class="dashboardPill">Mode: ${escapeHtml(state.storyFlowQuestionMode === 'expanded' ? 'Expanded signals' : 'Grouped domains')}</span>`,
+          `<span class="dashboardPill">Zoom: ${Math.round(zoom * 100)}%</span>`
+        ].join('');
+        const compactStoryText = (value, maxChars)=>{
+          const text = String(value || '').trim().replace(/\s+/g, ' ');
+          const cap = Math.max(48, Number(maxChars) || 188);
+          if(!text) return '';
+          if(text.length <= cap) return text;
+          return `${text.slice(0, cap - 1).trimEnd()}…`;
+        };
+        summaryEl.innerHTML = '';
+        if(zoomInBtn) zoomInBtn.disabled = zoom >= 2.2;
+        if(zoomOutBtn) zoomOutBtn.disabled = zoom <= 0.55;
+        if(fitBtn) fitBtn.disabled = false;
+
+        const existingLinkEls = new Map(
+          Array.from(linksSvg.querySelectorAll('.storyFlowLink')).map((el)=> [String(el.getAttribute('data-story-flow-link-id') || '').trim(), el]).filter((entry)=> entry[0])
+        );
+        const nextLinkIds = new Set();
+        const renderedNodeById = new Map(layout.nodes.map((row)=> [String(row.id || '').trim(), row]));
+        layout.links.forEach((link)=>{
+          nextLinkIds.add(link.id);
+          let pathEl = existingLinkEls.get(link.id);
+          if(!pathEl){
+            pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            pathEl.classList.add('storyFlowLink');
+            pathEl.setAttribute('data-story-flow-link-id', link.id);
+            linksSvg.appendChild(pathEl);
+          }
+          pathEl.setAttribute('d', link.path);
+          pathEl.setAttribute('stroke-width', Number(link.renderThickness || link.thickness || 1.2).toFixed(2));
+          pathEl.style.setProperty('--flow-alpha', (0.16 + (clamp(Number(link.strength) || 0, 0, 1) * 0.8)).toFixed(2));
+          const routeStyle = routeLinkStyleById.get(String(link.id || '').trim());
+          if(routeStyle){
+            pathEl.style.stroke = routeStyle.stroke;
+            pathEl.setAttribute('data-story-flow-route-rank', String(routeStyle.rank + 1));
+            pathEl.setAttribute('data-story-flow-route-tint', String(routeStyle.tint));
+          }else{
+            pathEl.style.removeProperty('stroke');
+            pathEl.removeAttribute('data-story-flow-route-rank');
+            pathEl.removeAttribute('data-story-flow-route-tint');
+          }
+          const byNodeVisibility = !visibleSet || (visibleSet.has(link.sourceId) && visibleSet.has(link.targetId));
+          const byPathVisibility = !visibleLinkSet || visibleLinkSet.has(link.id);
+          const isVisible = byNodeVisibility && byPathVisibility;
+          const isActivePathLink = !!state.storyFlowActivePathId && !!visibleLinkSet && visibleLinkSet.has(link.id);
+          const isFocusedPath = !!(state.storyFlowFocusNodeId && (link.sourceId === state.storyFlowFocusNodeId || link.targetId === state.storyFlowFocusNodeId));
+          const isHoveredPath = !!hoveredLinkId && String(link.id) === hoveredLinkId;
+          pathEl.classList.toggle('is-dimmed', !isVisible);
+          pathEl.classList.toggle('is-hidden', shouldHideNonVisible && !isVisible);
+          pathEl.classList.toggle('is-path-active', isActivePathLink);
+          pathEl.classList.toggle('is-focused', isFocusedPath);
+          pathEl.classList.toggle('is-hovered', isHoveredPath);
+          const sourceLabel = String((renderedNodeById.get(String(link.sourceId || '').trim()) && renderedNodeById.get(String(link.sourceId || '').trim()).label) || link.sourceId).trim();
+          const targetLabel = String((renderedNodeById.get(String(link.targetId || '').trim()) && renderedNodeById.get(String(link.targetId || '').trim()).label) || link.targetId).trim();
+          const firstReason = String((Array.isArray(link.reasons) ? link.reasons[0] : '') || '').trim();
+          const routeMeta = routeLinkStyleById.get(String(link.id || '').trim());
+          const insightText = [
+            `${sourceLabel} -> ${targetLabel}`,
+            `Relationship strength: ${Math.max(1, Math.round(Number(link.value) || 0))}%`,
+            routeMeta ? `Route rank: ${routeMeta.rank + 1} (tint ${routeMeta.tint}%)` : '',
+            firstReason ? `Why: ${firstReason}` : ''
+          ].filter(Boolean).join('\n');
+          let titleEl = pathEl.querySelector('title');
+          if(!titleEl){
+            titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+            pathEl.appendChild(titleEl);
+          }
+          titleEl.textContent = insightText;
+        });
+        existingLinkEls.forEach((el, id)=>{
+          if(nextLinkIds.has(id)) return;
+          el.remove();
+        });
+
+        const nodeLayoutById = new Map(layout.nodes.map((row)=> [String(row.id || '').trim(), row]));
+        const incomingByNode = new Map();
+        const outgoingByNode = new Map();
+        layout.links.forEach((link)=>{
+          const sourceId = String(link && link.sourceId || '').trim();
+          const targetId = String(link && link.targetId || '').trim();
+          if(!sourceId || !targetId) return;
+          if(!incomingByNode.has(targetId)) incomingByNode.set(targetId, []);
+          if(!outgoingByNode.has(sourceId)) outgoingByNode.set(sourceId, []);
+          incomingByNode.get(targetId).push(link);
+          outgoingByNode.get(sourceId).push(link);
+        });
+        incomingByNode.forEach((rows)=> rows.sort((left, right)=> Number(right.value) - Number(left.value)));
+        outgoingByNode.forEach((rows)=> rows.sort((left, right)=> Number(right.value) - Number(left.value)));
+        const compactText = (value, maxChars)=>{
+          const text = String(value || '').trim().replace(/\s+/g, ' ');
+          const cap = Math.max(36, Number(maxChars) || 140);
+          if(!text) return '';
+          if(text.length <= cap) return text;
+          return `${text.slice(0, cap - 1).trimEnd()}…`;
+        };
+        const normalizeCompareText = (value)=> String(value || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9\s:]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const textTailAfterColon = (value)=>{
+          const text = String(value || '');
+          const idx = text.indexOf(':');
+          if(idx === -1) return text;
+          return text.slice(idx + 1);
+        };
+        const isRepeatedCopy = (a, b)=>{
+          const left = normalizeCompareText(a);
+          const right = normalizeCompareText(b);
+          if(!left || !right) return false;
+          if(left === right) return true;
+          const leftTail = normalizeCompareText(textTailAfterColon(a));
+          const rightTail = normalizeCompareText(textTailAfterColon(b));
+          if(leftTail && rightTail && leftTail === rightTail) return true;
+          return left.includes(right) || right.includes(left) || (leftTail && rightTail && (leftTail.includes(rightTail) || rightTail.includes(leftTail)));
+        };
+        const nodeSummary = (node, opts)=>{
+          const cfg = (opts && typeof opts === 'object') ? opts : {};
+          const expanded = !!cfg.expanded;
+          const desc = String((node && node.description) || '').trim();
+          const hint = String((Array.isArray(node && node.hints) ? node.hints[0] : '') || '').trim();
+          const text = desc || hint;
+          if(!text) return '';
+          return expanded ? text : compactText(text, 112);
+        };
+        const nodeDetail = (node, summaryText, opts)=>{
+          const cfg = (opts && typeof opts === 'object') ? opts : {};
+          const expanded = !!cfg.expanded;
+          if(!node) return '';
+          const signalGroup = Array.isArray(node.signalDetails) ? node.signalDetails.find((group)=> Array.isArray(group && group.values) && group.values.length) : null;
+          const signalValues = Array.isArray(signalGroup && signalGroup.values) ? signalGroup.values.slice(0, 2) : [];
+          const signalText = signalValues.length
+            ? `${String((signalGroup && signalGroup.label) || 'Signal').trim()}: ${naturalList(signalValues, { conjunction:'and' })}`
+            : '';
+          const incoming = Array.isArray(incomingByNode.get(node.id)) ? incomingByNode.get(node.id)[0] : null;
+          const outgoing = Array.isArray(outgoingByNode.get(node.id)) ? outgoingByNode.get(node.id)[0] : null;
+          const incomingSource = incoming ? nodeLayoutById.get(String(incoming.sourceId || '').trim()) : null;
+          const outgoingTarget = outgoing ? nodeLayoutById.get(String(outgoing.targetId || '').trim()) : null;
+          const reasoning = [];
+          if(incomingSource){
+            reasoning.push(`Driven mainly by ${incomingSource.label} (${Math.max(1, Math.round(Number(incoming && incoming.value) || 0))}%).`);
+          }
+          if(signalText){
+            reasoning.push(`Current context: ${signalText}.`);
+          }
+          if(outgoingTarget){
+            reasoning.push(`Most strongly shapes ${outgoingTarget.label} (${Math.max(1, Math.round(Number(outgoing && outgoing.value) || 0))}%).`);
+          }
+          if(!reasoning.length){
+            reasoning.push('Positioned here because it has one of the strongest mapped contributions in this layer.');
+          }
+          const raw = reasoning.join(' ').trim();
+          const detail = expanded ? raw : compactText(raw, 142);
+          if(!detail) return '';
+          if(isRepeatedCopy(detail, summaryText)) return '';
+          return detail;
+        };
+        const nodeWeightCaption = (stage, weightValue)=>{
+          const weight = Math.max(1, Math.round(Number(weightValue) || 0));
+          if(stage === 'question') return `${weight}% signal contribution`;
+          if(stage === 'pain') return `${weight}% pain weight`;
+          if(stage === 'outcome') return `${weight}% outcome priority`;
+          if(stage === 'capability') return `${weight}% capability fit`;
+          if(stage === 'platform') return `${weight}% platform relevance`;
+          if(stage === 'brand') return `${weight}% brand alignment`;
+          return `${weight}% weighted influence`;
+        };
+
+        const existingNodeEls = new Map(
+          Array.from(nodesLayer.querySelectorAll('.storyFlowNode')).map((el)=> [String(el.getAttribute('data-story-flow-node-id') || '').trim(), el]).filter((entry)=> entry[0])
+        );
+        const nextNodeIds = new Set();
+        layout.nodes.forEach((node)=>{
+          nextNodeIds.add(node.id);
+          let nodeEl = existingNodeEls.get(node.id);
+          if(!nodeEl){
+            nodeEl = document.createElement('button');
+            nodeEl.type = 'button';
+            nodeEl.className = 'storyFlowNode';
+            nodeEl.setAttribute('data-story-flow-node-id', node.id);
+            nodesLayer.appendChild(nodeEl);
+          }
+          nodeEl.setAttribute('data-story-flow-stage', node.stage);
+          const isFocusedNode = !!state.storyFlowFocusNodeId && node.id === state.storyFlowFocusNodeId;
+          const summary = nodeSummary(node, { expanded:isFocusedNode });
+          const detail = nodeDetail(node, summary, { expanded:isFocusedNode });
+          const focusedIncoming = (incomingByNode.get(node.id) || []).slice(0, 2).map((link)=> {
+            const source = nodeLayoutById.get(String(link.sourceId || '').trim());
+            return `${String((source && source.label) || 'Previous layer').trim()} (${Math.max(1, Math.round(Number(link.value) || 0))}%)`;
+          });
+          const focusedOutgoing = (outgoingByNode.get(node.id) || []).slice(0, 2).map((link)=> {
+            const target = nodeLayoutById.get(String(link.targetId || '').trim());
+            return `${String((target && target.label) || 'Next layer').trim()} (${Math.max(1, Math.round(Number(link.value) || 0))}%)`;
+          });
+          const focusedSignals = Array.isArray(node.signalDetails)
+            ? node.signalDetails.slice(0, 1).flatMap((group)=> (Array.isArray(group && group.values) ? group.values.slice(0, 2) : []))
+            : [];
+          const relatedJourneyCount = topPaths.filter((row)=> Array.isArray(row && row.nodeIds) && row.nodeIds.includes(node.id)).length;
+          const whyPrioritisedText = [
+            focusedIncoming.length ? `This node is prioritised because ${naturalList(focusedIncoming, { conjunction:'and' })} feed into it.` : '',
+            focusedSignals.length ? `Signal evidence: ${naturalList(focusedSignals, { conjunction:'and' })}.` : '',
+            !focusedIncoming.length && !focusedSignals.length ? 'This node remains prioritised due to cumulative weighted influence across connected links.' : ''
+          ].filter(Boolean).join(' ');
+          const chainPositionText = focusedOutgoing.length
+            ? `From here, the strongest downstream impact goes to ${naturalList(focusedOutgoing, { conjunction:'and' })}.`
+            : 'This is currently an end-stage node in the mapped journey.';
+          const journeyContextText = relatedJourneyCount
+            ? `${relatedJourneyCount} mapped ${relatedJourneyCount === 1 ? 'journey includes' : 'journeys include'} this node.`
+            : 'No full end-to-end journey currently includes this node.';
+          const weightBar = Math.max(5, Math.min(100, Math.round(Number(node.weight) || 0)));
+          nodeEl.innerHTML = `
+            <p class="storyFlowNodeStage">${escapeHtml(STORY_FLOW_STAGE_LABEL[node.stage] || node.stage)}</p>
+            <p class="storyFlowNodeTitle">${escapeHtml(node.label)}</p>
+            <p class="storyFlowNodeWeight">${escapeHtml(nodeWeightCaption(node.stage, node.weight))}</p>
+            <div class="storyFlowNodeBar" aria-hidden="true"><span style="width:${weightBar}%"></span></div>
+            ${summary ? `<p class="storyFlowNodeSummary">${escapeHtml(summary)}</p>` : ''}
+            ${detail ? `<p class="storyFlowNodeDetail">${escapeHtml(detail)}</p>` : ''}
+            ${isFocusedNode ? `
+              <div class="storyFlowNodeInsights">
+                <p class="storyFlowNodeInsight"><strong>Why this is here:</strong> ${escapeHtml(whyPrioritisedText || 'Prioritised from weighted discovery-to-outcome mapping.')}</p>
+                <p class="storyFlowNodeInsight"><strong>Position in chain:</strong> ${escapeHtml(chainPositionText || 'This node contributes to the active mapped journey.')}</p>
+                <p class="storyFlowNodeInsight"><strong>Journey context:</strong> ${escapeHtml(journeyContextText)}</p>
+              </div>
+            ` : ''}
+          `;
+          nodeEl.style.left = `${node.x.toFixed(2)}px`;
+          nodeEl.style.top = `${node.y.toFixed(2)}px`;
+          nodeEl.style.width = `${node.w.toFixed(2)}px`;
+          if(isFocusedNode){
+            nodeEl.style.minHeight = `${node.h.toFixed(2)}px`;
+            nodeEl.style.height = 'auto';
+            nodeEl.style.zIndex = '26';
+          }else{
+            nodeEl.style.minHeight = '';
+            nodeEl.style.height = `${node.h.toFixed(2)}px`;
+            nodeEl.style.zIndex = '';
+          }
+          const isVisible = !visibleSet || visibleSet.has(node.id);
+          nodeEl.classList.toggle('is-dimmed', !isVisible);
+          nodeEl.classList.toggle('is-hidden', shouldHideNonVisible && !isVisible);
+          nodeEl.classList.toggle('is-focused', isFocusedNode);
+          nodeEl.setAttribute('aria-pressed', isFocusedNode ? 'true' : 'false');
+        });
+        existingNodeEls.forEach((el, id)=>{
+          if(nextNodeIds.has(id)) return;
+          el.remove();
+        });
+
+        clearFocusBtn.disabled = !state.storyFlowFocusNodeId;
+        const pathsForList = state.storyFlowFocusNodeId
+          ? (relatedPaths.length ? relatedPaths : [])
+          : topPaths;
+        pathListEl.innerHTML = pathsForList.length
+          ? pathsForList.slice(0, 4).map((path, idx)=> {
+              const active = String(path.id) === String(state.storyFlowActivePathId || '');
+              const score = Math.max(1, Math.round(path.score));
+              const widthPct = Math.max(8, Math.min(100, score));
+              const pathNodeIds = Array.isArray(path && path.nodeIds) ? path.nodeIds : [];
+              const pathLinkIds = Array.isArray(path && path.linkIds) ? path.linkIds : [];
+              const pathNodeByStage = new Map();
+              pathNodeIds.forEach((nodeId)=>{
+                const node = graph.nodeById.get(String(nodeId || '').trim());
+                if(!node || !node.stage) return;
+                if(!pathNodeByStage.has(node.stage)){
+                  pathNodeByStage.set(node.stage, node);
+                }
+              });
+              const pathQuestionNode = pathNodeByStage.get('question');
+              const pathPainNode = pathNodeByStage.get('pain');
+              const pathOutcomeNode = pathNodeByStage.get('outcome');
+              const pathCapabilityNode = pathNodeByStage.get('capability');
+              const pathPlatformNode = pathNodeByStage.get('platform');
+              const pathBrandNode = pathNodeByStage.get('brand');
+              const pathLinks = pathLinkIds
+                .map((linkId)=> graphLinkById.get(String(linkId || '').trim()))
+                .filter(Boolean);
+              const strongestPathLink = pathLinks
+                .slice()
+                .sort((left, right)=> Number((right && right.value) || 0) - Number((left && left.value) || 0))[0];
+              const strongestPathReason = String((Array.isArray(strongestPathLink && strongestPathLink.reasons) ? strongestPathLink.reasons[0] : '') || '').trim();
+              const strongestPathReasonText = strongestPathReason
+                || `${(pathQuestionNode && pathQuestionNode.label) || 'This driver'} has the strongest influence on ${((pathOutcomeNode && pathOutcomeNode.label) || (pathCapabilityNode && pathCapabilityNode.label) || 'the mapped outcome')}.`;
+              const stageFlowLine = [
+                pathQuestionNode ? `Driver: ${pathQuestionNode.label}` : '',
+                pathPainNode ? `Pain: ${pathPainNode.label}` : '',
+                pathOutcomeNode ? `Outcome: ${pathOutcomeNode.label}` : '',
+                pathCapabilityNode ? `Capability: ${pathCapabilityNode.label}` : ''
+              ].filter(Boolean).join(' · ');
+              const pathResultLine = [
+                pathPlatformNode ? `Platform motion: ${pathPlatformNode.label}` : '',
+                pathBrandNode ? `Brand narrative: ${pathBrandNode.label}` : ''
+              ].filter(Boolean).join(' · ');
+              const contextTag = state.storyFlowFocusNodeId ? 'related' : 'global';
+              return `
+                <button class="storyFlowPathBtn${active ? ' is-active' : ''}" type="button" data-story-flow-path-id="${escapeHtml(path.id)}" data-story-flow-path-context="${escapeHtml(contextTag)}" aria-expanded="${active ? 'true' : 'false'}" aria-pressed="${active ? 'true' : 'false'}">
+                  <p class="storyFlowPathBtnRank">Path ${idx + 1} · ${score}%</p>
+                  <p class="storyFlowPathBtnTitle">${escapeHtml(compactStoryText(path.title || 'Priority path', 88))}</p>
+                  <p class="storyFlowPathBtnMeta">${escapeHtml(compactStoryText(`Driven by ${path.driver || 'discovery signals'}.`, 86))}</p>
+                  <div class="storyFlowPathBtnBar" aria-hidden="true"><span style="width:${widthPct}%"></span></div>
+                  ${active ? `
+                    <div class="storyFlowPathBtnInsights">
+                      ${stageFlowLine ? `<p class="storyFlowPathBtnInsight"><strong>Journey:</strong> ${escapeHtml(stageFlowLine)}</p>` : ''}
+                      <p class="storyFlowPathBtnInsight"><strong>Why this path:</strong> ${escapeHtml(strongestPathReasonText)}</p>
+                      ${pathResultLine ? `<p class="storyFlowPathBtnInsight"><strong>Result:</strong> ${escapeHtml(pathResultLine)}</p>` : ''}
+                    </div>
+                  ` : ''}
+                </button>
+              `;
+            }).join('')
+          : `<p class="storyFlowInspectorSignal">${escapeHtml(state.storyFlowFocusNodeId ? 'No complete journey path includes the selected node yet.' : 'No complete question-to-brand paths detected yet.')}</p>`;
+        const hoveredLink = hoveredLinkId
+          ? layout.links.find((row)=> String((row && row.id) || '').trim() === hoveredLinkId)
+          : null;
+        const hoveredRouteMeta = hoveredLink ? routeLinkStyleById.get(String(hoveredLink.id || '').trim()) : null;
+        const hoveredSourceNode = hoveredLink ? renderedNodeById.get(String(hoveredLink.sourceId || '').trim()) : null;
+        const hoveredTargetNode = hoveredLink ? renderedNodeById.get(String(hoveredLink.targetId || '').trim()) : null;
+        if(hoveredLink && hoveredSourceNode && hoveredTargetNode){
+          const reasonText = String((Array.isArray(hoveredLink.reasons) ? hoveredLink.reasons[0] : '') || '').trim();
+          const midpointX = ((((Number(hoveredSourceNode.x) || 0) + (Number(hoveredSourceNode.w) || 0)) + (Number(hoveredTargetNode.x) || 0)) * 0.5);
+          const midpointY = ((Number(hoveredLink.y0) || ((Number(hoveredSourceNode.y) || 0) + ((Number(hoveredSourceNode.h) || 0) * 0.5))) + (Number(hoveredLink.y1) || ((Number(hoveredTargetNode.y) || 0) + ((Number(hoveredTargetNode.h) || 0) * 0.5)))) * 0.5;
+          const screenX = clamp((midpointX * zoom) + state.storyFlowPanX + 14, 12, Math.max(12, liveCanvasWidth - 312));
+          const screenY = clamp((midpointY * zoom) + state.storyFlowPanY - 78, 12, Math.max(12, liveCanvasHeight - 94));
+          hoverCardEl.innerHTML = [
+            `<p class="storyFlowHoverTitle">${escapeHtml(`${hoveredSourceNode.label} -> ${hoveredTargetNode.label}`)}</p>`,
+            `<p class="storyFlowHoverMeta">${escapeHtml(`${Math.max(1, Math.round(Number(hoveredLink.value) || 0))}% relationship strength${hoveredRouteMeta ? ` · path ${hoveredRouteMeta.rank + 1}` : ''}`)}</p>`,
+            reasonText ? `<p class="storyFlowHoverMeta">${escapeHtml(compactStoryText(reasonText, 118))}</p>` : ''
+          ].filter(Boolean).join('');
+          hoverCardEl.style.left = `${Math.round(screenX)}px`;
+          hoverCardEl.style.top = `${Math.round(screenY)}px`;
+          hoverCardEl.hidden = false;
+        }else{
+          hideHoverCard();
+        }
+        const focusedNode = state.storyFlowFocusNodeId ? graph.nodeById.get(state.storyFlowFocusNodeId) : null;
+        if(!focusedNode){
+          if(hoveredLink && hoveredSourceNode && hoveredTargetNode){
+            inspectorTitleEl.textContent = 'Relationship insight';
+            inspectorBodyEl.textContent = `${hoveredSourceNode.label} -> ${hoveredTargetNode.label}.`;
+            inspectorSignalsEl.innerHTML = [
+              `<p class="storyFlowInspectorSignal"><strong>Strength:</strong> ${escapeHtml(`${Math.max(1, Math.round(Number(hoveredLink.value) || 0))}% weighted relationship`)}</p>`,
+              hoveredRouteMeta ? `<p class="storyFlowInspectorSignal"><strong>Route tint:</strong> ${escapeHtml(`Path ${hoveredRouteMeta.rank + 1} (${hoveredRouteMeta.tint}% tint)`)}</p>` : '',
+              `<p class="storyFlowInspectorSignal"><strong>Why this link exists:</strong> ${escapeHtml(String((Array.isArray(hoveredLink.reasons) ? hoveredLink.reasons[0] : '') || `${hoveredSourceNode.label} contributes to ${hoveredTargetNode.label}.`).trim())}</p>`,
+              `<p class="storyFlowInspectorSignal"><strong>From:</strong> ${escapeHtml(`${STORY_FLOW_STAGE_LABEL[hoveredSourceNode.stage] || hoveredSourceNode.stage} - ${hoveredSourceNode.label}`)}</p>`,
+              `<p class="storyFlowInspectorSignal"><strong>To:</strong> ${escapeHtml(`${STORY_FLOW_STAGE_LABEL[hoveredTargetNode.stage] || hoveredTargetNode.stage} - ${hoveredTargetNode.label}`)}</p>`
+            ].filter(Boolean).join('');
+            return;
+          }
+          if(isTopMode){
+            inspectorTitleEl.textContent = 'Strongest narrative path';
+            const activePath = topPaths.find((row)=> row.id === state.storyFlowActivePathId) || topPaths[0];
+            inspectorBodyEl.textContent = activePath
+              ? `${activePath.title}. Driven by ${activePath.driver} (${Math.max(1, Math.round(activePath.score))}% contribution).`
+              : 'Select a path or node to inspect weighted contribution logic.';
+            const activePathNodeIds = Array.isArray(activePath && activePath.nodeIds) ? activePath.nodeIds : [];
+            const activePathLinkIds = Array.isArray(activePath && activePath.linkIds) ? activePath.linkIds : [];
+            const activePathNodeByStage = new Map();
+            activePathNodeIds.forEach((nodeId)=>{
+              const node = graph.nodeById.get(String(nodeId || '').trim());
+              if(!node || !node.stage) return;
+              if(!activePathNodeByStage.has(node.stage)){
+                activePathNodeByStage.set(node.stage, node);
+              }
+            });
+            const activeQuestion = activePathNodeByStage.get('question');
+            const activePain = activePathNodeByStage.get('pain');
+            const activeOutcome = activePathNodeByStage.get('outcome');
+            const activeCapability = activePathNodeByStage.get('capability');
+            const activeLinks = activePathLinkIds
+              .map((linkId)=> graphLinkById.get(String(linkId || '').trim()))
+              .filter(Boolean);
+            const strongestActiveLink = activeLinks
+              .slice()
+              .sort((left, right)=> Number((right && right.value) || 0) - Number((left && left.value) || 0))[0];
+            const strongestReason = String((Array.isArray(strongestActiveLink && strongestActiveLink.reasons) ? strongestActiveLink.reasons[0] : '') || '').trim();
+            const activeJourneyLine = [
+              activeQuestion ? `Driver: ${activeQuestion.label}` : '',
+              activePain ? `Pain: ${activePain.label}` : '',
+              activeOutcome ? `Outcome: ${activeOutcome.label}` : '',
+              activeCapability ? `Capability: ${activeCapability.label}` : ''
+            ].filter(Boolean).join(' · ');
+            const activeReasonLine = strongestReason || 'This path ranks highly because each stage preserves strong weighted contribution into the next stage.';
+            const activeContributionLine = activePath
+              ? `Path score is ${Math.max(1, Math.round(activePath.score))}%, calculated from the limiting relationship strength across this journey.`
+              : '';
+            const strongQuestions = layout.nodes
+              .filter((node)=> node.stage === 'question')
+              .sort((left, right)=> Number(right.weight) - Number(left.weight))
+              .slice(0, 3)
+              .map((node)=> `${node.label} (${Math.max(1, Math.round(node.weight))}%)`);
+            const strongOutcomes = layout.nodes
+              .filter((node)=> node.stage === 'outcome')
+              .sort((left, right)=> Number(right.weight) - Number(left.weight))
+              .slice(0, 2)
+              .map((node)=> `${node.label} (${Math.max(1, Math.round(node.weight))}%)`);
+            const strongCapabilities = layout.nodes
+              .filter((node)=> node.stage === 'capability')
+              .sort((left, right)=> Number(right.weight) - Number(left.weight))
+              .slice(0, 2)
+              .map((node)=> `${node.label} (${Math.max(1, Math.round(node.weight))}%)`);
+            inspectorSignalsEl.innerHTML = [
+              activeJourneyLine ? `<p class="storyFlowInspectorSignal"><strong>Selected journey:</strong> ${escapeHtml(compactStoryText(activeJourneyLine, 210))}</p>` : '',
+              `<p class="storyFlowInspectorSignal"><strong>Why this path:</strong> ${escapeHtml(compactStoryText(activeReasonLine, 210))}</p>`,
+              activeContributionLine ? `<p class="storyFlowInspectorSignal"><strong>Contribution logic:</strong> ${escapeHtml(activeContributionLine)}</p>` : '',
+              strongQuestions.length ? `<p class="storyFlowInspectorSignal"><strong>Top drivers:</strong> ${escapeHtml(naturalList(strongQuestions, { conjunction:'and' }))}</p>` : '',
+              strongOutcomes.length ? `<p class="storyFlowInspectorSignal"><strong>Priority outcomes:</strong> ${escapeHtml(naturalList(strongOutcomes, { conjunction:'and' }))}</p>` : '',
+              strongCapabilities.length ? `<p class="storyFlowInspectorSignal"><strong>Best-fit capabilities:</strong> ${escapeHtml(naturalList(strongCapabilities, { conjunction:'and' }))}</p>` : ''
+            ].filter(Boolean).join('');
+            return;
+          }else{
+            inspectorTitleEl.textContent = 'All weighted paths';
+            inspectorBodyEl.textContent = 'Read left to right: discovery signals create pain themes, shape outcomes, and determine capability fit. Select any node to isolate that chain.';
+          }
+          const strongQuestions = layout.nodes
+            .filter((node)=> node.stage === 'question')
+            .sort((left, right)=> Number(right.weight) - Number(left.weight))
+            .slice(0, 3)
+            .map((node)=> `${node.label} (${Math.max(1, Math.round(node.weight))}%)`);
+          const strongOutcomes = layout.nodes
+            .filter((node)=> node.stage === 'outcome')
+            .sort((left, right)=> Number(right.weight) - Number(left.weight))
+            .slice(0, 2)
+            .map((node)=> `${node.label} (${Math.max(1, Math.round(node.weight))}%)`);
+          const strongCapabilities = layout.nodes
+            .filter((node)=> node.stage === 'capability')
+            .sort((left, right)=> Number(right.weight) - Number(left.weight))
+            .slice(0, 2)
+            .map((node)=> `${node.label} (${Math.max(1, Math.round(node.weight))}%)`);
+          inspectorSignalsEl.innerHTML = [
+            strongQuestions.length ? `<p class="storyFlowInspectorSignal"><strong>Top drivers:</strong> ${escapeHtml(naturalList(strongQuestions, { conjunction:'and' }))}</p>` : '',
+            strongOutcomes.length ? `<p class="storyFlowInspectorSignal"><strong>Priority outcomes:</strong> ${escapeHtml(naturalList(strongOutcomes, { conjunction:'and' }))}</p>` : '',
+            strongCapabilities.length ? `<p class="storyFlowInspectorSignal"><strong>Best-fit capabilities:</strong> ${escapeHtml(naturalList(strongCapabilities, { conjunction:'and' }))}</p>` : ''
+          ].filter(Boolean).join('');
+          return;
+        }
+
+        inspectorTitleEl.textContent = `${STORY_FLOW_STAGE_LABEL[focusedNode.stage] || focusedNode.stage}: ${focusedNode.label}`;
+        const focusedHint = String((Array.isArray(focusedNode.hints) ? focusedNode.hints[0] : '') || '').trim();
+        inspectorBodyEl.textContent = String(focusedNode.description || '').trim()
+          || focusedHint
+          || `This node carries ${Math.max(1, Math.round(Number(focusedNode.weight) || 0))}% relative influence in the mapped journey.`;
+        const incomingLinks = graph.links
+          .filter((link)=> link.targetId === focusedNode.id)
+          .sort((left, right)=> Number(right.value) - Number(left.value))
+          .slice(0, 4);
+        const outgoingLinks = graph.links
+          .filter((link)=> link.sourceId === focusedNode.id)
+          .sort((left, right)=> Number(right.value) - Number(left.value))
+          .slice(0, 4);
+        const signalLines = [];
+        if(relatedPaths.length){
+          signalLines.push(`<p class="storyFlowInspectorSignal"><strong>Related journeys:</strong> ${escapeHtml(`${relatedPaths.length} mapped path${relatedPaths.length === 1 ? '' : 's'} include this node.`)}</p>`);
+        }
+        signalLines.push(`<p class="storyFlowInspectorSignal"><strong>Relative weighting:</strong> ${escapeHtml(`${Math.max(1, Math.round(Number(focusedNode.weight) || 0))}%`)}</p>`);
+        (Array.isArray(focusedNode.signalDetails) ? focusedNode.signalDetails : []).slice(0, 4).forEach((group)=>{
+          signalLines.push(`<p class="storyFlowInspectorSignal"><strong>Current ${escapeHtml(String(group.label || 'signal context').toLowerCase())}:</strong> ${escapeHtml(naturalList((Array.isArray(group.values) ? group.values : []).slice(0, 4), { conjunction:'and' }))}</p>`);
+        });
+        (Array.isArray(focusedNode.hints) ? focusedNode.hints : []).slice(0, 2).forEach((hint)=>{
+          signalLines.push(`<p class="storyFlowInspectorSignal"><strong>Why this matters:</strong> ${escapeHtml(hint)}</p>`);
+        });
+        if(incomingLinks.length){
+          const incomingSummary = incomingLinks
+            .map((link)=> {
+              const source = graph.nodeById.get(link.sourceId);
+              return `${String((source && source.label) || 'Previous layer')} (${Math.max(1, Math.round(link.value))}%)`;
+            });
+          signalLines.push(`<p class="storyFlowInspectorSignal"><strong>Driven by:</strong> ${escapeHtml(naturalList(incomingSummary, { conjunction:'and' }))}</p>`);
+        }
+        if(outgoingLinks.length){
+          const outgoingSummary = outgoingLinks
+            .map((link)=> {
+              const target = graph.nodeById.get(link.targetId);
+              return `${String((target && target.label) || 'Next layer')} (${Math.max(1, Math.round(link.value))}%)`;
+            });
+          signalLines.push(`<p class="storyFlowInspectorSignal"><strong>Flows into:</strong> ${escapeHtml(naturalList(outgoingSummary, { conjunction:'and' }))}</p>`);
+        }
+        inspectorSignalsEl.innerHTML = signalLines.length
+          ? `
+            <details class="storyFlowInspectorDetails">
+              <summary><span class="storyFlowInspectorInfoBadge" aria-hidden="true">i</span><span>More context</span></summary>
+              <div class="storyFlowInspectorDetailsBody">
+                ${signalLines.join('')}
+              </div>
+            </details>
+          `
+          : '';
+      }
+
+      function openStoryFlowMode(threadId){
+        const context = storyFlowContextForThread(threadId);
+        if(!context.gate || !context.gate.eligible){
+          toast(`Story flow unlocks at 90% completion. Current completion is ${context.gate && context.gate.completion ? context.gate.completion : 'below threshold'}.`);
+          return false;
+        }
+        if(!context.pyramid || !Array.isArray(context.pyramid.layers) || !context.pyramid.layers.some((layer)=> Array.isArray(layer && layer.items) && layer.items.length)){
+          toast('No mapped story flow available yet for this record.');
+          return false;
+        }
+        state.storyFlowThreadId = context.gate.threadId || state.storyFlowThreadId || 'current';
+        state.storyFlowFocusNodeId = '';
+        state.storyFlowHoverLinkId = '';
+        state.storyFlowEmphasis = 'all';
+        state.storyFlowActivePathId = '';
+        storyFlowResetViewport({ clearFocus:true });
+        toggleStoryFlow(true, { threadId: state.storyFlowThreadId });
+        return true;
+      }
+
+      function storyNarrativeModelForThread(threadId){
+        const context = storyFlowContextForThread(threadId);
+        const gate = (context && context.gate && typeof context.gate === 'object') ? context.gate : {};
+        const pyramid = (context && context.pyramid && typeof context.pyramid === 'object') ? context.pyramid : {};
+        const thread = (context && context.thread && typeof context.thread === 'object') ? context.thread : {};
+        const resolvedThreadId = String((gate.threadId || thread.id || state.storyNarrativeThreadId || state.storyFlowThreadId || state.recommendationsThreadId || state.activeThread || 'current')).trim() || 'current';
+        const company = String((gate.company || thread.company || 'this account')).trim() || 'this account';
+        const completion = String(gate.completion || thread.completion || threadReadinessProgress(thread).completion || '0/22 (0%)');
+        const answeredSignals = Math.max(0, Number(pyramid.answeredQuestionCount) || 0);
+        const mappedSignals = Math.max(answeredSignals, Number(pyramid.mappedQuestionCount) || 0);
+        const mappedLayers = Array.isArray(pyramid.layers) ? pyramid.layers : [];
+        const hasMappedContent = mappedLayers.some((layer)=> Array.isArray(layer && layer.items) && layer.items.length);
+
+        const statusOnly = !gate.eligible || !hasMappedContent;
+        if(statusOnly){
+          const statusLine = !gate.eligible
+            ? `Story generation unlocks at 90% completion. Current completion is ${completion}.`
+            : 'No mapped story chain is available yet. Complete more discovery responses to generate a narrative.';
+          const statusText = [
+            `Story for ${company}`,
+            '',
+            statusLine
+          ].join('\n');
+          return {
+            threadId: resolvedThreadId,
+            company,
+            completion,
+            answeredSignals,
+            mappedSignals,
+            headline: `Story for ${company}`,
+            summary: statusLine,
+            meta: [
+              `Signals mapped: ${answeredSignals}/${mappedSignals || answeredSignals || 0}`,
+              `Completion: ${completion}`
+            ],
+            sections: [
+              {
+                title: 'Status',
+                body: statusLine,
+                bullets: []
+              }
+            ],
+            storyText: statusText
+          };
+        }
+
+        const graph = storyFlowGraphModelFromPyramid(pyramid, { questionMode:'grouped' });
+        const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+        const nodeById = (graph.nodeById instanceof Map) ? graph.nodeById : new Map();
+        const links = Array.isArray(graph.links) ? graph.links : [];
+        const topPaths = storyFlowTopPaths(graph, { maxPaths:6 });
+        const outgoingByNode = new Map();
+        const incomingByNode = new Map();
+        links.forEach((link)=>{
+          const sourceId = String((link && link.sourceId) || '').trim();
+          const targetId = String((link && link.targetId) || '').trim();
+          if(!sourceId || !targetId) return;
+          if(!outgoingByNode.has(sourceId)) outgoingByNode.set(sourceId, []);
+          if(!incomingByNode.has(targetId)) incomingByNode.set(targetId, []);
+          outgoingByNode.get(sourceId).push(link);
+          incomingByNode.get(targetId).push(link);
+        });
+        outgoingByNode.forEach((rows)=> rows.sort((left, right)=> Number(right.value) - Number(left.value)));
+        incomingByNode.forEach((rows)=> rows.sort((left, right)=> Number(right.value) - Number(left.value)));
+        const strongestPath = topPaths.length ? topPaths[0] : null;
+        const topNodesByStage = (stage, limit)=>{
+          const cap = Math.max(1, Number(limit) || 3);
+          return nodes
+            .filter((node)=> node && node.stage === stage)
+            .sort((left, right)=> Number(right.weight || 0) - Number(left.weight || 0))
+            .slice(0, cap);
+        };
+        const stageNodeFromPath = (path, stage)=>{
+          if(!path || !Array.isArray(path.nodeIds)) return null;
+          for(let i = 0; i < path.nodeIds.length; i += 1){
+            const node = nodeById.get(String(path.nodeIds[i] || '').trim());
+            if(node && node.stage === stage) return node;
+          }
+          return null;
+        };
+        const pct = (value)=> Math.max(1, Math.round(Number(value) || 0));
+        const strongestQuestion = stageNodeFromPath(strongestPath, 'question') || topNodesByStage('question', 1)[0] || null;
+        const strongestPain = stageNodeFromPath(strongestPath, 'pain') || topNodesByStage('pain', 1)[0] || null;
+        const strongestOutcome = stageNodeFromPath(strongestPath, 'outcome') || topNodesByStage('outcome', 1)[0] || null;
+        const strongestCapability = stageNodeFromPath(strongestPath, 'capability') || topNodesByStage('capability', 1)[0] || null;
+        const platformNode = topNodesByStage('platform', 1)[0] || null;
+        const brandNode = topNodesByStage('brand', 1)[0] || null;
+        const topQuestions = topNodesByStage('question', 3);
+        const topPains = topNodesByStage('pain', 3);
+        const topOutcomes = topNodesByStage('outcome', 3);
+        const topCapabilities = topNodesByStage('capability', 3);
+        const linkedNodesFor = (nodeId, direction, stage, limit)=>{
+          const list = direction === 'incoming'
+            ? (incomingByNode.get(String(nodeId || '').trim()) || [])
+            : (outgoingByNode.get(String(nodeId || '').trim()) || []);
+          const rows = [];
+          list.forEach((link)=>{
+            const siblingId = direction === 'incoming'
+              ? String((link && link.sourceId) || '').trim()
+              : String((link && link.targetId) || '').trim();
+            const sibling = nodeById.get(siblingId);
+            if(!sibling) return;
+            if(stage && sibling.stage !== stage) return;
+            rows.push({
+              link,
+              node: sibling,
+              weight: pct(link && link.value)
+            });
+          });
+          return rows.slice(0, Math.max(1, Number(limit) || 2));
+        };
+        const signalValuesFor = (node)=>{
+          const values = [];
+          const seen = new Set();
+          (Array.isArray(node && node.signalDetails) ? node.signalDetails : []).forEach((group)=>{
+            (Array.isArray(group && group.values) ? group.values : []).forEach((value)=>{
+              const text = String(value || '').trim();
+              const key = normalizeContentToken(text);
+              if(!text || !key || seen.has(key)) return;
+              seen.add(key);
+              values.push(text);
+            });
+          });
+          return values.slice(0, 3);
+        };
+        const questionLeadText = (node, signalContextText)=>{
+          const label = String((node && node.label) || '').trim();
+          const token = normalizeContentToken(label);
+          if(token.includes('pressure sources')){
+            return signalContextText
+              ? `Board-level pressure is most visible around ${signalContextText}`
+              : 'Board-level pressure is currently one of the strongest decision drivers';
+          }
+          if(token.includes('risk environment')){
+            return signalContextText
+              ? `Risk concentration is highest in ${signalContextText}`
+              : 'Risk concentration is pulling focus toward the highest-exposure environment';
+          }
+          if(token.includes('coverage groups')){
+            return signalContextText
+              ? `The teams carrying the heaviest readiness burden are ${signalContextText}`
+              : 'Team coverage pressure is shaping where readiness effort starts first';
+          }
+          if(token.includes('measured on today')){
+            return signalContextText
+              ? `Success is being judged on ${signalContextText}`
+              : 'Current scorecards are shaping which outcomes are prioritized first';
+          }
+          if(token.includes('organisation challenge') || token.includes('organization challenge')){
+            return signalContextText
+              ? `The operating challenge to solve first is ${signalContextText}`
+              : 'The operating model challenge is forcing sharper prioritization';
+          }
+          if(token.includes('urgent 90 day win')){
+            return signalContextText
+              ? `The immediate 90-day ask is ${signalContextText}`
+              : 'A near-term 90-day commitment is influencing what gets funded first';
+          }
+          return signalContextText
+            ? `${label} is currently showing up as ${signalContextText}`
+            : `${label} is one of the strongest mapped discovery signals`;
+        };
+        const cleanedHint = (node)=>{
+          const raw = String((Array.isArray(node && node.hints) ? node.hints[0] : '') || '').trim();
+          if(!raw) return '';
+          return raw.replace(/^Triggered by\s*/i, '').replace(/\.+$/,'').trim();
+        };
+        const fullText = (value)=>{
+          return String(value || '').replace(/\s+/g, ' ').trim();
+        };
+
+        const pathStrength = strongestPath ? pct(strongestPath.score) : 0;
+        const capabilityPibrPillar = (node)=>{
+          const token = normalizeContentToken(`${String((node && node.label) || '')} ${String((node && node.description) || '')}`);
+          if(/(drill|simulation|range|lab|hands on|exercise|crisis)/.test(token)) return 'Prove';
+          if(/(program|orchestration|automation|workflow|improve|integration)/.test(token)) return 'Improve';
+          if(/(benchmark|score|baseline|trend)/.test(token)) return 'Benchmark';
+          if(/(report|evidence|audit|board)/.test(token)) return 'Report';
+          return 'PIBR';
+        };
+
+        const challengeBullets = topPains.map((node)=>{
+          const incomingSignals = linkedNodesFor(node.id, 'incoming', 'question', 2);
+          const incomingText = incomingSignals.length
+            ? naturalList(incomingSignals.map((entry)=> `${entry.node.label} (${entry.weight}%)`), { conjunction:'and' })
+            : '';
+          const mappedOutcomes = linkedNodesFor(node.id, 'outgoing', 'outcome', 2);
+          const mappedOutcomesText = mappedOutcomes.length
+            ? naturalList(mappedOutcomes.map((entry)=> entry.node.label), { conjunction:'and' })
+            : '';
+          const description = fullText(node.description);
+          const hint = cleanedHint(node);
+          const line = [
+            `${node.label} (${pct(node.weight)}%) is a priority challenge for this account.`,
+            description || (hint ? `${hint}.` : ''),
+            incomingText ? `This is being driven by ${incomingText}.` : '',
+            mappedOutcomesText ? `If addressed, it unlocks outcomes such as ${mappedOutcomesText}.` : ''
+          ].filter(Boolean).join(' ');
+          return fullText(line);
+        });
+
+        const opportunityBullets = topQuestions.map((node)=>{
+          const signalContext = signalValuesFor(node);
+          const signalContextText = signalContext.length ? naturalList(signalContext, { conjunction:'and' }) : '';
+          const painTargets = linkedNodesFor(node.id, 'outgoing', 'pain', 2);
+          const painText = painTargets.length
+            ? naturalList(painTargets.map((entry)=> entry.node.label), { conjunction:'and' })
+            : '';
+          const outcomeTargets = [];
+          const seenOutcomeIds = new Set();
+          painTargets.forEach((entry)=>{
+            linkedNodesFor(entry.node.id, 'outgoing', 'outcome', 1).forEach((outcomeEntry)=>{
+              const id = String((outcomeEntry.node && outcomeEntry.node.id) || '').trim();
+              if(!id || seenOutcomeIds.has(id)) return;
+              seenOutcomeIds.add(id);
+              outcomeTargets.push(outcomeEntry.node.label);
+            });
+          });
+          const opportunityLead = fullText(questionLeadText(node, signalContextText));
+          const line = [
+            `${opportunityLead} (${pct(node.weight)}% influence).`,
+            painText ? `Opportunity: move from reactive handling of ${painText} to measurable readiness improvement.` : '',
+            outcomeTargets.length ? `Business impact: this directly supports ${naturalList(outcomeTargets, { conjunction:'and' })}.` : ''
+          ].filter(Boolean).join(' ');
+          return fullText(line);
+        });
+
+        const outcomeBullets = topOutcomes.map((node)=>{
+          const detail = fullText(node.description);
+          const linkedCapabilities = linkedNodesFor(node.id, 'outgoing', 'capability', 2)
+            .map((entry)=> `${entry.node.label} (${entry.weight}%)`);
+          return fullText([
+            `${node.label} (${pct(node.weight)}% priority).`,
+            detail || '',
+            linkedCapabilities.length ? `Delivery path: ${naturalList(linkedCapabilities, { conjunction:'and' })}.` : ''
+          ].filter(Boolean).join(' '));
+        });
+
+        const capabilityBullets = topCapabilities.map((node)=>{
+          const detail = fullText(node.description);
+          const supportedOutcomes = linkedNodesFor(node.id, 'incoming', 'outcome', 2)
+            .map((entry)=> `${entry.node.label} (${entry.weight}%)`);
+          const pillar = capabilityPibrPillar(node);
+          return fullText([
+            `${pillar}: ${node.label} (${pct(node.weight)}% fit).`,
+            supportedOutcomes.length ? `Mapped to ${naturalList(supportedOutcomes, { conjunction:'and' })}.` : '',
+            detail || ''
+          ].filter(Boolean).join(' '));
+        });
+
+        const executiveStory = [
+          `${company}'s mapped story starts with ${naturalList(topPains.slice(0, 3).map((node)=> node.label), { conjunction:'and' }) || 'priority readiness challenges'}.`,
+          `These are creating pressure against ${naturalList(topOutcomes.slice(0, 3).map((node)=> node.label), { conjunction:'and' }) || 'your target outcomes'}.`,
+          `Based on that, we recommend a PIBR constellation led by ${naturalList(topCapabilities.slice(0, 3).map((node)=> node.label), { conjunction:'and' }) || 'selected Immersive One capabilities'}.`
+        ].filter(Boolean).join(' ');
+
+        const pibrBody = [
+          'Based on your challenges, we recommend this constellation because it connects Prove, Improve, Benchmark, and Report in one operating motion.',
+          'Instead of isolated activities, it creates a chain from hands-on readiness proof to continuous improvement, benchmarked performance, and board-ready reporting.'
+        ].join(' ');
+
+        const beReadyBody = [
+          'This is why we believe this mapped feature set is right for your organization.',
+          'Immersive One turns your challenge profile into a practical PIBR operating model so teams can act faster, evidence is defensible, and leadership can see measurable progress.',
+          'In short: this helps your organization be ready.'
+        ].join(' ');
+
+        const draftParagraph = [
+          `From your discovery profile, we identified priority challenges in ${naturalList(topPains.slice(0, 3).map((node)=> node.label), { conjunction:'and' }) || 'key readiness themes'}.`,
+          `Those challenges point to outcomes in ${naturalList(topOutcomes.slice(0, 3).map((node)=> node.label), { conjunction:'and' }) || 'your target priorities'}.`,
+          `To deliver those outcomes, we suggest a PIBR constellation across ${naturalList(topCapabilities.slice(0, 3).map((node)=> node.label), { conjunction:'and' }) || 'selected capabilities'} within Immersive One.`,
+          platformNode ? `${platformNode.label} connects these motions into one repeatable operating model.` : '',
+          brandNode ? `${brandNode.label.replace(/^Immersive:\s*/i, '').trim()} is the brand promise this execution model is designed to deliver.` : 'This is how we help your organization be ready.'
+        ].filter(Boolean).join(' ');
+
+        const sections = [
+          {
+            title: 'Executive story',
+            body: executiveStory,
+            bullets: []
+          },
+          {
+            title: 'Challenges we identified',
+            body: '',
+            bullets: challengeBullets.slice(0, 6)
+          },
+          {
+            title: 'Opportunities this creates',
+            body: '',
+            bullets: opportunityBullets.slice(0, 6)
+          },
+          {
+            title: 'Outcomes we recommend based on those challenges',
+            body: '',
+            bullets: outcomeBullets.slice(0, 4)
+          },
+          {
+            title: 'Why this PIBR constellation',
+            body: pibrBody,
+            bullets: capabilityBullets.slice(0, 4)
+          },
+          {
+            title: 'Why this helps you be ready',
+            body: beReadyBody,
+            bullets: []
+          },
+          {
+            title: 'Draft customer narrative',
+            body: draftParagraph,
+            bullets: []
+          }
+        ];
+
+        const lines = [];
+        lines.push(`Story for ${company}`);
+        lines.push('');
+        lines.push(`Completion: ${completion}`);
+        lines.push(`Signals mapped: ${answeredSignals}/${mappedSignals || answeredSignals || 0}`);
+        if(strongestPath){
+          lines.push(`Primary path strength: ${pathStrength}%`);
+        }
+        lines.push('');
+        sections.forEach((section)=>{
+          lines.push(section.title);
+          lines.push(section.body ? section.body : '');
+          (Array.isArray(section.bullets) ? section.bullets : []).forEach((bullet)=> lines.push(`- ${bullet}`));
+          lines.push('');
+        });
+
+        return {
+          threadId: resolvedThreadId,
+          company,
+          completion,
+          answeredSignals,
+          mappedSignals,
+          headline: `Story for ${company}`,
+          summary: strongestPath
+            ? `Mapped from challenges to outcomes through a PIBR constellation in Immersive One (primary path strength ${pathStrength}%).`
+            : 'Generated from mapped discovery signals, challenges, outcomes, and PIBR capabilities.',
+          meta: [],
+          sections,
+          storyText: lines.join('\n').trim()
+        };
+      }
+
+      function renderStoryNarrativeDrawer(threadId){
+        const panel = $('#storyNarrativePanel');
+        const titleEl = $('#storyNarrativeTitle');
+        const subEl = $('#storyNarrativeSub');
+        const metaEl = $('#storyNarrativeMeta');
+        const bodyEl = $('#storyNarrativeBody');
+        if(!panel || !titleEl || !subEl || !metaEl || !bodyEl) return;
+        const model = storyNarrativeModelForThread(threadId || state.storyNarrativeThreadId || state.storyFlowThreadId || state.recommendationsThreadId || state.activeThread || 'current');
+        state.storyNarrativeThreadId = model.threadId || state.storyNarrativeThreadId || 'current';
+        state.storyNarrativeText = String(model.storyText || '').trim();
+        titleEl.textContent = model.headline || `Story for ${model.company || 'this account'}`;
+        subEl.textContent = model.summary || 'Natural-language narrative generated from weighted story mapping.';
+        metaEl.hidden = true;
+        metaEl.innerHTML = '';
+        const sections = Array.isArray(model.sections) ? model.sections : [];
+        bodyEl.innerHTML = sections.length
+          ? sections.map((section)=>{
+              const body = String(section && section.body || '').trim();
+              const bullets = Array.isArray(section && section.bullets) ? section.bullets.map((row)=> String(row || '').trim()).filter(Boolean) : [];
+              const isDraft = normalizeContentToken(section && section.title) === 'draft customer narrative';
+              return `
+                <section class="storyNarrativeSection${isDraft ? ' is-draft' : ''}">
+                  <h4>${escapeHtml(String((section && section.title) || 'Story section').trim())}</h4>
+                  ${body ? `<p class="storyNarrativeParagraph">${escapeHtml(body)}</p>` : ''}
+                  ${bullets.length ? `<ul class="storyNarrativeBullets">${bullets.map((row)=> `<li>${escapeHtml(row)}</li>`).join('')}</ul>` : ''}
+                </section>
+              `;
+            }).join('')
+          : '<section class="storyNarrativeSection"><p class="storyNarrativeParagraph">No mapped story is available yet.</p></section>';
+      }
+
+      function copyStoryNarrativeToClipboard(){
+        const text = String(state.storyNarrativeText || '').trim();
+        if(!text){
+          toast('Generate a story first.');
+          return false;
+        }
+        copyToClipboard(text, 'Copied generated story.');
+        return true;
+      }
+
+      function openStoryNarrativeDrawer(threadId){
+        const context = storyFlowContextForThread(threadId);
+        if(!context.gate || !context.gate.eligible){
+          toast(`Story generation unlocks at 90% completion. Current completion is ${context.gate && context.gate.completion ? context.gate.completion : 'below threshold'}.`);
+          return false;
+        }
+        if(!context.pyramid || !Array.isArray(context.pyramid.layers) || !context.pyramid.layers.some((layer)=> Array.isArray(layer && layer.items) && layer.items.length)){
+          toast('No mapped story data is available yet for this record.');
+          return false;
+        }
+        state.storyNarrativeThreadId = context.gate.threadId || state.storyNarrativeThreadId || state.storyFlowThreadId || 'current';
+        toggleStoryNarrative(true, { threadId: state.storyNarrativeThreadId });
+        return true;
+      }
+
+      function toggleStoryNarrative(open, opts){
+        const panel = $('#storyNarrativePanel');
+        if(!panel) return;
+        const on = !!open;
+        if(on){
+          const cfg = opts || {};
+          if(state.consultationOpen){
+            toggleConsultation(false);
+          }
+          if(state.emailBuilderOpen){
+            toggleEmailBuilder(false);
+          }
+          if(state.customerTemplateEditorOpen){
+            toggleCustomerTemplateEditor(false);
+          }
+          if(state.storyFlowOpen){
+            toggleStoryFlow(false);
+          }
+          state.storyNarrativeOpen = true;
+          state.storyNarrativeThreadId = String(cfg.threadId || state.storyNarrativeThreadId || state.storyFlowThreadId || state.recommendationsThreadId || state.activeThread || 'current').trim() || 'current';
+          panel.classList.add('open');
+          panel.setAttribute('aria-hidden', 'false');
+          renderStoryNarrativeDrawer(state.storyNarrativeThreadId);
+        }else{
+          state.storyNarrativeOpen = false;
+          panel.classList.remove('open');
+          panel.setAttribute('aria-hidden', 'true');
+        }
+        syncOverlayBodyLock();
+      }
+
+      function toggleStoryFlow(open, opts){
+        const panel = $('#storyFlowPanel');
+        if(!panel) return;
+        const on = !!open;
+        if(on){
+          const cfg = opts || {};
+          if(state.consultationOpen){
+            toggleConsultation(false);
+          }
+          if(state.emailBuilderOpen){
+            toggleEmailBuilder(false);
+          }
+          if(state.customerTemplateEditorOpen){
+            toggleCustomerTemplateEditor(false);
+          }
+          if(state.storyNarrativeOpen){
+            toggleStoryNarrative(false);
+          }
+          state.storyFlowOpen = true;
+          state.storyFlowHoverLinkId = '';
+          state.storyFlowModesOpen = false;
+          state.storyFlowThreadId = String(cfg.threadId || state.storyFlowThreadId || state.recommendationsThreadId || state.activeThread || 'current').trim() || 'current';
+          panel.classList.add('open');
+          panel.setAttribute('aria-hidden', 'false');
+          renderStoryFlowOverlay();
+        }else{
+          if(typeof storyFlowDragReset === 'function'){
+            storyFlowDragReset();
+          }
+          state.storyFlowOpen = false;
+          state.storyFlowHoverLinkId = '';
+          state.storyFlowModesOpen = false;
+          setStoryFlowModesOpen(false);
+          panel.classList.remove('open');
+          panel.setAttribute('aria-hidden', 'true');
+        }
+        syncOverlayBodyLock();
       }
 
       function moduleValueByLabel(rows, label){
@@ -15301,7 +17775,7 @@ const evidenceOpts = [
       function recommendationEmailModelForThread(threadId){
         const thread = resolveRecommendationThread(threadId || state.recommendationsThreadId || state.activeThread || 'current');
         const gate = recommendationsGateFromThread(thread);
-        const cards = gate.eligible ? recommendationCardsForGate(gate) : [];
+        const cards = contentUnlockedForGate(gate) ? recommendationCardsForGate(gate) : [];
         const progress = threadReadinessProgress(thread);
         const snapshot = (thread && thread.snapshot && typeof thread.snapshot === 'object') ? thread.snapshot : {};
         const modules = (thread && thread.modules && typeof thread.modules === 'object')
@@ -15456,10 +17930,10 @@ const evidenceOpts = [
         state.recommendationsThreadId = gate.threadId;
         state.recommendationsReturnView = 'interstitial';
         openThreadOverview(gate.threadId, { section:'content' });
-        if(!gate.eligible){
-          toast(`Content is locked until 90% completion (current: ${gate.completion}).`);
+        if(!contentUnlockedForGate(gate)){
+          toast(contentLockedToastMessage(gate));
         }
-        return gate.eligible;
+        return contentUnlockedForGate(gate);
       }
 
       function openRecommendationEmailBuilder(threadId){
@@ -15470,8 +17944,8 @@ const evidenceOpts = [
           return false;
         }
         const gate = recommendationsGateFromThread(thread);
-        if(!gate.eligible){
-          toast(`Content is locked until 90% completion (current: ${gate.completion}).`);
+        if(!contentUnlockedForGate(gate)){
+          toast(contentLockedToastMessage(gate));
           return false;
         }
         state.recommendationsThreadId = gate.threadId;
@@ -15487,8 +17961,8 @@ const evidenceOpts = [
           return false;
         }
         const gate = recommendationsGateFromThread(thread);
-        if(!gate.eligible){
-          toast(`Content is locked until 90% completion (current: ${gate.completion}).`);
+        if(!contentUnlockedForGate(gate)){
+          toast(contentLockedToastMessage(gate));
           return false;
         }
         const model = recommendationEmailModelForThread(gate.threadId);
@@ -17368,8 +19842,21 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const closeConsultationBtn = $('#closeConsultation');
       const emailBuilderPanel = $('#emailBuilderPanel');
       const closeEmailBuilderBtn = $('#closeEmailBuilder');
+      const storyNarrativePanel = $('#storyNarrativePanel');
+      const closeStoryNarrativeBtn = $('#closeStoryNarrative');
+      const storyFlowPanel = $('#storyFlowPanel');
+      const closeStoryFlowBtn = $('#closeStoryFlow');
+      const storyFlowLinksSvg = $('#storyFlowLinksSvg');
+      const storyFlowNodesLayer = $('#storyFlowNodesLayer');
+      const storyFlowPathList = $('#storyFlowPathList');
+      const storyFlowNarrativeInner = $('#storyFlowNarrativeInner');
+      const storyFlowModesDock = $('#storyFlowModesDock');
+      const storyFlowModesToggle = $('#storyFlowModesToggle');
+      const storyFlowModesFlyout = $('#storyFlowModesFlyout');
+      const storyFlowCanvas = $('#storyFlowCanvas');
       const customerTemplateEditorPanel = $('#customerTemplateEditorPanel');
       const closeCustomerTemplateEditorBtn = $('#closeCustomerTemplateEditor');
+      let storyFlowSuppressNodeClickUntil = 0;
       const workspaceBreadcrumb = $('#workspaceBreadcrumb');
       const jumpNextIncompleteBtns = $$('[data-jump-next-incomplete]');
       const saveRecordBtn = $('#saveRecordBtn');
@@ -17528,6 +20015,223 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
             toggleEmailBuilder(false);
           }
         });
+      }
+      if(closeStoryNarrativeBtn){
+        closeStoryNarrativeBtn.addEventListener('click', ()=>{
+          toggleStoryNarrative(false);
+        });
+      }
+      if(storyNarrativePanel){
+        storyNarrativePanel.addEventListener('click', (e)=>{
+          if(e.target === storyNarrativePanel){
+            toggleStoryNarrative(false);
+          }
+        });
+      }
+      if(closeStoryFlowBtn){
+        closeStoryFlowBtn.addEventListener('click', ()=>{
+          toggleStoryFlow(false);
+        });
+      }
+      if(storyFlowPanel){
+        storyFlowPanel.addEventListener('click', (e)=>{
+          if(e.target === storyFlowPanel){
+            toggleStoryFlow(false);
+          }
+        });
+      }
+      if(storyFlowModesToggle){
+        storyFlowModesToggle.addEventListener('click', (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          if(!state.storyFlowOpen) return;
+          setStoryFlowModesOpen(!state.storyFlowModesOpen);
+        });
+      }
+      document.addEventListener('click', (e)=>{
+        if(!state.storyFlowOpen || !state.storyFlowModesOpen) return;
+        const target = (e.target instanceof Element) ? e.target : null;
+        if(target && storyFlowModesDock && storyFlowModesDock.contains(target)) return;
+        setStoryFlowModesOpen(false);
+      });
+      if(storyFlowNodesLayer){
+        storyFlowNodesLayer.addEventListener('click', (e)=>{
+          if(storyFlowSuppressNodeClickUntil > Date.now()){
+            return;
+          }
+          const target = (e.target instanceof Element) ? e.target.closest('[data-story-flow-node-id]') : null;
+          if(!target) return;
+          const nodeId = String(target.getAttribute('data-story-flow-node-id') || '').trim();
+          if(!nodeId) return;
+          state.storyFlowFocusNodeId = nodeId;
+          state.storyFlowEmphasis = 'top';
+          state.storyFlowActivePathId = '';
+          renderStoryFlowOverlay();
+        });
+      }
+      if(storyFlowPathList){
+        storyFlowPathList.addEventListener('click', (e)=>{
+          const target = (e.target instanceof Element) ? e.target.closest('[data-story-flow-path-id]') : null;
+          if(!target) return;
+          const pathId = String(target.getAttribute('data-story-flow-path-id') || '').trim();
+          if(!pathId) return;
+          const context = String(target.getAttribute('data-story-flow-path-context') || '').trim();
+          if(context !== 'related'){
+            state.storyFlowFocusNodeId = '';
+          }
+          state.storyFlowEmphasis = 'top';
+          state.storyFlowActivePathId = pathId;
+          renderStoryFlowOverlay();
+        });
+      }
+      if(storyFlowNarrativeInner){
+        storyFlowNarrativeInner.addEventListener('click', (e)=>{
+          if(!state.storyFlowOpen) return;
+          const resolvedMode = storyFlowResolvedViewMode(state.storyFlowViewMode);
+          if(resolvedMode !== 'narrative' && resolvedMode !== 'card-map') return;
+          const target = (e.target instanceof Element)
+            ? e.target.closest('[data-story-flow-narrative-node-id], [data-story-flow-card-node-id]')
+            : null;
+          if(!target) return;
+          const nodeId = String(
+            target.getAttribute('data-story-flow-narrative-node-id')
+            || target.getAttribute('data-story-flow-card-node-id')
+            || ''
+          ).trim();
+          if(!nodeId) return;
+          state.storyFlowFocusNodeId = nodeId;
+          state.storyFlowEmphasis = 'top';
+          state.storyFlowActivePathId = '';
+          renderStoryFlowOverlay();
+        });
+      }
+      if(storyFlowLinksSvg){
+        const setHoveredLink = (nextId)=>{
+          if(!state.storyFlowOpen){
+            if(state.storyFlowHoverLinkId){
+              state.storyFlowHoverLinkId = '';
+            }
+            return;
+          }
+          const resolved = String(nextId || '').trim();
+          if(String(state.storyFlowHoverLinkId || '').trim() === resolved) return;
+          state.storyFlowHoverLinkId = resolved;
+          renderStoryFlowOverlay();
+        };
+        storyFlowLinksSvg.addEventListener('pointermove', (e)=>{
+          if(!state.storyFlowOpen) return;
+          const target = (e.target instanceof Element) ? e.target.closest('[data-story-flow-link-id]') : null;
+          const linkId = target ? String(target.getAttribute('data-story-flow-link-id') || '').trim() : '';
+          setHoveredLink(linkId);
+        });
+        storyFlowLinksSvg.addEventListener('pointerleave', ()=>{
+          setHoveredLink('');
+        });
+      }
+      if(storyFlowCanvas){
+        let dragState = null;
+        let moved = false;
+        const releaseCapture = (pointerId)=>{
+          if(!Number.isFinite(pointerId)) return;
+          if(typeof storyFlowCanvas.releasePointerCapture !== 'function') return;
+          try{
+            if(typeof storyFlowCanvas.hasPointerCapture === 'function' && !storyFlowCanvas.hasPointerCapture(pointerId)){
+              return;
+            }
+            storyFlowCanvas.releasePointerCapture(pointerId);
+          }catch(_err){
+            // no-op: pointer may have already been released
+          }
+        };
+        const readPanX = ()=> {
+          const value = Number(state.storyFlowPanX);
+          return Number.isFinite(value) ? value : 0;
+        };
+        const readPanY = ()=> {
+          const value = Number(state.storyFlowPanY);
+          return Number.isFinite(value) ? value : 0;
+        };
+        const stopDrag = (pointerId, opts)=>{
+          if(dragState && Number.isFinite(pointerId) && dragState.pointerId !== pointerId) return;
+          const cfg = (opts && typeof opts === 'object') ? opts : {};
+          const activePointerId = dragState && Number.isFinite(dragState.pointerId) ? dragState.pointerId : NaN;
+          const pointerToRelease = Number.isFinite(pointerId) ? pointerId : activePointerId;
+          releaseCapture(pointerToRelease);
+          if(moved && !cfg.silent){
+            storyFlowSuppressNodeClickUntil = Date.now() + 180;
+          }
+          dragState = null;
+          moved = false;
+          storyFlowCanvas.classList.remove('is-dragging');
+        };
+        storyFlowDragReset = ()=>{
+          stopDrag(NaN, { silent:true });
+        };
+        storyFlowCanvas.addEventListener('pointerdown', (e)=>{
+          if(!state.storyFlowOpen) return;
+          if(e.button !== 0) return;
+          const target = (e.target instanceof Element) ? e.target : null;
+          if(target){
+            // Do not start pan-drag from UI controls or node cards; preserve click interactions.
+            if(target.closest('.storyFlowModesDock, .storyFlowZoomControls, .storyFlowSummary, .storyFlowHoverCard, .storyFlowNode')){
+              return;
+            }
+          }
+          dragState = {
+            pointerId: e.pointerId,
+            startX: e.clientX,
+            startY: e.clientY,
+            startPanX: readPanX(),
+            startPanY: readPanY()
+          };
+          moved = false;
+          if(typeof storyFlowCanvas.setPointerCapture === 'function'){
+            try{
+              storyFlowCanvas.setPointerCapture(e.pointerId);
+            }catch(_err){
+              // no-op
+            }
+          }
+        });
+        storyFlowCanvas.addEventListener('pointermove', (e)=>{
+          if(!state.storyFlowOpen){
+            stopDrag(e.pointerId, { silent:true });
+            return;
+          }
+          if(!dragState || dragState.pointerId !== e.pointerId) return;
+          const dx = e.clientX - dragState.startX;
+          const dy = e.clientY - dragState.startY;
+          if(!moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)){
+            moved = true;
+            storyFlowCanvas.classList.add('is-dragging');
+          }
+          if(!moved) return;
+          state.storyFlowPanX = dragState.startPanX + dx;
+          state.storyFlowPanY = dragState.startPanY + dy;
+          storyFlowApplyStageTransform($('#storyFlowGraphStage'), state.storyFlowZoom || 1);
+          e.preventDefault();
+        });
+        storyFlowCanvas.addEventListener('pointerup', (e)=>{
+          stopDrag(e.pointerId);
+        });
+        storyFlowCanvas.addEventListener('pointercancel', (e)=>{
+          stopDrag(e.pointerId);
+        });
+        storyFlowCanvas.addEventListener('pointerleave', (e)=>{
+          if(!dragState) return;
+          if(!Number.isFinite(e.pointerId) || e.pointerId !== dragState.pointerId) return;
+          stopDrag(e.pointerId);
+        });
+        storyFlowCanvas.addEventListener('wheel', (e)=>{
+          if(!state.storyFlowOpen) return;
+          if(!(e.ctrlKey || e.metaKey)) return;
+          e.preventDefault();
+          const rect = storyFlowCanvas.getBoundingClientRect();
+          const anchorX = clamp(e.clientX - rect.left, 0, rect.width || storyFlowCanvas.clientWidth || 0);
+          const anchorY = clamp(e.clientY - rect.top, 0, rect.height || storyFlowCanvas.clientHeight || 0);
+          const factor = e.deltaY > 0 ? 0.9 : 1.1;
+          storyFlowApplyZoom((state.storyFlowZoom || 1) * factor, { anchorX, anchorY });
+        }, { passive:false });
       }
       if(closeCustomerTemplateEditorBtn){
         closeCustomerTemplateEditorBtn.addEventListener('click', ()=>{
@@ -17778,7 +20482,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       const settingsState = {
         tone: 'default',
         density: 'comfortable',
-        fontScale: 1,
+        fontScale: 1.2,
         dummyMode: 'off',
         account: {
           fullName: '',
@@ -17808,8 +20512,8 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
       function resolveFontScale(next){
         const allowed = [0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5];
         const n = Number(next);
-        if(!Number.isFinite(n)) return 1;
-        return allowed.reduce((best, val)=> Math.abs(val - n) < Math.abs(best - n) ? val : best, 1);
+        if(!Number.isFinite(n)) return 1.2;
+        return allowed.reduce((best, val)=> Math.abs(val - n) < Math.abs(best - n) ? val : best, 1.2);
       }
 
       function resolveDummyMode(next){
@@ -18362,7 +21066,7 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         applyAccountDefaultsToState({ emptyOnly:true });
         applyShellTone(storedTone || 'default', false);
         applyShellDensity(storedDensity || 'comfortable', false);
-        applyShellFontScale(storedFontScale || 1, false);
+        applyShellFontScale(storedFontScale || 1.2, false);
         syncSettingsUI();
       })();
 
@@ -18437,6 +21141,9 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         shellResizeTimer = window.setTimeout(()=>{
           update();
           syncCustomerPreviewStoryLayout();
+          if(state.storyFlowOpen){
+            renderStoryFlowOverlay();
+          }
         }, 80);
       });
       document.addEventListener('keydown', (e)=>{
@@ -18449,6 +21156,9 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
         }
         if(state.customerTemplateEditorOpen){
           toggleCustomerTemplateEditor(false);
+        }
+        if(state.storyFlowOpen){
+          toggleStoryFlow(false);
         }
         if($('#shareModal')?.classList.contains('show')) closeShareModal();
         if($('#archiveModal')?.classList.contains('show')) closeArchivePrompt();
@@ -19452,6 +22162,69 @@ setText('#primaryOutcome', primaryOutcome(rec.best));
                 ? activeThreadModel()
                 : currentThreadModel());
           openRecommendationEmailClient((targetThread && targetThread.id) ? targetThread.id : 'current');
+        }
+        if(action === 'openStoryFlow'){
+          const targetThread = (state.currentView === 'recommendations' || state.currentView === 'interstitial')
+            ? (state.recommendationsThreadId || state.activeThread || 'current')
+            : (state.activeThread || 'current');
+          openStoryFlowMode(targetThread);
+        }
+        if(action === 'openStoryNarrative'){
+          const targetThread = (state.currentView === 'recommendations' || state.currentView === 'interstitial')
+            ? (state.recommendationsThreadId || state.activeThread || 'current')
+            : (state.activeThread || 'current');
+          openStoryNarrativeDrawer(targetThread);
+        }
+        if(action === 'toggleStoryFlowViewMode'){
+          state.storyFlowViewMode = storyFlowNextViewMode(state.storyFlowViewMode);
+          storyFlowResetViewport();
+          setStoryFlowModesOpen(false);
+          renderStoryFlowOverlay();
+        }
+        if(action === 'toggleStoryFlowTopPaths'){
+          state.storyFlowEmphasis = (state.storyFlowEmphasis === 'all') ? 'top' : 'all';
+          if(state.storyFlowEmphasis === 'all'){
+            state.storyFlowActivePathId = '';
+          }else{
+            state.storyFlowFocusNodeId = '';
+          }
+          storyFlowResetViewport({ clearHover:false });
+          setStoryFlowModesOpen(false);
+          renderStoryFlowOverlay();
+        }
+        if(action === 'storyFlowZoomIn'){
+          storyFlowApplyZoom((state.storyFlowZoom || 1) * 1.18);
+        }
+        if(action === 'storyFlowZoomOut'){
+          storyFlowApplyZoom((state.storyFlowZoom || 1) / 1.18);
+        }
+        if(action === 'storyFlowFit'){
+          state.storyFlowNeedsFit = true;
+          renderStoryFlowOverlay();
+        }
+        if(action === 'storyFlowResetView'){
+          storyFlowResetViewport({ clearFocus:true });
+          renderStoryFlowOverlay();
+        }
+        if(action === 'toggleStoryFlowQuestionMode'){
+          state.storyFlowQuestionMode = (state.storyFlowQuestionMode === 'expanded') ? 'grouped' : 'expanded';
+          storyFlowResetViewport();
+          setStoryFlowModesOpen(false);
+          renderStoryFlowOverlay();
+        }
+        if(action === 'clearStoryFlowFocus'){
+          state.storyFlowFocusNodeId = '';
+          setStoryFlowModesOpen(false);
+          renderStoryFlowOverlay();
+        }
+        if(action === 'closeStoryFlow'){
+          toggleStoryFlow(false);
+        }
+        if(action === 'closeStoryNarrative'){
+          toggleStoryNarrative(false);
+        }
+        if(action === 'copyStoryNarrative'){
+          copyStoryNarrativeToClipboard();
         }
         if(action === 'generateCustomerPageTemplate'){
           const preferredThreadId = preferredCustomerTemplateThreadIdForCurrentView();

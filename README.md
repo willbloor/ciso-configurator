@@ -1404,6 +1404,29 @@ Design and workflow updates deployed for self-service intake and dashboard follo
      - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
      - `rg -n "picsum\\.photos" /Users/will.bloor/Documents/Configurator/assets/js/app.js /Users/will.bloor/Documents/Configurator/landing-pages/customer-dashboard-template-Pioneer-Cloud-2026-02-22.html` (PASS)
 
+57. Second-pass Ultimate tuning: stronger $50bn+ bias and lighter suppression thresholds (2026-02-28)
+   - Increased explicit `$50bn+` enterprise weighting in `score()`:
+     - reduced `Advanced` uplift at this tier
+     - increased `Ultimate` uplift and pressure contribution so very large records can break through more reliably
+   - Relaxed Ultimate suppression further when `ultObvious` is not strictly met:
+     - reduced non-obvious penalty magnitudes again
+     - reduced low-pressure penalty again
+     - lowered final Ultimate lead requirement (`minUltLead`) to reduce near-tie fallback to Advanced
+   - Expanded `ultLikely` behavior for enterprise records:
+     - for `$50bn+` + large-scale records, either external accountability or strategic/service framing can qualify as `ultLikely`
+     - non-obvious branch now adds a recovery uplift when this enterprise-likely condition is met
+   - Principle:
+     - keep Ultimate meaningful while reducing over-filtering for very large enterprise accounts.
+   - Cross-surface impact:
+     - recommendation tier in configurator/overview/report/export now promotes Ultimate more readily for top-end enterprise profiles.
+   - Files:
+     - `/Users/will.bloor/Documents/Configurator/assets/js/app.js`
+     - `/Users/will.bloor/Documents/Configurator/README.md`
+   - Validation performed:
+     - `node --check /Users/will.bloor/Documents/Configurator/assets/js/app.js`
+   - Residual risk / follow-up:
+     - run quick manual spot checks on mid-market records to confirm Advanced/Core recommendations remain sensible.
+
 ## State Sync Guardrails (Critical, 2026-02-26)
 
 These are hard rules to prevent recurrence of the Tina Corp save-loss regression.

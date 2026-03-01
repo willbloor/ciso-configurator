@@ -7345,14 +7345,16 @@
   border-radius:8px;
   background:linear-gradient(180deg, #f8fbff, #f3f8ff);
   display:grid;
-  grid-template-columns:minmax(86px, 24%) minmax(0, 1fr);
+  grid-template-columns:1fr;
   gap:0;
   overflow:hidden;
 }
 .customerPreviewCapabilityMedia{
-  border-right:1px solid color-mix(in srgb, var(--azure) 18%, var(--border));
+  border-right:none;
+  border-bottom:1px solid color-mix(in srgb, var(--azure) 18%, var(--border));
   background:#d8e5ff;
-  min-height:182px;
+  min-height:138px;
+  aspect-ratio:16 / 9;
 }
 .customerPreviewCapabilityMedia img{
   width:100%;
@@ -7435,12 +7437,32 @@
 .customerPreviewSection--story .customerPreviewDetailCard{
   background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display:grid;
-  gap:6px;
-  align-content:start;
+  grid-template-columns:minmax(88px, 24%) minmax(0, 1fr);
+  gap:0;
+  align-content:stretch;
   min-height:168px;
+  padding:0;
+  overflow:hidden;
 }
 .customerPreviewSection--story .customerPreviewDetailCard h6{
   color:#1f3763;
+}
+.customerPreviewStoryCardMedia{
+  border-right:1px solid color-mix(in srgb, var(--azure) 20%, var(--border));
+  background:#d8e5ff;
+  min-height:100%;
+}
+.customerPreviewStoryCardMedia img{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit:cover;
+}
+.customerPreviewStoryCardBody{
+  padding:12px;
+  display:grid;
+  gap:6px;
+  align-content:start;
 }
 .customerPreviewStoryIntro{
   margin:0;
@@ -7607,8 +7629,8 @@
   .customerPreviewCapabilityGrid{
     grid-template-columns:1fr;
   }
-  .customerPreviewCapabilityCard{
-    grid-template-columns:minmax(96px, 24%) minmax(0, 1fr);
+  .customerPreviewCapabilityMedia{
+    min-height:132px;
   }
   .customerPreviewOutcomeGrid{
     grid-template-columns:repeat(2, minmax(0, 1fr));
@@ -7634,19 +7656,21 @@
   .customerPreviewOutcomeGrid{
     grid-template-columns:1fr;
   }
-  .customerPreviewCapabilityCard{
-    grid-template-columns:1fr;
-  }
   .customerPreviewCapabilityMedia{
-    border-right:none;
-    border-bottom:1px solid color-mix(in srgb, var(--azure) 18%, var(--border));
-    min-height:168px;
+    min-height:124px;
   }
   .customerPreviewDetailsGrid{
     grid-template-columns:1fr;
   }
   .customerPreviewSection--story .customerPreviewDetailCard{
+    grid-template-columns:1fr;
     min-height:0;
+  }
+  .customerPreviewStoryCardMedia{
+    border-right:none;
+    border-bottom:1px solid color-mix(in srgb, var(--azure) 20%, var(--border));
+    min-height:112px;
+    aspect-ratio:16 / 8;
   }
   .customerPreviewStoryIntro{
     min-height:0;

@@ -10292,9 +10292,9 @@ const evidenceOpts = [
         else if(revScale >= 2.5){ adv += 0.7; ult += 0.5; }
         else core += 0.2;
         if(revenueB >= 50){
-          adv += 1.0;
-          ult += 2.4;
-          pressure += 1.2;
+          adv += 0.8;
+          ult += 3.2;
+          pressure += 1.4;
         }else if(revenueB >= 25){
           adv += 0.6;
           ult += 1.0;
@@ -10341,7 +10341,7 @@ const evidenceOpts = [
         const scaleLarge = scaleSignal >= 2;
         const strategicOrService = strategicFraming || state.fitServices === 'whiteglove';
         const ultObvious = externalAccountability && strategicOrService && scaleLarge;
-        const ultLikely = ultObvious || (externalAccountability && scaleLarge && revenueB >= 50);
+        const ultLikely = ultObvious || (scaleLarge && revenueB >= 50 && (externalAccountability || strategicOrService));
 
         if(ultObvious){
           ult += 2.3;
@@ -10349,17 +10349,18 @@ const evidenceOpts = [
           if(state.fitServices === 'whiteglove') ult += 1.2; // accelerator, not requirement
           else ult += 0.4;
         }else{
-          ult -= 0.6;
-          if(!externalAccountability) ult -= 0.5;
-          if(!strategicOrService) ult -= 0.4;
-          if(!scaleLarge) ult -= 0.4;
+          ult -= 0.2;
+          if(!externalAccountability) ult -= 0.2;
+          if(!strategicOrService) ult -= 0.2;
+          if(!scaleLarge) ult -= 0.2;
+          if(ultLikely) ult += 1.0;
         }
 
         if(state.fitServices === 'whiteglove') adv += 0.6;
         if(state.fitServices === 'guided') adv += 0.4;
         if(state.fitServices === 'diy') core += 0.4;
 
-        if(pressure < 5 && !ultLikely) ult -= 0.4;
+        if(pressure < 5 && !ultLikely) ult -= 0.2;
 
         core = Math.max(0, core);
         adv = Math.max(0, adv);
@@ -10376,7 +10377,7 @@ const evidenceOpts = [
         let best = arr[0].k;
         let gap = arr[0].v - arr[1].v;
 
-        const minUltLead = ultLikely ? 0.6 : 0.9;
+        const minUltLead = ultLikely ? 0.3 : 0.6;
         if(best === 'ult' && gap < minUltLead){
           best = 'adv';
           gap = 0;
@@ -12032,12 +12033,128 @@ const evidenceOpts = [
         };
       }
 
-      function capabilityCardImageUrl(capability){
+      const CAPABILITY_PIBR_IMAGE_POOLS = Object.freeze({
+        prove: Object.freeze([
+          'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/67989a2257a80fa8752bf15b_ImmersiveLabsDrill_021024_223.webp',
+          'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/67989a2ab5bab8ba7e8aaa8e_ImmersiveLabsDrill_021024_312.webp'
+        ]),
+        improve: Object.freeze([
+          'https://cdn.prod.website-files.com/678a13476d0a697e355dec29/69789a8dedfc30dfad573b6e_Header%20Image.avif',
+          'https://cdn.prod.website-files.com/678a13476d0a697e355dec29/698db6b138326ecad57716e7_Orchid%20Fusion_%20APT33%20%E2%80%94%20Header%20Image%20%E2%80%94%C2%A01280x720.png'
+        ]),
+        report: Object.freeze([
+          'https://cdn.prod.website-files.com/678a13476d0a697e355dec29/699f26125c38bfa3c903673c_Main%20Blog%20Header%20Image.png',
+          'https://cdn.prod.website-files.com/678a13476d0a697e355dec29/68fb4d5932d4cf61f987b60a_Blog%20-%20Header%20-%201920x1080.avif'
+        ])
+      });
+
+      const CAPABILITY_PIBR_IMAGE_FALLBACK_POOL = Object.freeze(
+        Object.values(CAPABILITY_PIBR_IMAGE_POOLS).flat()
+      );
+
+      function capabilityCardImageBucket(capability, idx){
+        const item = (capability && typeof capability === 'object') ? capability : {};
+        const track = normalizeContentToken(item.pibrTrack || '');
+        const pillar = normalizeContentToken(item.pillar || '');
+        const title = normalizeContentToken(item.title || '');
+        if(
+          track.includes('improve')
+          || pillar.includes('improve')
+          || title.includes('hands-on')
+          || title.includes('labs')
+          || title.includes('exercise')
+          || title.includes('workforce')
+        ) return 'improve';
+        if(
+          track.includes('report')
+          || track.includes('benchmark')
+          || pillar.includes('report')
+          || pillar.includes('benchmark')
+          || title.includes('report')
+          || title.includes('score')
+          || title.includes('orchestration')
+        ) return 'report';
+        if(track.includes('prove') || pillar.includes('prove')) return 'prove';
+        if(track.includes('cross')) return (Number(idx) % 2 === 0 ? 'prove' : 'report');
+        if(Number(idx) % 3 === 1) return 'improve';
+        if(Number(idx) % 3 === 2) return 'report';
+        return 'prove';
+      }
+
+      function pickUniqueCapabilityImageFromPool(pool, usedUrls, cursorState, key){
+        const rows = Array.isArray(pool) ? pool : [];
+        if(!rows.length) return '';
+        const start = Number(cursorState[key]) || 0;
+        for(let i = 0; i < rows.length; i += 1){
+          const pos = (start + i) % rows.length;
+          const candidate = normalizedHttpUrl(rows[pos]);
+          if(!candidate || usedUrls.has(candidate)) continue;
+          usedUrls.add(candidate);
+          cursorState[key] = (pos + 1) % rows.length;
+          return candidate;
+        }
+        return '';
+      }
+
+      function capabilityCardImageAssignments(capabilitiesInput){
+        const capabilities = Array.isArray(capabilitiesInput) ? capabilitiesInput : [];
+        const assignments = [];
+        const usedUrls = new Set();
+        const cursorState = { prove:0, improve:0, report:0, fallback:0 };
+        capabilities.forEach((capability, idx)=>{
+          const item = (capability && typeof capability === 'object') ? capability : {};
+          const direct = normalizedHttpUrl(
+            item.imageUrl || item.image || item.thumbnail || item.thumbnailUrl || item.heroImage || item.coverImage || ''
+          );
+          if(direct && !usedUrls.has(direct)){
+            usedUrls.add(direct);
+            assignments[idx] = direct;
+            return;
+          }
+          const bucket = capabilityCardImageBucket(item, idx);
+          const bucketPool = CAPABILITY_PIBR_IMAGE_POOLS[bucket] || [];
+          const picked = pickUniqueCapabilityImageFromPool(bucketPool, usedUrls, cursorState, bucket)
+            || pickUniqueCapabilityImageFromPool(CAPABILITY_PIBR_IMAGE_FALLBACK_POOL, usedUrls, cursorState, 'fallback')
+            || direct
+            || IMMERSIVE_DEFAULT_IMAGE_URL;
+          if(picked) usedUrls.add(picked);
+          assignments[idx] = picked;
+        });
+        return assignments;
+      }
+
+      function capabilityCardImageUrl(capability, idx){
         const item = (capability && typeof capability === 'object') ? capability : {};
         const direct = normalizedHttpUrl(
           item.imageUrl || item.image || item.thumbnail || item.thumbnailUrl || item.heroImage || item.coverImage || ''
         );
         if(direct) return direct;
+        const bucket = capabilityCardImageBucket(item, idx);
+        const pool = CAPABILITY_PIBR_IMAGE_POOLS[bucket] || CAPABILITY_PIBR_IMAGE_FALLBACK_POOL;
+        const rank = Number.isFinite(Number(idx)) ? Math.max(0, Number(idx)) : 0;
+        if(pool.length){
+          const candidate = normalizedHttpUrl(pool[rank % pool.length]);
+          if(candidate) return candidate;
+        }
+        return IMMERSIVE_DEFAULT_IMAGE_URL;
+      }
+
+      function readinessStoryCardImageUrl(section, idx){
+        const item = (section && typeof section === 'object') ? section : {};
+        const direct = normalizedHttpUrl(
+          item.imageUrl || item.image || item.thumbnail || item.thumbnailUrl || item.heroImage || item.coverImage || ''
+        );
+        if(direct) return direct;
+        const featurePlaceholders = [
+          'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/69076dd30e6065b5b189b5b5_Three-men-working-together.png',
+          'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/69076de387ede58922159428_Handsome-young-man-smiling.png',
+          'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/69076db2b82ece2f5b6fe1bf_Cyber-Drill-Hero.png',
+          'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/69076dc496f08def568bc507_Woman-Looking-at-Screen.png'
+        ];
+        const rank = Number.isFinite(Number(idx)) ? Number(idx) : -1;
+        if(rank >= 0 && rank < featurePlaceholders.length){
+          return featurePlaceholders[rank];
+        }
         return IMMERSIVE_DEFAULT_IMAGE_URL;
       }
 
@@ -13731,9 +13848,10 @@ const evidenceOpts = [
           return `<article class="contentCard">${imageUrl ? `<div class="contentImageWrap"><img class="contentImage" loading="lazy" src="${esc(imageUrl)}" alt="${esc(item.title || 'Latest post image')}" /></div>` : ''}<p class="contentEyebrow">${esc(eyebrow)}</p>${titleHtml}<p class="contentText">${esc(summary)}</p>${linkHref ? `<a class="contentLink" href="${esc(linkHref)}" target="_blank" rel="noopener noreferrer">${esc(linkLabel)}</a>` : ''}</article>`;
         };
 
+        const capabilityCardImages = capabilityCardImageAssignments(priorityCapabilities);
         const renderCapabilityCard = (capability, idx)=>{
           const display = capabilityCardDisplayModel(capability, idx);
-          const imageUrl = capabilityCardImageUrl(capability, idx);
+          const imageUrl = capabilityCardImages[idx] || capabilityCardImageUrl(capability, idx);
           return `<article class="capabilityCard"><div class="capabilityCardMedia"><img src="${esc(imageUrl)}" alt="" loading="lazy" /></div><div class="capabilityCardBody"><p class="capabilityEyebrow">${esc(display.eyebrow)}</p><h3>${esc(display.title)}</h3><p class="capabilityPill">${esc(display.pillarLabel)}</p><p class="capabilitySummary">${esc(display.description)}</p>${display.whyBullets.length ? `<p class="capabilityWhy"><strong>${esc(display.whyTitle)}</strong></p><ul class="capabilityProofList">${display.whyBullets.map((point)=> `<li>${esc(point)}</li>`).join('')}</ul>` : ''}</div></article>`;
         };
 
@@ -13900,7 +14018,10 @@ const evidenceOpts = [
     .detailsGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0px, 1fr)); }
     .detailsGrid--story { grid-template-columns: repeat(2, minmax(0px, 1fr)); gap: 14px; }
     .detailCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 12%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(rgb(255, 255, 255), rgb(248, 250, 255)); padding: 16px; box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; }
-    .detailCard--story { padding: 18px 18px 16px; display: grid; gap: 8px; align-content: start; min-height: 206px; }
+    .detailCard--story { padding: 0px; display: grid; grid-template-columns: minmax(124px, 24%) minmax(0px, 1fr); gap: 0px; align-content: stretch; min-height: 206px; overflow: hidden; }
+    .detailCardStoryMedia { border-right: 1px solid color-mix(in srgb,var(--primary-colours--azure) 12%, var(--line)); background: rgb(220, 231, 255); min-height: 100%; }
+    .detailCardStoryMedia img { width: 100%; height: 100%; display: block; object-fit: cover; }
+    .detailCardStoryBody { padding: 18px 18px 16px; display: grid; gap: 8px; align-content: start; }
     .detailCard h3 { margin: 0px 0px 2px; font-size: 24px; line-height: 1.1; color: rgb(36, 60, 104); }
     .detailCard p { margin: 0px; color: rgb(76, 95, 126); font-size: 16px; line-height: 1.35; }
     .storyIntro { margin: 0px; color: rgb(74, 93, 126); font-size: 16px; line-height: 1.4; min-height: 3.1em; }
@@ -13913,8 +14034,8 @@ const evidenceOpts = [
     .storyMore[open] > summary::after { content: "-"; }
     .storyMore .detailsGrid { margin-top: 0; padding: 14px; background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%); }
     .capabilityGrid { margin-top: 16px; display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0px, 1fr)); }
-    .capabilityCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 16%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%); box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; display: grid; grid-template-columns: minmax(110px, 24%) minmax(0px, 1fr); gap: 0px; overflow: hidden; }
-    .capabilityCardMedia { border-right: 1px solid color-mix(in srgb,var(--primary-colours--azure) 14%, var(--line)); background: rgb(220, 231, 255); min-height: 230px; }
+    .capabilityCard { border: 1px solid color-mix(in srgb,var(--primary-colours--azure) 16%, var(--line)); border-radius: var(--radius-card); background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%); box-shadow: rgba(7, 18, 44, 0.04) 0px 2px 10px; display: grid; grid-template-columns: 1fr; gap: 0px; overflow: hidden; }
+    .capabilityCardMedia { border-right: none; border-bottom: 1px solid color-mix(in srgb,var(--primary-colours--azure) 14%, var(--line)); background: rgb(220, 231, 255); min-height: 176px; aspect-ratio: 16 / 8; }
     .capabilityCardMedia img { width: 100%; height: 100%; display: block; object-fit: cover; }
     .capabilityCardBody { padding: 16px; display: grid; gap: 8px; align-content: start; }
     .capabilityEyebrow { margin: 0px; color: rgb(66, 91, 140); font-size: 12px; line-height: 1; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; }
@@ -13960,8 +14081,7 @@ const evidenceOpts = [
     }
     @media (max-width: 760px) {
       .outcomeGrid, .contentGrid, .detailsGrid, .capabilityGrid { grid-template-columns: 1fr; }
-      .capabilityCard { grid-template-columns: 1fr; }
-      .capabilityCardMedia { border-right: none; border-bottom: 1px solid color-mix(in srgb,var(--primary-colours--azure) 14%, var(--line)); min-height: 170px; }
+      .capabilityCardMedia { min-height: 154px; aspect-ratio: 16 / 9; }
       .header90_card-content { padding: 26px 20px; }
       .panel { padding: 16px; }
       .panel h2 { font-size: 28px; }
@@ -13970,7 +14090,8 @@ const evidenceOpts = [
       .storyContent p, .storyBullets li, .storyList li, .actionsList { font-size: 16px; }
       .topPreviewBtn, .topContactBtn { font-size: 14px; line-height: 18px; padding: 8px 12px; min-height: 40px; }
       .contactFormGrid { grid-template-columns: 1fr; }
-      .detailCard--story { min-height: 0; }
+      .detailCard--story { grid-template-columns: 1fr; min-height: 0; }
+      .detailCardStoryMedia { border-right: none; border-bottom: 1px solid color-mix(in srgb,var(--primary-colours--azure) 12%, var(--line)); min-height: 132px; aspect-ratio: 16 / 8; }
       .storyIntro { min-height: 0; }
     }
     @media (max-width: 479px) {
@@ -14037,7 +14158,7 @@ const evidenceOpts = [
     </section>
     <section class="layout">
       ${outcomeBlocks.length ? `<article class="panel panel--outcomes"><h2>Your top outcomes</h2><p class="panelSub">The three priorities we recommend focusing on first.</p><div class="outcomeGrid">${outcomeBlocks.map((outcome, idx)=> `<article class="outcomeCard"><div class="outcomeHead"><div class="outcomeRing" style="--pct:${metricPercent(outcome.metric, idx)}"><span>${metricPercent(outcome.metric, idx)}%</span></div><h3>${esc(outcome.title || `Priority outcome ${idx + 1}`)}</h3></div><p>${esc(outcome.detail || '')}</p></article>`).join('')}</div></article>` : ''}
-      ${landingStorySections.length ? `<article class="panel panel--story"><h2>Your readiness story</h2><p class="panelSub panelSub--story">${esc(landingStorySummary || 'A concise view of the priorities, outcomes, and delivery approach for your organization.')}</p><div class="detailsGrid detailsGrid--story">${landingStoryPrimarySections.map((section)=> `<article class="detailCard detailCard--story"><h3>${esc(section.title)}</h3>${section.body ? `<p class="storyIntro">${esc(section.body)}</p>` : ''}${section.bullets.length ? `<ul class="storyList storyList--dense">${section.bullets.slice(0, 3).map((bullet)=> `<li>${esc(bullet)}</li>`).join('')}</ul>` : ''}</article>`).join('')}</div>${landingStorySecondarySections.length ? `<details class="storyMore"><summary>Show full rationale</summary><div class="detailsGrid detailsGrid--story detailsGrid--story-expanded">${landingStorySecondarySections.map((section)=> `<article class="detailCard detailCard--story"><h3>${esc(section.title)}</h3>${section.body ? `<p class="storyIntro">${esc(section.body)}</p>` : ''}${section.bullets.length ? `<ul class="storyList storyList--dense">${section.bullets.map((bullet)=> `<li>${esc(bullet)}</li>`).join('')}</ul>` : ''}</article>`).join('')}</div></details>` : ''}</article>` : ''}
+      ${landingStorySections.length ? `<article class="panel panel--story"><h2>Your readiness story</h2><p class="panelSub panelSub--story">${esc(landingStorySummary || 'A concise view of the priorities, outcomes, and delivery approach for your organization.')}</p><div class="detailsGrid detailsGrid--story">${landingStoryPrimarySections.map((section, idx)=> `<article class="detailCard detailCard--story"><div class="detailCardStoryMedia"><img src="${esc(readinessStoryCardImageUrl(section, idx))}" alt="" loading="lazy" /></div><div class="detailCardStoryBody"><h3>${esc(section.title)}</h3>${section.body ? `<p class="storyIntro">${esc(section.body)}</p>` : ''}${section.bullets.length ? `<ul class="storyList storyList--dense">${section.bullets.slice(0, 3).map((bullet)=> `<li>${esc(bullet)}</li>`).join('')}</ul>` : ''}</div></article>`).join('')}</div>${landingStorySecondarySections.length ? `<details class="storyMore"><summary>Show full rationale</summary><div class="detailsGrid detailsGrid--story detailsGrid--story-expanded">${landingStorySecondarySections.map((section, idx)=> `<article class="detailCard detailCard--story"><div class="detailCardStoryMedia"><img src="${esc(readinessStoryCardImageUrl(section, idx + landingStoryPrimarySections.length))}" alt="" loading="lazy" /></div><div class="detailCardStoryBody"><h3>${esc(section.title)}</h3>${section.body ? `<p class="storyIntro">${esc(section.body)}</p>` : ''}${section.bullets.length ? `<ul class="storyList storyList--dense">${section.bullets.map((bullet)=> `<li>${esc(bullet)}</li>`).join('')}</ul>` : ''}</div></article>`).join('')}</div></details>` : ''}</article>` : ''}
       ${details.length ? `<article class="panel"><h2>What you told us in the meeting</h2><p class="panelSub">Your context, constraints, and operating priorities as we captured them.</p><div class="detailsGrid">${details.map((section)=> `<article class="detailCard"><h3>${esc(section.title || 'Section')}</h3>${(Array.isArray(section.rows) ? section.rows : []).map((row)=> `<div class="kvRow"><span class="kvLabel">${esc((row && row.label) || 'Field')}</span><span class="kvValue">${esc((row && row.value) || '—')}</span></div>`).join('')}</article>`).join('')}</div></article>` : ''}
       ${priorityCapabilities.length ? `<article class="panel" id="priority-capabilities"><h2>Your priority Immersive One features mapped to PIBR</h2><p class="panelSub">Mapped to your discovery outcomes and selected operating stack, these are the most relevant Immersive One features to prioritize first.</p><div class="capabilityGrid">${priorityCapabilities.map((capability, idx)=> renderCapabilityCard(capability, idx)).join('')}</div></article>` : ''}
       ${showNarrativeStoryboard ? `<div class="sectionHead sectionHead--center"><div><h2>Our understanding of your needs</h2><p class="sectionHeadSub">Measuring cyber readiness with Immersive</p><p class="sectionHeadLead">${esc(readinessParagraph)}</p></div></div>
@@ -14712,9 +14833,10 @@ const evidenceOpts = [
             : (mediaImageHref ? `<img src="${esc(mediaImageHref)}" alt="${esc(entry.mediaAlt || entry.title || 'Story visual')}" loading="lazy" />` : '');
           return `<article class="customerPreviewStoryCard${reverseClass}"><div class="customerPreviewStoryInner"><div class="customerPreviewStoryMedia customerPreviewStoryMedia--${esc(token)}" aria-hidden="true">${media}</div><div class="customerPreviewStoryContent"><div class="customerPreviewStoryKicker">${esc(entry.kicker || 'FOCUS')}</div><h6>${esc(entry.title || 'Focus area')}</h6><p>${esc(entry.text || '')}</p>${bullets.length ? `<ul class="customerPreviewStoryBullets">${bullets.map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}</div></div></article>`;
         };
+        const previewCapabilityCardImages = capabilityCardImageAssignments(priorityCapabilities);
         const renderPreviewCapabilityCard = (capability, idx)=>{
           const display = capabilityCardDisplayModel(capability, idx);
-          const imageUrl = capabilityCardImageUrl(capability, idx);
+          const imageUrl = previewCapabilityCardImages[idx] || capabilityCardImageUrl(capability, idx);
           return `<article class="customerPreviewCapabilityCard"><div class="customerPreviewCapabilityMedia"><img src="${esc(imageUrl)}" alt="" loading="lazy" /></div><div class="customerPreviewCapabilityBody"><p class="customerPreviewCapabilityEyebrow">${esc(display.eyebrow)}</p><h6>${esc(display.title)}</h6><p class="customerPreviewCapabilityPill">${esc(display.pillarLabel)}</p><p class="customerPreviewCapabilitySummary">${esc(display.description)}</p>${display.whyBullets.length ? `<p class="customerPreviewCapabilityWhyTitle">${esc(display.whyTitle)}</p><ul class="customerPreviewCapabilityWhyList">${display.whyBullets.map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}</div></article>`;
         };
         const logoSrc = 'https://cdn.prod.website-files.com/6735fba9a631272fb4513263/6762d3c19105162149b9f1dc_Immersive%20Logo.svg';
@@ -14787,11 +14909,14 @@ const evidenceOpts = [
               <h5>Your readiness story</h5>
               <p>${esc(landingStorySummary || 'A concise view of the priorities, outcomes, and delivery approach for your organization.')}</p>
               <div class="customerPreviewDetailsGrid customerPreviewDetailsGrid--story">
-                ${landingStoryPrimarySections.map((section)=> `
+                ${landingStoryPrimarySections.map((section, idx)=> `
                   <article class="customerPreviewDetailCard">
-                    <h6>${esc(section.title)}</h6>
-                    ${section.body ? `<p class="customerPreviewStoryIntro">${esc(section.body)}</p>` : ''}
-                    ${section.bullets.length ? `<ul class="customerPreviewStoryBullets">${section.bullets.slice(0, 3).map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}
+                    <div class="customerPreviewStoryCardMedia"><img src="${esc(readinessStoryCardImageUrl(section, idx))}" alt="" loading="lazy" /></div>
+                    <div class="customerPreviewStoryCardBody">
+                      <h6>${esc(section.title)}</h6>
+                      ${section.body ? `<p class="customerPreviewStoryIntro">${esc(section.body)}</p>` : ''}
+                      ${section.bullets.length ? `<ul class="customerPreviewStoryBullets">${section.bullets.slice(0, 3).map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}
+                    </div>
                   </article>
                 `).join('')}
               </div>
@@ -14799,11 +14924,14 @@ const evidenceOpts = [
                 <details class="customerPreviewStoryMore">
                   <summary>Show full rationale</summary>
                   <div class="customerPreviewDetailsGrid customerPreviewDetailsGrid--story customerPreviewDetailsGrid--storyExpanded">
-                    ${landingStorySecondarySections.map((section)=> `
+                    ${landingStorySecondarySections.map((section, idx)=> `
                       <article class="customerPreviewDetailCard">
-                        <h6>${esc(section.title)}</h6>
-                        ${section.body ? `<p class="customerPreviewStoryIntro">${esc(section.body)}</p>` : ''}
-                        ${section.bullets.length ? `<ul class="customerPreviewStoryBullets">${section.bullets.map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}
+                        <div class="customerPreviewStoryCardMedia"><img src="${esc(readinessStoryCardImageUrl(section, idx + landingStoryPrimarySections.length))}" alt="" loading="lazy" /></div>
+                        <div class="customerPreviewStoryCardBody">
+                          <h6>${esc(section.title)}</h6>
+                          ${section.body ? `<p class="customerPreviewStoryIntro">${esc(section.body)}</p>` : ''}
+                          ${section.bullets.length ? `<ul class="customerPreviewStoryBullets">${section.bullets.map((line)=> `<li>${esc(line)}</li>`).join('')}</ul>` : ''}
+                        </div>
                       </article>
                     `).join('')}
                   </div>
